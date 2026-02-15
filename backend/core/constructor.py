@@ -8,6 +8,8 @@ Es el ÚNICO que sabe cómo cablear la red.
 
 from __future__ import annotations
 
+import random
+
 from .sinapsis import Sinapsis
 from .dendrita import Dendrita
 from .neurona import Neurona, NeuronaEntrada
@@ -157,3 +159,51 @@ class Constructor:
             regla_pesos=patrones_activos,
             peso_dendrita=1.0,
         )
+
+    def aplicar_mascara_2d(
+        self,
+        red: Red,
+        width: int,
+        height: int,
+        mascara: list[dict[str, object]],
+    ) -> None:
+        """Aplica una máscara de conexión a cada neurona de la grilla 2D.
+
+        Args:
+            red: La red con las neuronas.
+            width: Ancho de la grilla.
+            height: Alto de la grilla.
+            mascara: Lista de definiciones de dendritas. Cada una:
+                {
+                    "peso_dendrita": float,  # Peso de la dendrita (+1.0 o -1.0)
+                    "offsets": [(dx, dy), ...],  # Offsets relativos a la neurona
+                }
+                Los pesos sinápticos se generan aleatorios en [0.2, 1.0].
+                Sinapsis cuyo offset cae fuera de la grilla se ignoran.
+        """
+        for y in range(height):
+            for x in range(width):
+                neurona_destino = red.get_neurona(self.key_by_coord(x, y))
+
+                for def_dendrita in mascara:
+                    peso_dendrita: float = def_dendrita["peso_dendrita"]  # type: ignore[assignment]
+                    offsets: list[tuple[int, int]] = def_dendrita["offsets"]  # type: ignore[assignment]
+
+                    sinapsis_list: list[Sinapsis] = []
+                    for dx, dy in offsets:
+                        nx = x + dx
+                        ny = y + dy
+                        if 0 <= nx < width and 0 <= ny < height:
+                            neurona_fuente = red.get_neurona(
+                                self.key_by_coord(nx, ny)
+                            )
+                            peso = random.uniform(0.2, 1.0)
+                            sinapsis_list.append(
+                                Sinapsis(neurona_entrante=neurona_fuente, peso=peso)
+                            )
+
+                    if sinapsis_list:
+                        dendrita = Dendrita(
+                            sinapsis=sinapsis_list, peso=peso_dendrita
+                        )
+                        neurona_destino.dendritas.append(dendrita)

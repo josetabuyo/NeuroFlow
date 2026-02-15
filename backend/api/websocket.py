@@ -9,14 +9,17 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from experiments.base import Experimento
 from experiments.von_neumann import VonNeumannExperiment
+from experiments.kohonen import KohonenExperiment
 
 logger = logging.getLogger(__name__)
 
 ws_router = APIRouter()
 
-EXPERIMENT_CLASSES = {
+EXPERIMENT_CLASSES: dict[str, type[Experimento]] = {
     "von_neumann": VonNeumannExperiment,
+    "kohonen": KohonenExperiment,
 }
 
 
@@ -25,7 +28,7 @@ class ExperimentSession:
 
     def __init__(self, websocket: WebSocket) -> None:
         self.ws = websocket
-        self.experiment: VonNeumannExperiment | None = None
+        self.experiment: Experimento | None = None
         self._play_task: asyncio.Task | None = None
         self._playing: bool = False
         self.fps: int = 10
@@ -154,8 +157,9 @@ class ExperimentSession:
         frame = self.experiment.get_frame()
         stats = self.experiment.get_stats()
 
-        # Convert float values to int for cleaner JSON
-        grid = [[int(cell) for cell in row] for row in frame]
+        # Convert float values to int for cleaner JSON (round preserves
+        # initial random state where values like 0.73 should count as active)
+        grid = [[round(cell) for cell in row] for row in frame]
 
         await self.send({
             "type": "frame",

@@ -6,8 +6,8 @@ interface PixelCanvasProps {
   grid: number[][];
   width: number;
   height: number;
-  inputRow: number;
-  outputRow: number;
+  inputRow?: number;
+  outputRow?: number;
   onCellClick: (x: number, y: number) => void;
 }
 
@@ -65,8 +65,8 @@ export function PixelCanvas({
     for (let row = 0; row < Math.min(height, grid.length); row++) {
       for (let col = 0; col < Math.min(width, grid[row].length); col++) {
         const active = grid[row][col] > 0;
-        const isInput = row === inputRow;
-        const isOutput = row === outputRow;
+        const isInput = inputRow != null && row === inputRow;
+        const isOutput = outputRow != null && row === outputRow;
 
         if (isInput) {
           ctx.fillStyle = active ? COLORS.inputActive : COLORS.inputInactive;

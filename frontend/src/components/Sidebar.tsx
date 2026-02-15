@@ -102,39 +102,41 @@ export function Sidebar({
 
       {selectedExp && (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <div>
-            <label
-              style={{
-                fontSize: "0.75rem",
-                color: "#888",
-                display: "block",
-                marginBottom: "4px",
-              }}
-            >
-              Regla
-            </label>
-            <select
-              value={config.rule}
-              onChange={(e) =>
-                onConfigChange({ ...config, rule: Number(e.target.value) })
-              }
-              style={{
-                width: "100%",
-                padding: "8px",
-                background: "#1a1a2e",
-                border: "1px solid #2a2a3e",
-                borderRadius: "4px",
-                color: "#e0e0ff",
-                fontSize: "0.9rem",
-              }}
-            >
-              {selectedExp.rules.map((r) => (
-                <option key={r} value={r}>
-                  Rule {r}
-                </option>
-              ))}
-            </select>
-          </div>
+          {selectedExp.rules && selectedExp.rules.length > 0 && (
+            <div>
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#888",
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Regla
+              </label>
+              <select
+                value={config.rule ?? ""}
+                onChange={(e) =>
+                  onConfigChange({ ...config, rule: Number(e.target.value) })
+                }
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  background: "#1a1a2e",
+                  border: "1px solid #2a2a3e",
+                  borderRadius: "4px",
+                  color: "#e0e0ff",
+                  fontSize: "0.9rem",
+                }}
+              >
+                {selectedExp.rules.map((r) => (
+                  <option key={r} value={r}>
+                    Rule {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: "8px" }}>
             <div style={{ flex: 1 }}>
@@ -220,7 +222,11 @@ export function Sidebar({
       )}
 
       <div style={{ marginTop: "auto", fontSize: "0.7rem", color: "#444" }}>
-        <p>Click en la fila inferior (azul) para activar neuronas de entrada.</p>
+        <p>
+          {selectedExp?.rules
+            ? "Click en la fila inferior (azul) para activar neuronas de entrada."
+            : "Click en cualquier celda para activar/desactivar neuronas."}
+        </p>
         <p style={{ marginTop: "4px" }}>
           Usa Play para ver la propagacion automatica.
         </p>

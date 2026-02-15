@@ -17,6 +17,13 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
     rules: [111, 30, 90, 110],
     default_config: { width: 50, height: 50, rule: 111 },
   },
+  {
+    id: "kohonen",
+    name: "Kohonen (Competencia Lateral 2D)",
+    description:
+      "Mapa autoorganizado con excitación local e inhibición lateral",
+    default_config: { width: 30, height: 30 },
+  },
 ];
 
 function App() {
@@ -132,8 +139,9 @@ function App() {
               grid={grid}
               width={config.width}
               height={config.height}
-              inputRow={config.height - 1}
-              outputRow={0}
+              {...(selectedExp !== "kohonen"
+                ? { inputRow: config.height - 1, outputRow: 0 }
+                : {})}
               onCellClick={handleCellClick}
             />
           ) : (
@@ -176,34 +184,38 @@ function App() {
             paddingBottom: "4px",
           }}
         >
-          <span>
-            <span
-              style={{
-                display: "inline-block",
-                width: "10px",
-                height: "10px",
-                background: "#4cc9f0",
-                borderRadius: "2px",
-                marginRight: "4px",
-                verticalAlign: "middle",
-              }}
-            />
-            ENTRADA
-          </span>
-          <span>
-            <span
-              style={{
-                display: "inline-block",
-                width: "10px",
-                height: "10px",
-                background: "#f72585",
-                borderRadius: "2px",
-                marginRight: "4px",
-                verticalAlign: "middle",
-              }}
-            />
-            SALIDA
-          </span>
+          {selectedExp !== "kohonen" && (
+            <>
+              <span>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: "10px",
+                    height: "10px",
+                    background: "#4cc9f0",
+                    borderRadius: "2px",
+                    marginRight: "4px",
+                    verticalAlign: "middle",
+                  }}
+                />
+                ENTRADA
+              </span>
+              <span>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: "10px",
+                    height: "10px",
+                    background: "#f72585",
+                    borderRadius: "2px",
+                    marginRight: "4px",
+                    verticalAlign: "middle",
+                  }}
+                />
+                SALIDA
+              </span>
+            </>
+          )}
           <span>
             <span
               style={{

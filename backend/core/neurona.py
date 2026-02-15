@@ -1,13 +1,15 @@
 """Neurona y NeuronaEntrada — unidades de cómputo del modelo neuronal.
 
 Neurona:
-  procesar() → fuzzy OR: max(dendritas) + min(dendritas) → setTension
-  activar()  → tension > umbral ? valor=1 : valor=0
+  procesar()          → fuzzy OR: max(dendritas) + min(dendritas) → setTension
+  activar()           → tension > umbral ? valor=1 : valor=0
+  activar_external()  → setea valor y tensión directamente (intervención externa)
 
 NeuronaEntrada:
   procesar() → no-op
   activar()  → no-op
-  Solo cambia vía activar_external(valor)
+  Cualquier neurona puede recibir un valor externo vía activar_external().
+  NeuronaEntrada simplemente ignora el procesamiento normal.
 """
 
 from __future__ import annotations
@@ -67,6 +69,16 @@ class Neurona:
         else:
             self.valor = 0.0
 
+    def activar_external(self, valor: float) -> None:
+        """Setea valor y tensión directamente desde el exterior.
+
+        Permite intervención externa sobre cualquier neurona: click del usuario,
+        inyección de estímulo, etc. En el siguiente Red.procesar(), las neuronas
+        conectadas a esta verán el nuevo valor.
+        """
+        self.tension_superficial = valor
+        self.valor = valor
+
     def __repr__(self) -> str:
         return f"Neurona(id={self.id}, valor={self.valor})"
 
@@ -75,6 +87,7 @@ class NeuronaEntrada(Neurona):
     """Neurona de entrada: sin dendritas, valor seteado externamente.
 
     La Red la procesa igual que las demás, pero internamente no hace nada.
+    procesar() y activar() son no-op — su valor solo cambia vía activar_external().
     """
 
     def __init__(self, id: str) -> None:
@@ -87,11 +100,6 @@ class NeuronaEntrada(Neurona):
     def activar(self) -> None:
         """No-op: el valor de la neurona de entrada se setea externamente."""
         pass
-
-    def activar_external(self, valor: float) -> None:
-        """Setea el valor de la neurona de entrada desde el exterior."""
-        self.tension_superficial = valor
-        self.valor = valor
 
     def __repr__(self) -> str:
         return f"NeuronaEntrada(id={self.id}, valor={self.valor})"

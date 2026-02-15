@@ -4,14 +4,14 @@ export interface ExperimentInfo {
   id: string;
   name: string;
   description: string;
-  rules: number[];
+  rules?: number[];
   default_config: ExperimentConfig;
 }
 
 export interface ExperimentConfig {
   width: number;
   height: number;
-  rule: number;
+  rule?: number;
 }
 
 export interface FrameMessage {

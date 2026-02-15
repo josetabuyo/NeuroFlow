@@ -21,7 +21,20 @@ EXPERIMENTS = {
             "height": 50,
             "rule": 111,
         },
-    }
+    },
+    "kohonen": {
+        "id": "kohonen",
+        "name": "Kohonen (Competencia Lateral 2D)",
+        "description": (
+            "Mapa autoorganizado de Kohonen con excitación local e inhibición "
+            "lateral. Perfil 'Mexican hat': las neuronas excitan a sus vecinas "
+            "cercanas e inhiben a las lejanas, formando clusters que compiten."
+        ),
+        "default_config": {
+            "width": 30,
+            "height": 30,
+        },
+    },
 }
 
 
