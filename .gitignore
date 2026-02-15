@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+*.egg
+dist/
+
+# Node
+node_modules/
+frontend/dist/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+
+# Jupyter (legacy)
+.ipynb_checkpoints/
+*.ipynb
+
+# Test
+.pytest_cache/
+
+# Render / Vercel
+.vercel/

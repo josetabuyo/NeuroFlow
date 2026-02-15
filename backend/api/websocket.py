@@ -1,0 +1,193 @@
+"""WebSocket handler for NeuroFlow experiments."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from typing import Any
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from experiments.von_neumann import VonNeumannExperiment
+
+logger = logging.getLogger(__name__)
+
+ws_router = APIRouter()
+
+EXPERIMENT_CLASSES = {
+    "von_neumann": VonNeumannExperiment,
+}
+
+
+class ExperimentSession:
+    """Manages a single WebSocket experiment session."""
+
+    def __init__(self, websocket: WebSocket) -> None:
+        self.ws = websocket
+        self.experiment: VonNeumannExperiment | None = None
+        self._play_task: asyncio.Task | None = None
+        self._playing: bool = False
+        self.fps: int = 10
+
+    async def send(self, data: dict[str, Any]) -> None:
+        """Send JSON data to the client."""
+        await self.ws.send_json(data)
+
+    async def handle_message(self, message: dict[str, Any]) -> None:
+        """Route incoming messages to the appropriate handler."""
+        action = message.get("action", "")
+
+        handlers = {
+            "start": self._handle_start,
+            "click": self._handle_click,
+            "step": self._handle_step,
+            "play": self._handle_play,
+            "pause": self._handle_pause,
+            "reset": self._handle_reset,
+        }
+
+        handler = handlers.get(action)
+        if handler:
+            await handler(message)
+        else:
+            await self.send({"type": "error", "message": f"Unknown action: {action}"})
+
+    async def _handle_start(self, message: dict[str, Any]) -> None:
+        """Initialize an experiment."""
+        experiment_id = message.get("experiment", "von_neumann")
+        config = message.get("config", {})
+
+        exp_class = EXPERIMENT_CLASSES.get(experiment_id)
+        if not exp_class:
+            await self.send({"type": "error", "message": f"Unknown experiment: {experiment_id}"})
+            return
+
+        self.experiment = exp_class()
+        self.experiment.setup(config)
+
+        await self.send({"type": "status", "state": "ready"})
+        await self._send_frame()
+
+    async def _handle_click(self, message: dict[str, Any]) -> None:
+        """Handle a click on the canvas."""
+        if not self.experiment:
+            await self.send({"type": "error", "message": "No experiment started"})
+            return
+
+        x = message.get("x", 0)
+        y = message.get("y", 0)
+        self.experiment.click(x, y)
+        await self._send_frame()
+
+    async def _handle_step(self, _message: dict[str, Any]) -> None:
+        """Process one step."""
+        if not self.experiment:
+            await self.send({"type": "error", "message": "No experiment started"})
+            return
+
+        result = self.experiment.step()
+        if result.get("type") == "status" and result.get("state") == "complete":
+            await self.send(result)
+        else:
+            await self._send_frame()
+
+    async def _handle_play(self, message: dict[str, Any]) -> None:
+        """Start continuous processing."""
+        if not self.experiment:
+            await self.send({"type": "error", "message": "No experiment started"})
+            return
+
+        self.fps = message.get("fps", 10)
+        self._playing = True
+        await self.send({"type": "status", "state": "running"})
+
+        # Cancel existing play task if any
+        if self._play_task and not self._play_task.done():
+            self._play_task.cancel()
+
+        self._play_task = asyncio.create_task(self._play_loop())
+
+    async def _handle_pause(self, _message: dict[str, Any]) -> None:
+        """Pause continuous processing."""
+        self._playing = False
+        if self._play_task and not self._play_task.done():
+            self._play_task.cancel()
+        await self.send({"type": "status", "state": "paused"})
+
+    async def _handle_reset(self, _message: dict[str, Any]) -> None:
+        """Reset the experiment."""
+        if not self.experiment:
+            await self.send({"type": "error", "message": "No experiment started"})
+            return
+
+        self._playing = False
+        if self._play_task and not self._play_task.done():
+            self._play_task.cancel()
+
+        self.experiment.reset()
+        await self.send({"type": "status", "state": "ready"})
+        await self._send_frame()
+
+    async def _play_loop(self) -> None:
+        """Continuously process and send frames."""
+        try:
+            while self._playing and self.experiment:
+                result = self.experiment.step()
+                if result.get("type") == "status" and result.get("state") == "complete":
+                    await self.send(result)
+                    self._playing = False
+                    break
+                await self._send_frame()
+                await asyncio.sleep(1.0 / self.fps)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.exception("Error in play loop")
+            await self.send({"type": "error", "message": str(e)})
+
+    async def _send_frame(self) -> None:
+        """Send the current frame to the client."""
+        if not self.experiment:
+            return
+
+        frame = self.experiment.get_frame()
+        stats = self.experiment.get_stats()
+
+        # Convert float values to int for cleaner JSON
+        grid = [[int(cell) for cell in row] for row in frame]
+
+        await self.send({
+            "type": "frame",
+            "generation": self.experiment.generation,
+            "grid": grid,
+            "stats": stats,
+        })
+
+    def cleanup(self) -> None:
+        """Cleanup on disconnect."""
+        self._playing = False
+        if self._play_task and not self._play_task.done():
+            self._play_task.cancel()
+
+
+@ws_router.websocket("/ws/experiment")
+async def experiment_websocket(websocket: WebSocket) -> None:
+    """WebSocket endpoint for experiment interaction."""
+    await websocket.accept()
+    session = ExperimentSession(websocket)
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            try:
+                message = json.loads(data)
+                await session.handle_message(message)
+            except json.JSONDecodeError:
+                await session.send({"type": "error", "message": "Invalid JSON"})
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected")
+    except Exception as e:
+        logger.exception("WebSocket error")
+    finally:
+        session.cleanup()
