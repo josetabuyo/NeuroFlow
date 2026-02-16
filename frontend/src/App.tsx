@@ -40,12 +40,17 @@ function App() {
     state,
     stats,
     generation,
+    inspectMode,
+    connectionMap,
+    inspectedCell,
     start,
     click,
     step,
     play,
     pause,
     reset,
+    inspect,
+    toggleInspectMode,
   } = useExperiment();
 
   // Fetch experiments list
@@ -80,15 +85,31 @@ function App() {
 
   const handleCellClick = useCallback(
     (x: number, y: number) => {
-      click(x, y);
+      if (inspectMode) {
+        inspect(x, y);
+      } else {
+        click(x, y);
+      }
     },
-    [click]
+    [inspectMode, inspect, click]
   );
 
   const handlePlay = useCallback(() => play(10), [play]);
 
   const connected = state !== "disconnected";
   const hasGrid = grid.length > 0;
+  const hasConnectionMap = connectionMap != null;
+
+  const colorSwatch = (bg: string, border?: string): React.CSSProperties => ({
+    display: "inline-block",
+    width: "10px",
+    height: "10px",
+    background: bg,
+    border: border || "none",
+    borderRadius: "2px",
+    marginRight: "4px",
+    verticalAlign: "middle",
+  });
 
   return (
     <div
@@ -142,6 +163,8 @@ function App() {
               {...(selectedExp !== "kohonen"
                 ? { inputRow: config.height - 1, outputRow: 0 }
                 : {})}
+              connectionMap={connectionMap}
+              inspectedCell={inspectedCell}
               onCellClick={handleCellClick}
             />
           ) : (
@@ -153,7 +176,7 @@ function App() {
               }}
             >
               <p style={{ fontSize: "2rem", marginBottom: "12px" }}>
-                {connected ? "🧠" : "⏳"}
+                {connected ? "\uD83E\uDDE0" : "\u23F3"}
               </p>
               <p>
                 {connected
@@ -168,10 +191,12 @@ function App() {
           state={state}
           stats={stats}
           generation={generation}
+          inspectMode={inspectMode}
           onPlay={handlePlay}
           onPause={pause}
           onStep={step}
           onReset={reset}
+          onToggleInspect={toggleInspectMode}
         />
 
         <div
@@ -184,67 +209,49 @@ function App() {
             paddingBottom: "4px",
           }}
         >
-          {selectedExp !== "kohonen" && (
+          {hasConnectionMap ? (
             <>
               <span>
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: "10px",
-                    height: "10px",
-                    background: "#4cc9f0",
-                    borderRadius: "2px",
-                    marginRight: "4px",
-                    verticalAlign: "middle",
-                  }}
-                />
-                ENTRADA
+                <span style={colorSwatch("#00ff00")} />
+                Excitatorio (+1)
               </span>
               <span>
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: "10px",
-                    height: "10px",
-                    background: "#f72585",
-                    borderRadius: "2px",
-                    marginRight: "4px",
-                    verticalAlign: "middle",
-                  }}
-                />
-                SALIDA
+                <span style={colorSwatch("#000000", "1px solid #333")} />
+                Neutro (0)
+              </span>
+              <span>
+                <span style={colorSwatch("#8b00ff")} />
+                Inhibitorio (-1)
+              </span>
+              <span>
+                <span style={colorSwatch("#111111", "1px solid #333")} />
+                Sin conexión
+              </span>
+            </>
+          ) : (
+            <>
+              {selectedExp !== "kohonen" && (
+                <>
+                  <span>
+                    <span style={colorSwatch("#4cc9f0")} />
+                    ENTRADA
+                  </span>
+                  <span>
+                    <span style={colorSwatch("#f72585")} />
+                    SALIDA
+                  </span>
+                </>
+              )}
+              <span>
+                <span style={colorSwatch("#ffffff")} />
+                Activa
+              </span>
+              <span>
+                <span style={colorSwatch("#0a0a0a", "1px solid #333")} />
+                Inactiva
               </span>
             </>
           )}
-          <span>
-            <span
-              style={{
-                display: "inline-block",
-                width: "10px",
-                height: "10px",
-                background: "#ffffff",
-                borderRadius: "2px",
-                marginRight: "4px",
-                verticalAlign: "middle",
-              }}
-            />
-            Activa
-          </span>
-          <span>
-            <span
-              style={{
-                display: "inline-block",
-                width: "10px",
-                height: "10px",
-                background: "#0a0a0a",
-                border: "1px solid #333",
-                borderRadius: "2px",
-                marginRight: "4px",
-                verticalAlign: "middle",
-              }}
-            />
-            Inactiva
-          </span>
         </div>
       </main>
     </div>

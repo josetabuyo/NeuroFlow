@@ -8,6 +8,8 @@ interface PixelCanvasProps {
   height: number;
   inputRow?: number;
   outputRow?: number;
+  connectionMap?: (number | null)[][] | null;
+  inspectedCell?: { x: number; y: number } | null;
   onCellClick: (x: number, y: number) => void;
 }
 
@@ -21,12 +23,32 @@ const COLORS = {
   gridLine: "#1a1a2e",
 };
 
+function weightToColor(weight: number | null): string {
+  if (weight === null) return "#111111";
+  if (weight === 999) return "#ffff00";
+
+  const w = Math.max(-1, Math.min(1, weight));
+
+  if (w > 0) {
+    const g = Math.round(w * 255);
+    return `rgb(0, ${g}, 0)`;
+  } else if (w < 0) {
+    const abs = Math.abs(w);
+    const r = Math.round(abs * 139);
+    const b = Math.round(abs * 255);
+    return `rgb(${r}, 0, ${b})`;
+  }
+  return "#000000";
+}
+
 export function PixelCanvas({
   grid,
   width,
   height,
   inputRow,
   outputRow,
+  connectionMap,
+  inspectedCell,
   onCellClick,
 }: PixelCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -61,19 +83,27 @@ export function PixelCanvas({
 
     if (grid.length === 0) return;
 
+    const hasConnectionMap = connectionMap != null && connectionMap.length > 0;
+
     // Draw cells
     for (let row = 0; row < Math.min(height, grid.length); row++) {
       for (let col = 0; col < Math.min(width, grid[row].length); col++) {
-        const active = grid[row][col] > 0;
-        const isInput = inputRow != null && row === inputRow;
-        const isOutput = outputRow != null && row === outputRow;
+        if (hasConnectionMap && connectionMap[row] && connectionMap[row][col] !== undefined) {
+          ctx.fillStyle = weightToColor(connectionMap[row][col]);
+        } else if (!hasConnectionMap) {
+          const active = grid[row][col] > 0;
+          const isInput = inputRow != null && row === inputRow;
+          const isOutput = outputRow != null && row === outputRow;
 
-        if (isInput) {
-          ctx.fillStyle = active ? COLORS.inputActive : COLORS.inputInactive;
-        } else if (isOutput) {
-          ctx.fillStyle = active ? COLORS.outputActive : COLORS.outputInactive;
+          if (isInput) {
+            ctx.fillStyle = active ? COLORS.inputActive : COLORS.inputInactive;
+          } else if (isOutput) {
+            ctx.fillStyle = active ? COLORS.outputActive : COLORS.outputInactive;
+          } else {
+            ctx.fillStyle = active ? COLORS.active : COLORS.inactive;
+          }
         } else {
-          ctx.fillStyle = active ? COLORS.active : COLORS.inactive;
+          ctx.fillStyle = "#111111";
         }
 
         ctx.fillRect(
@@ -82,9 +112,26 @@ export function PixelCanvas({
           cellSize - 1,
           cellSize - 1
         );
+
+        // Draw yellow border for inspected cell
+        if (
+          hasConnectionMap &&
+          inspectedCell &&
+          col === inspectedCell.x &&
+          row === inspectedCell.y
+        ) {
+          ctx.strokeStyle = "#ffff00";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(
+            col * cellSize + 1,
+            row * cellSize + 1,
+            cellSize - 3,
+            cellSize - 3
+          );
+        }
       }
     }
-  }, [grid, width, height, inputRow, outputRow, getCellSize]);
+  }, [grid, width, height, inputRow, outputRow, connectionMap, inspectedCell, getCellSize]);
 
   useEffect(() => {
     draw();

@@ -19,12 +19,17 @@ interface UseExperimentReturn {
   state: ExperimentState;
   stats: ExperimentStats | null;
   generation: number;
+  inspectMode: boolean;
+  connectionMap: (number | null)[][] | null;
+  inspectedCell: { x: number; y: number } | null;
   start: (experiment: string, config: ExperimentConfig) => void;
   click: (x: number, y: number) => void;
   step: () => void;
   play: (fps?: number) => void;
   pause: () => void;
   reset: () => void;
+  inspect: (x: number, y: number) => void;
+  toggleInspectMode: () => void;
 }
 
 export function useExperiment(): UseExperimentReturn {
@@ -32,6 +37,9 @@ export function useExperiment(): UseExperimentReturn {
   const [state, setState] = useState<ExperimentState>("disconnected");
   const [stats, setStats] = useState<ExperimentStats | null>(null);
   const [generation, setGeneration] = useState(0);
+  const [inspectMode, setInspectMode] = useState(false);
+  const [connectionMap, setConnectionMap] = useState<(number | null)[][] | null>(null);
+  const [inspectedCell, setInspectedCell] = useState<{ x: number; y: number } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const send = useCallback((data: Record<string, unknown>) => {
@@ -57,6 +65,12 @@ export function useExperiment(): UseExperimentReturn {
           setGrid(msg.grid);
           setGeneration(msg.generation);
           setStats(msg.stats);
+          setConnectionMap(null);
+          setInspectedCell(null);
+          break;
+        case "connections":
+          setConnectionMap(msg.weight_grid);
+          setInspectedCell({ x: msg.x, y: msg.y });
           break;
         case "status":
           setState(msg.state);
@@ -108,18 +122,44 @@ export function useExperiment(): UseExperimentReturn {
     [send]
   );
   const pause = useCallback(() => send({ action: "pause" }), [send]);
-  const reset = useCallback(() => send({ action: "reset" }), [send]);
+  const reset = useCallback(() => {
+    setConnectionMap(null);
+    setInspectedCell(null);
+    send({ action: "reset" });
+  }, [send]);
+
+  const inspect = useCallback(
+    (x: number, y: number) => {
+      send({ action: "inspect", x, y });
+    },
+    [send]
+  );
+
+  const toggleInspectMode = useCallback(() => {
+    setInspectMode((prev) => {
+      if (prev) {
+        setConnectionMap(null);
+        setInspectedCell(null);
+      }
+      return !prev;
+    });
+  }, []);
 
   return {
     grid,
     state,
     stats,
     generation,
+    inspectMode,
+    connectionMap,
+    inspectedCell,
     start,
     click,
     step,
     play,
     pause,
     reset,
+    inspect,
+    toggleInspectMode,
   };
 }

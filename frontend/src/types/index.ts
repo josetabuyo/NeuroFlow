@@ -31,7 +31,16 @@ export interface ErrorMessage {
   message: string;
 }
 
-export type ServerMessage = FrameMessage | StatusMessage | ErrorMessage;
+export interface ConnectionsMessage {
+  type: "connections";
+  x: number;
+  y: number;
+  total_dendritas: number;
+  total_sinapsis: number;
+  weight_grid: (number | null)[][];
+}
+
+export type ServerMessage = FrameMessage | StatusMessage | ErrorMessage | ConnectionsMessage;
 
 export interface ExperimentStats {
   active_cells: number;

@@ -1,4 +1,4 @@
-/** Controls — Play/Pause/Step/Reset + stats display. */
+/** Controls — Play/Pause/Step/Reset/Inspect + stats display. */
 
 import type { ExperimentState, ExperimentStats } from "../types";
 
@@ -6,10 +6,12 @@ interface ControlsProps {
   state: ExperimentState;
   stats: ExperimentStats | null;
   generation: number;
+  inspectMode: boolean;
   onPlay: () => void;
   onPause: () => void;
   onStep: () => void;
   onReset: () => void;
+  onToggleInspect: () => void;
 }
 
 const btnStyle = (active: boolean, color: string): React.CSSProperties => ({
@@ -29,15 +31,16 @@ export function Controls({
   state,
   stats,
   generation,
+  inspectMode,
   onPlay,
   onPause,
   onStep,
   onReset,
+  onToggleInspect,
 }: ControlsProps) {
   const hasExperiment = state !== "disconnected";
   const canInteract = state === "ready" || state === "paused";
   const isRunning = state === "running";
-  const isComplete = state === "complete";
 
   return (
     <div
@@ -78,6 +81,13 @@ export function Controls({
         >
           Reset
         </button>
+        <button
+          style={btnStyle(inspectMode, "#ffff00")}
+          onClick={onToggleInspect}
+          disabled={!canInteract}
+        >
+          {inspectMode ? "\u2715 Inspeccionar" : "Inspeccionar"}
+        </button>
       </div>
 
       <div
@@ -92,7 +102,7 @@ export function Controls({
         <span>
           Gen:{" "}
           <strong style={{ color: "#e0e0ff" }}>
-            {generation}/{stats?.total_rows ?? "—"}
+            {generation}/{stats?.total_rows ?? "\u2014"}
           </strong>
         </span>
         <span>

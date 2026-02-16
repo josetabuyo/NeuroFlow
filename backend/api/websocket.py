@@ -48,6 +48,7 @@ class ExperimentSession:
             "play": self._handle_play,
             "pause": self._handle_pause,
             "reset": self._handle_reset,
+            "inspect": self._handle_inspect,
         }
 
         handler = handlers.get(action)
@@ -117,6 +118,16 @@ class ExperimentSession:
         if self._play_task and not self._play_task.done():
             self._play_task.cancel()
         await self.send({"type": "status", "state": "paused"})
+
+    async def _handle_inspect(self, message: dict[str, Any]) -> None:
+        """Return connection weights for a neuron."""
+        if not self.experiment:
+            await self.send({"type": "error", "message": "No experiment started"})
+            return
+        x = message.get("x", 0)
+        y = message.get("y", 0)
+        result = self.experiment.inspect(x, y)
+        await self.send(result)
 
     async def _handle_reset(self, _message: dict[str, Any]) -> None:
         """Reset the experiment."""
