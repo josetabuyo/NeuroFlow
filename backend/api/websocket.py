@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from core.constructor import Constructor
 from experiments.base import Experimento
 from experiments.von_neumann import VonNeumannExperiment
 from experiments.kohonen import KohonenExperiment
@@ -35,6 +35,7 @@ class ExperimentSession:
         self._play_task: asyncio.Task | None = None
         self._playing: bool = False
         self.fps: int = 10
+        self.steps_per_tick: int = 1
 
     async def send(self, data: dict[str, Any]) -> None:
         """Send JSON data to the client."""
@@ -95,30 +96,35 @@ class ExperimentSession:
             return
         cells: list[dict[str, int]] = message.get("cells", [])
         value: float = message.get("value", 1.0)
-        if not self.experiment.red:
-            return
-        for cell in cells:
-            x = cell.get("x", 0)
-            y = cell.get("y", 0)
-            key = Constructor.key_by_coord(x, y)
-            try:
-                neurona = self.experiment.red.get_neurona(key)
-                neurona.activar_external(value)
-            except KeyError:
-                pass  # Celda fuera del grid (borde del pincel)
+
+        red_tensor = getattr(self.experiment, "red_tensor", None)
+        if red_tensor:
+            w = self.experiment.width
+            for cell in cells:
+                x = cell.get("x", 0)
+                y = cell.get("y", 0)
+                idx = y * w + x
+                if 0 <= x < w and 0 <= y < self.experiment.height and 0 <= idx < red_tensor.n_real:
+                    red_tensor.set_valor(idx, value)
         await self._send_frame()
 
-    async def _handle_step(self, _message: dict[str, Any]) -> None:
-        """Process one step."""
+    async def _handle_step(self, message: dict[str, Any]) -> None:
+        """Process one or more steps. Supports {"action": "step", "count": N}."""
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
 
-        result = self.experiment.step()
+        count = max(1, message.get("count", 1))
+
+        t0 = time.perf_counter()
+        result = self.experiment.step_n(count)
+        elapsed = time.perf_counter() - t0
+
         if result.get("type") == "status" and result.get("state") == "complete":
             await self.send(result)
-        else:
-            await self._send_frame()
+            return
+
+        await self._send_frame(steps=count, elapsed_s=elapsed)
 
     async def _handle_play(self, message: dict[str, Any]) -> None:
         """Start continuous processing."""
@@ -127,10 +133,10 @@ class ExperimentSession:
             return
 
         self.fps = message.get("fps", 10)
+        self.steps_per_tick = max(1, message.get("steps_per_tick", 1))
         self._playing = True
         await self.send({"type": "status", "state": "running"})
 
-        # Cancel existing play task if any
         if self._play_task and not self._play_task.done():
             self._play_task.cancel()
 
@@ -171,12 +177,15 @@ class ExperimentSession:
         """Continuously process and send frames."""
         try:
             while self._playing and self.experiment:
-                result = self.experiment.step()
+                t0 = time.perf_counter()
+                result = self.experiment.step_n(self.steps_per_tick)
+                elapsed = time.perf_counter() - t0
+
                 if result.get("type") == "status" and result.get("state") == "complete":
                     await self.send(result)
                     self._playing = False
-                    break
-                await self._send_frame()
+                    return
+                await self._send_frame(steps=self.steps_per_tick, elapsed_s=elapsed)
                 await asyncio.sleep(1.0 / self.fps)
         except asyncio.CancelledError:
             pass
@@ -184,24 +193,35 @@ class ExperimentSession:
             logger.exception("Error in play loop")
             await self.send({"type": "error", "message": str(e)})
 
-    async def _send_frame(self) -> None:
-        """Send the current frame to the client."""
+    async def _send_frame(
+        self,
+        steps: int | None = None,
+        elapsed_s: float | None = None,
+    ) -> None:
+        """Send the current frame to the client, with optional timing metrics."""
         if not self.experiment:
             return
 
         frame = self.experiment.get_frame()
         stats = self.experiment.get_stats()
 
-        # Convert float values to int for cleaner JSON (round preserves
-        # initial random state where values like 0.73 should count as active)
         grid = [[round(cell) for cell in row] for row in frame]
 
-        await self.send({
+        msg: dict[str, Any] = {
             "type": "frame",
             "generation": self.experiment.generation,
             "grid": grid,
             "stats": stats,
-        })
+        }
+
+        if steps is not None and elapsed_s is not None and elapsed_s > 0:
+            msg["perf"] = {
+                "steps": steps,
+                "elapsed_ms": round(elapsed_s * 1000, 2),
+                "steps_per_second": round(steps / elapsed_s, 1),
+            }
+
+        await self.send(msg)
 
     def cleanup(self) -> None:
         """Cleanup on disconnect."""

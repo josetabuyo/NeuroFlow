@@ -221,24 +221,26 @@ class TestKohonenExperiment:
         assert all(0.0 <= v <= 1.0 for v in valores)
 
     def test_click_toggle_0_a_1(self) -> None:
-        """Click en celda con valor < 0.5 → activa (valor=1.0)."""
+        """Click en celda con valor < 0.5 -> activa (valor=1.0)."""
         exp = KohonenExperiment()
         exp.setup({"width": 10, "height": 10})
 
-        # Forzar una neurona a 0
-        exp.red.get_neurona("x5y5").activar_external(0.0)
+        # Forzar una neurona a 0 via tensor
+        idx = 5 * 10 + 5  # y=5, x=5
+        exp.red_tensor.set_valor(idx, 0.0)
         exp.click(5, 5)
-        assert exp.red.get_neurona("x5y5").valor == 1.0
+        assert exp.red_tensor.valores[idx].item() == 1.0
 
     def test_click_toggle_1_a_0(self) -> None:
-        """Click en celda con valor >= 0.5 → desactiva (valor=0.0)."""
+        """Click en celda con valor >= 0.5 -> desactiva (valor=0.0)."""
         exp = KohonenExperiment()
         exp.setup({"width": 10, "height": 10})
 
-        # Forzar una neurona a 1
-        exp.red.get_neurona("x5y5").activar_external(1.0)
+        # Forzar una neurona a 1 via tensor
+        idx = 5 * 10 + 5  # y=5, x=5
+        exp.red_tensor.set_valor(idx, 1.0)
         exp.click(5, 5)
-        assert exp.red.get_neurona("x5y5").valor == 0.0
+        assert exp.red_tensor.valores[idx].item() == 0.0
 
     def test_step_procesa_toda_la_red(self) -> None:
         """Un step procesa toda la red de golpe (red.procesar())."""

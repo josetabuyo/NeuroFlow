@@ -5,6 +5,7 @@ import type {
   ExperimentConfig,
   ExperimentState,
   ExperimentStats,
+  PerfMetrics,
   ServerMessage,
 } from "../types";
 
@@ -18,6 +19,7 @@ interface UseExperimentReturn {
   grid: number[][];
   state: ExperimentState;
   stats: ExperimentStats | null;
+  perf: PerfMetrics | null;
   generation: number;
   inspectMode: boolean;
   connectionMap: (number | null)[][] | null;
@@ -27,8 +29,8 @@ interface UseExperimentReturn {
   start: (experiment: string, config: ExperimentConfig) => void;
   click: (x: number, y: number) => void;
   paint: (cells: { x: number; y: number }[], value: number) => void;
-  step: () => void;
-  play: (fps?: number) => void;
+  step: (count?: number) => void;
+  play: (fps?: number, stepsPerTick?: number) => void;
   pause: () => void;
   reset: () => void;
   inspect: (x: number, y: number) => void;
@@ -45,6 +47,7 @@ export function useExperiment(): UseExperimentReturn {
   const [inspectMode, setInspectMode] = useState(false);
   const [connectionMap, setConnectionMap] = useState<(number | null)[][] | null>(null);
   const [inspectedCell, setInspectedCell] = useState<{ x: number; y: number } | null>(null);
+  const [perf, setPerf] = useState<PerfMetrics | null>(null);
   const [selectedBrush, setSelectedBrush] = useState("1x1");
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
   const wsRef = useRef<WebSocket | null>(null);
@@ -72,6 +75,7 @@ export function useExperiment(): UseExperimentReturn {
           setGrid(msg.grid);
           setGeneration(msg.generation);
           setStats(msg.stats);
+          setPerf(msg.perf ?? null);
           setConnectionMap(null);
           setInspectedCell(null);
           break;
@@ -123,9 +127,13 @@ export function useExperiment(): UseExperimentReturn {
     [send]
   );
 
-  const step = useCallback(() => send({ action: "step" }), [send]);
+  const step = useCallback(
+    (count = 1) => send({ action: "step", count }),
+    [send]
+  );
   const play = useCallback(
-    (fps = 10) => send({ action: "play", fps }),
+    (fps = 10, stepsPerTick = 1) =>
+      send({ action: "play", fps, steps_per_tick: stepsPerTick }),
     [send]
   );
   const pause = useCallback(() => send({ action: "pause" }), [send]);
@@ -167,6 +175,7 @@ export function useExperiment(): UseExperimentReturn {
     grid,
     state,
     stats,
+    perf,
     generation,
     inspectMode,
     connectionMap,

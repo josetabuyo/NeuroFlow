@@ -6,6 +6,8 @@ from .neurona import Neurona, NeuronaEntrada
 from .red import Red
 from .region import Region
 from .constructor import Constructor
+from .red_tensor import RedTensor
+from .constructor_tensor import ConstructorTensor
 
 __all__ = [
     "Sinapsis",
@@ -15,4 +17,6 @@ __all__ = [
     "Red",
     "Region",
     "Constructor",
+    "RedTensor",
+    "ConstructorTensor",
 ]

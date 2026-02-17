@@ -43,11 +43,13 @@ function App() {
     height: 50,
     rule: 111,
   });
+  const [stepsPerTick, setStepsPerTick] = useState(1);
 
   const {
     grid,
     state,
     stats,
+    perf,
     generation,
     inspectMode,
     connectionMap,
@@ -132,7 +134,15 @@ function App() {
     [inspectMode, applyBrush]
   );
 
-  const handlePlay = useCallback(() => play(10), [play]);
+  const handlePlay = useCallback(
+    () => play(10, stepsPerTick),
+    [play, stepsPerTick]
+  );
+
+  const handleStep = useCallback(
+    () => step(stepsPerTick),
+    [step, stepsPerTick]
+  );
 
   const connected = state !== "disconnected";
   const hasGrid = grid.length > 0;
@@ -240,13 +250,16 @@ function App() {
         <Controls
           state={state}
           stats={stats}
+          perf={perf}
           generation={generation}
           inspectMode={inspectMode}
+          stepsPerTick={stepsPerTick}
           onPlay={handlePlay}
           onPause={pause}
-          onStep={step}
+          onStep={handleStep}
           onReset={reset}
           onToggleInspect={toggleInspectMode}
+          onStepsPerTickChange={setStepsPerTick}
         />
 
         <div

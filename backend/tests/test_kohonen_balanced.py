@@ -110,12 +110,13 @@ class TestKohonenBalancedFunctionality:
         exp = KohonenBalancedExperiment()
         exp.setup({"width": 10, "height": 10, "balance": 0.0})
 
-        exp.red.get_neurona("x5y5").activar_external(0.0)
+        idx = 5 * 10 + 5  # y=5, x=5
+        exp.red_tensor.set_valor(idx, 0.0)
         exp.click(5, 5)
-        assert exp.red.get_neurona("x5y5").valor == 1.0
+        assert exp.red_tensor.valores[idx].item() == 1.0
 
         exp.click(5, 5)
-        assert exp.red.get_neurona("x5y5").valor == 0.0
+        assert exp.red_tensor.valores[idx].item() == 0.0
 
     def test_reset_reinicializa(self) -> None:
         """Reset vuelve a generación 0 y reinicializa valores."""

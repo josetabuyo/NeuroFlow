@@ -14,6 +14,7 @@ import random
 from typing import Any
 
 from core.constructor import Constructor
+from core.constructor_tensor import ConstructorTensor
 from .base import Experimento
 
 
@@ -112,6 +113,7 @@ class KohonenExperiment(Experimento):
     def __init__(self) -> None:
         super().__init__()
         self._config: dict[str, Any] = {}
+        self.red_tensor = None
 
     def setup(self, config: dict[str, Any]) -> None:
         """Configura el experimento: grilla 2D con máscara kohonen_simple."""
@@ -122,7 +124,6 @@ class KohonenExperiment(Experimento):
 
         constructor = Constructor()
 
-        # Todas las neuronas son internas (sin entrada ni salida), umbral = 0.0
         self.red, self.regiones = constructor.crear_grilla(
             width=self.width,
             height=self.height,
@@ -131,30 +132,25 @@ class KohonenExperiment(Experimento):
             umbral=0.0,
         )
 
-        # Aplicar máscara de conexión kohonen_simple
         constructor.aplicar_mascara_2d(
             self.red, self.width, self.height, KOHONEN_SIMPLE_MASK
         )
 
-        # Inicializar todas las neuronas con valores aleatorios
         for neurona in self.red.neuronas:
             neurona.activar_external(random.random())
 
+        self.red_tensor = ConstructorTensor.compilar(self.red)
+
     def click(self, x: int, y: int) -> None:
-        """Toggle: si valor < 0.5 → activar (1.0), si >= 0.5 → desactivar (0.0)."""
-        key = Constructor.key_by_coord(x, y)
-        try:
-            neurona = self.red.get_neurona(key)
-            if neurona.valor < 0.5:
-                neurona.activar_external(1.0)
-            else:
-                neurona.activar_external(0.0)
-        except KeyError:
-            pass
+        """Toggle: si valor < 0.5 -> activar (1.0), si >= 0.5 -> desactivar (0.0)."""
+        idx = y * self.width + x
+        if 0 <= idx < self.red_tensor.n_real:
+            current = self.red_tensor.valores[idx].item()
+            self.red_tensor.set_valor(idx, 0.0 if current >= 0.5 else 1.0)
 
     def step(self) -> dict[str, Any]:
         """Un step procesa toda la red de golpe. Kohonen nunca termina."""
-        self.red.procesar()
+        self.red_tensor.procesar()
         self.generation += 1
 
         frame = self.get_frame()
@@ -166,6 +162,23 @@ class KohonenExperiment(Experimento):
             "grid": frame,
             "stats": stats,
         }
+
+    def step_n(self, count: int) -> dict[str, Any]:
+        """N steps en una sola operación tensorial (sin frames intermedios)."""
+        self.red_tensor.procesar_n(count)
+        self.generation += count
+        return {
+            "type": "frame",
+            "generation": self.generation,
+            "grid": self.get_frame(),
+            "stats": self.get_stats(),
+        }
+
+    def get_frame(self) -> list[list[float]]:
+        """Retorna la grilla actual como matriz de valores."""
+        if self.red_tensor:
+            return self.red_tensor.get_grid(self.width, self.height)
+        return super().get_frame()
 
     def reset(self) -> None:
         """Reinicia el experimento con nuevos valores aleatorios."""

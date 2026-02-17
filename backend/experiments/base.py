@@ -43,6 +43,19 @@ class Experimento(ABC):
         """Avanza un paso de procesamiento."""
         ...
 
+    def step_n(self, count: int) -> dict[str, Any]:
+        """Avanza N pasos de procesamiento de forma eficiente.
+
+        Subclasses should override for optimized bulk processing.
+        Default falls back to calling step() in a loop.
+        """
+        result: dict[str, Any] = {}
+        for _ in range(count):
+            result = self.step()
+            if result.get("type") == "status" and result.get("state") == "complete":
+                return result
+        return result
+
     @abstractmethod
     def click(self, x: int, y: int) -> None:
         """Activa una neurona en la región de entrada."""
@@ -65,8 +78,7 @@ class Experimento(ABC):
         active = sum(1 for row in frame for cell in row if cell > 0)
         return {
             "active_cells": active,
-            "generation": self.generation,
-            "total_rows": self.height,
+            "steps": self.generation,
         }
 
     def inspect(self, x: int, y: int) -> dict[str, Any]:

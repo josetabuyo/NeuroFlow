@@ -15,11 +15,18 @@ export interface ExperimentConfig {
   balance?: number;
 }
 
+export interface PerfMetrics {
+  steps: number;
+  elapsed_ms: number;
+  steps_per_second: number;
+}
+
 export interface FrameMessage {
   type: "frame";
   generation: number;
   grid: number[][];
   stats: ExperimentStats;
+  perf?: PerfMetrics;
 }
 
 export interface StatusMessage {
@@ -45,9 +52,8 @@ export type ServerMessage = FrameMessage | StatusMessage | ErrorMessage | Connec
 
 export interface ExperimentStats {
   active_cells: number;
-  generation: number;
-  total_rows: number;
-  processed_rows?: number;
+  steps: number;
+  total_steps?: number;
 }
 
 export type ExperimentState = "disconnected" | "ready" | "running" | "paused" | "complete";

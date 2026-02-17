@@ -1,17 +1,20 @@
-/** Controls — Play/Pause/Step/Reset/Inspect + stats display. */
+/** Controls — Play/Pause/Step/Reset/Inspect + stats display + steps per tick. */
 
-import type { ExperimentState, ExperimentStats } from "../types";
+import type { ExperimentState, ExperimentStats, PerfMetrics } from "../types";
 
 interface ControlsProps {
   state: ExperimentState;
   stats: ExperimentStats | null;
+  perf: PerfMetrics | null;
   generation: number;
   inspectMode: boolean;
+  stepsPerTick: number;
   onPlay: () => void;
   onPause: () => void;
   onStep: () => void;
   onReset: () => void;
   onToggleInspect: () => void;
+  onStepsPerTickChange: (value: number) => void;
 }
 
 const btnStyle = (active: boolean, color: string): React.CSSProperties => ({
@@ -27,16 +30,27 @@ const btnStyle = (active: boolean, color: string): React.CSSProperties => ({
   minWidth: "80px",
 });
 
+const STEP_OPTIONS = [1, 5, 10, 50, 100, 500, 1000];
+
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "k";
+  return String(Math.round(n));
+}
+
 export function Controls({
   state,
   stats,
+  perf,
   generation,
   inspectMode,
+  stepsPerTick,
   onPlay,
   onPause,
   onStep,
   onReset,
   onToggleInspect,
+  onStepsPerTickChange,
 }: ControlsProps) {
   const hasExperiment = state !== "disconnected";
   const canInteract = state === "ready" || state === "paused";
@@ -88,21 +102,65 @@ export function Controls({
         >
           {inspectMode ? "\u2715 Inspeccionar" : "Inspeccionar"}
         </button>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            marginLeft: "8px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "0.7rem",
+              color: "#888",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Steps/tick:
+          </span>
+          <select
+            value={stepsPerTick}
+            onChange={(e) => onStepsPerTickChange(Number(e.target.value))}
+            style={{
+              padding: "4px 8px",
+              background: "#1a1a2e",
+              border: "1px solid #2a2a3e",
+              borderRadius: "4px",
+              color: "#e0e0ff",
+              fontSize: "0.8rem",
+              cursor: "pointer",
+            }}
+          >
+            {STEP_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div
         style={{
           display: "flex",
-          gap: "20px",
+          gap: "16px",
           fontSize: "0.8rem",
           color: "#888",
           fontFamily: "monospace",
+          alignItems: "center",
         }}
       >
         <span>
-          Gen:{" "}
+          Steps:{" "}
           <strong style={{ color: "#e0e0ff" }}>
-            {generation}/{stats?.total_rows ?? "\u2014"}
+            {formatNumber(generation)}
+            {stats?.total_steps != null && (
+              <span style={{ color: "#666" }}>
+                {" / "}{stats.total_steps}
+              </span>
+            )}
           </strong>
         </span>
         <span>
@@ -111,6 +169,22 @@ export function Controls({
             {stats?.active_cells ?? 0}
           </strong>
         </span>
+        {perf && (
+          <span
+            style={{
+              padding: "2px 8px",
+              borderRadius: "4px",
+              background: "#0d1f0d",
+              border: "1px solid #1a3a1a",
+            }}
+          >
+            <span style={{ color: "#666" }}>{perf.elapsed_ms}ms</span>
+            {" / "}
+            <strong style={{ color: "#4ade80" }}>
+              {formatNumber(perf.steps_per_second)} steps/s
+            </strong>
+          </span>
+        )}
         <span
           style={{
             padding: "2px 8px",

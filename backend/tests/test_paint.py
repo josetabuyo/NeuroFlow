@@ -4,13 +4,12 @@ Valida:
 - Paint con una celda activa valor 1.0
 - Paint con una celda desactiva valor 0.0
 - Paint con múltiples celdas activa todas
-- Paint con celdas fuera del grid no falla (KeyError ignorado)
+- Paint con celdas fuera del grid no falla
 - Paint actualiza el frame (el grid refleja los cambios)
-- Paint sin experimento retorna error
+- Paint funciona en Von Neumann
 """
 
 import pytest
-from core.constructor import Constructor
 from experiments.kohonen import KohonenExperiment
 from experiments.von_neumann import VonNeumannExperiment
 
@@ -23,94 +22,76 @@ class TestPaint:
         exp = KohonenExperiment()
         exp.setup({"width": 10, "height": 10})
 
-        # Forzar neurona a 0
-        neurona = exp.red.get_neurona("x5y5")
-        neurona.activar_external(0.0)
-        assert neurona.valor == 0.0
+        idx = 5 * 10 + 5  # y=5, x=5
+        exp.red_tensor.set_valor(idx, 0.0)
+        assert exp.red_tensor.valores[idx].item() == 0.0
 
-        # Paint: activar
-        key = Constructor.key_by_coord(5, 5)
-        neurona = exp.red.get_neurona(key)
-        neurona.activar_external(1.0)
-
-        assert neurona.valor == 1.0
+        exp.red_tensor.set_valor(idx, 1.0)
+        assert exp.red_tensor.valores[idx].item() == 1.0
 
     def test_paint_una_celda_desactiva(self) -> None:
         """Paint con una celda y valor 0.0 desactiva la neurona."""
         exp = KohonenExperiment()
         exp.setup({"width": 10, "height": 10})
 
-        # Forzar neurona a 1
-        neurona = exp.red.get_neurona("x5y5")
-        neurona.activar_external(1.0)
-        assert neurona.valor == 1.0
+        idx = 5 * 10 + 5
+        exp.red_tensor.set_valor(idx, 1.0)
+        assert exp.red_tensor.valores[idx].item() == 1.0
 
-        # Paint: desactivar
-        key = Constructor.key_by_coord(5, 5)
-        neurona = exp.red.get_neurona(key)
-        neurona.activar_external(0.0)
-
-        assert neurona.valor == 0.0
+        exp.red_tensor.set_valor(idx, 0.0)
+        assert exp.red_tensor.valores[idx].item() == 0.0
 
     def test_paint_multiples_celdas_activa_todas(self) -> None:
         """Paint con múltiples celdas activa todas las neuronas."""
         exp = KohonenExperiment()
         exp.setup({"width": 10, "height": 10})
 
-        # Forzar varias neuronas a 0
         celdas = [(3, 3), (4, 3), (5, 3), (3, 4), (4, 4), (5, 4)]
         for x, y in celdas:
-            exp.red.get_neurona(Constructor.key_by_coord(x, y)).activar_external(0.0)
+            idx = y * 10 + x
+            exp.red_tensor.set_valor(idx, 0.0)
 
-        # Paint: activar todas
         for x, y in celdas:
-            key = Constructor.key_by_coord(x, y)
-            neurona = exp.red.get_neurona(key)
-            neurona.activar_external(1.0)
+            idx = y * 10 + x
+            exp.red_tensor.set_valor(idx, 1.0)
 
-        # Verificar que todas están activas
         for x, y in celdas:
-            neurona = exp.red.get_neurona(Constructor.key_by_coord(x, y))
-            assert neurona.valor == 1.0, f"Neurona ({x},{y}) debería estar activa"
+            idx = y * 10 + x
+            assert exp.red_tensor.valores[idx].item() == 1.0, \
+                f"Neurona ({x},{y}) debería estar activa"
 
     def test_paint_celdas_fuera_del_grid_no_falla(self) -> None:
-        """Paint con celdas fuera del grid ignora KeyError sin fallar."""
+        """Paint con celdas fuera del grid ignora sin fallar."""
         exp = KohonenExperiment()
         exp.setup({"width": 10, "height": 10})
 
-        # Celdas que incluyen posiciones fuera del grid
         celdas = [
-            {"x": 5, "y": 5},   # Válida
-            {"x": -1, "y": 5},  # Fuera
-            {"x": 5, "y": -1},  # Fuera
-            {"x": 10, "y": 5},  # Fuera
-            {"x": 5, "y": 10},  # Fuera
-            {"x": 99, "y": 99}, # Fuera
+            (5, 5),    # Válida
+            (-1, 5),   # Fuera
+            (5, -1),   # Fuera
+            (10, 5),   # Fuera
+            (5, 10),   # Fuera
+            (99, 99),  # Fuera
         ]
 
-        # Simular lógica del handler: no debería lanzar excepciones
-        for cell in celdas:
-            x, y = cell["x"], cell["y"]
-            key = Constructor.key_by_coord(x, y)
-            try:
-                neurona = exp.red.get_neurona(key)
-                neurona.activar_external(1.0)
-            except KeyError:
-                pass  # Celda fuera del grid
+        for x, y in celdas:
+            idx = y * 10 + x
+            if 0 <= idx < exp.red_tensor.n_real and 0 <= x < 10 and 0 <= y < 10:
+                exp.red_tensor.set_valor(idx, 1.0)
 
-        # La celda válida sí se activó
-        assert exp.red.get_neurona("x5y5").valor == 1.0
+        # La celda válida se activó
+        idx_valid = 5 * 10 + 5
+        assert exp.red_tensor.valores[idx_valid].item() == 1.0
 
     def test_paint_actualiza_frame(self) -> None:
         """Paint modifica el frame: el grid refleja los cambios."""
         exp = KohonenExperiment()
         exp.setup({"width": 10, "height": 10})
 
-        # Desactivar toda la grilla
-        for neurona in exp.red.neuronas:
-            neurona.activar_external(0.0)
+        # Desactivar toda la grilla via tensor
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
 
-        # Verificar que el frame tiene todo en 0
         frame_antes = exp.get_frame()
         assert all(cell == 0.0 for row in frame_antes for cell in row)
 
@@ -118,10 +99,9 @@ class TestPaint:
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
                 x, y = 5 + dx, 5 + dy
-                key = Constructor.key_by_coord(x, y)
-                exp.red.get_neurona(key).activar_external(1.0)
+                idx = y * 10 + x
+                exp.red_tensor.set_valor(idx, 1.0)
 
-        # El frame refleja los cambios
         frame_despues = exp.get_frame()
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
@@ -129,17 +109,14 @@ class TestPaint:
                     f"Celda ({5+dx},{5+dy}) debería estar activa en el frame"
 
     def test_paint_funciona_en_von_neumann(self) -> None:
-        """Paint funciona igual en Von Neumann — activar_external directamente."""
+        """Paint funciona igual en Von Neumann — set_valor via tensor."""
         exp = VonNeumannExperiment()
         exp.setup({"width": 20, "height": 20, "rule": 111})
 
-        # Paint: activar una neurona de entrada (fila 19)
-        key = Constructor.key_by_coord(10, 19)
-        neurona = exp.red.get_neurona(key)
-        neurona.activar_external(1.0)
+        idx = 19 * 20 + 10  # y=19, x=10
+        exp.red_tensor.set_valor(idx, 1.0)
 
-        assert neurona.valor == 1.0
+        assert exp.red_tensor.valores[idx].item() == 1.0
 
-        # El frame refleja el cambio
         frame = exp.get_frame()
         assert frame[19][10] == 1.0
