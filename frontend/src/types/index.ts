@@ -12,6 +12,7 @@ export interface ExperimentConfig {
   width: number;
   height: number;
   rule?: number;
+  balance?: number;
 }
 
 export interface FrameMessage {

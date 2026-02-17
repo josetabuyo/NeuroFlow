@@ -160,6 +160,75 @@ class Constructor:
             peso_dendrita=1.0,
         )
 
+    def balancear_pesos(
+        self,
+        neuronas: list[Neurona],
+        target: float = 0.0,
+    ) -> None:
+        """Ajusta pesos sinápticos para que el balance excitación/inhibición iguale el target.
+
+        Para cada neurona calcula:
+          P = sum(s.peso * d.peso) para dendritas excitatorias (d.peso > 0)
+          N = sum(s.peso * |d.peso|) para dendritas inhibitorias (d.peso < 0)
+        Y escala los pesos sinápticos de modo que P_new - N_new = target.
+
+        La estrategia escala siempre hacia abajo (nunca sube pesos), usando
+        min(P, N) como base.  Esto evita que los pesos sobrepasen [0, 1]:
+          base     = min(P, N)
+          P_new    = base + target / 2
+          N_new    = base - target / 2
+          factor_e = P_new / P    (≤ 1 cuando P es el lado mayor)
+          factor_i = N_new / N    (≤ 1 cuando N es el lado mayor)
+
+        Args:
+            neuronas: Lista de neuronas a balancear.  NeuronaEntrada y neuronas
+                      sin dendritas se ignoran.
+            target: Balance deseado.  0.0 = equilibrio perfecto (50/50).
+                    Positivo = sesgo excitatorio.  Negativo = sesgo inhibitorio.
+        """
+        for neurona in neuronas:
+            if isinstance(neurona, NeuronaEntrada):
+                continue
+            if not neurona.dendritas:
+                continue
+
+            # Clasificar sinapsis por tipo de dendrita
+            exc_pairs: list[tuple[Sinapsis, float]] = []  # (sinapsis, |peso_dendrita|)
+            inh_pairs: list[tuple[Sinapsis, float]] = []
+
+            for dendrita in neurona.dendritas:
+                if dendrita.peso > 0:
+                    for s in dendrita.sinapsis:
+                        exc_pairs.append((s, dendrita.peso))
+                elif dendrita.peso < 0:
+                    for s in dendrita.sinapsis:
+                        inh_pairs.append((s, abs(dendrita.peso)))
+
+            # Sumas actuales (ambas positivas)
+            sum_exc = sum(s.peso * dp for s, dp in exc_pairs)
+            sum_inh = sum(s.peso * dp for s, dp in inh_pairs)
+
+            if sum_exc <= 0 or sum_inh <= 0:
+                continue
+
+            # Usar el lado menor como base para evitar escalar hacia arriba
+            base = min(sum_exc, sum_inh)
+
+            desired_exc = base + target / 2.0
+            desired_inh = base - target / 2.0
+
+            if desired_exc <= 0 or desired_inh <= 0:
+                continue
+
+            factor_exc = desired_exc / sum_exc
+            factor_inh = desired_inh / sum_inh
+
+            # Aplicar factores a pesos sinápticos, clampeando a [0, 1]
+            for s, _dp in exc_pairs:
+                s.peso = min(1.0, max(0.0, s.peso * factor_exc))
+            for s, _dp in inh_pairs:
+                s.peso = min(1.0, max(0.0, s.peso * factor_inh))
+
     def aplicar_mascara_2d(
         self,
         red: Red,

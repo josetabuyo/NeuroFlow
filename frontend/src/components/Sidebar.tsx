@@ -201,6 +201,53 @@ export function Sidebar({
             </div>
           </div>
 
+          {selectedExp.default_config.balance !== undefined && (
+            <div>
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#888",
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Balance
+              </label>
+              <input
+                type="number"
+                value={config.balance ?? 0}
+                min={-1}
+                max={1}
+                step={0.1}
+                onChange={(e) =>
+                  onConfigChange({
+                    ...config,
+                    balance: Number(e.target.value),
+                  })
+                }
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  background: "#1a1a2e",
+                  border: "1px solid #2a2a3e",
+                  borderRadius: "4px",
+                  color: "#e0e0ff",
+                  fontSize: "0.9rem",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: "0.65rem",
+                  color: "#555",
+                  marginTop: "2px",
+                  display: "block",
+                }}
+              >
+                0 = neutro, + excitatorio, − inhibitorio
+              </span>
+            </div>
+          )}
+
           <button
             onClick={onStart}
             disabled={!connected}

@@ -35,6 +35,21 @@ EXPERIMENTS = {
             "height": 30,
         },
     },
+    "kohonen_balanced": {
+        "id": "kohonen_balanced",
+        "name": "Kohonen Balanceado",
+        "description": (
+            "Kohonen con pesos balanceados: la suma de pesos efectivos "
+            "(sinapsis × dendrita) de cada neurona iguala el valor de balance. "
+            "Con balance=0 excitación e inhibición se anulan; con 0.1 hay "
+            "sesgo excitatorio."
+        ),
+        "default_config": {
+            "width": 30,
+            "height": 30,
+            "balance": 0.0,
+        },
+    },
 }
 
 

@@ -19,12 +19,15 @@ test("1. Carga inicial", async ({ page }) => {
   // Title
   await expect(page.locator("h1")).toHaveText("NeuroFlow");
 
-  // Two experiment buttons in the sidebar
+  // Experiment buttons in the sidebar
   await expect(
     page.getByRole("button", { name: /Von Neumann/i })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Kohonen/i })
+    page.getByRole("button", { name: "Kohonen (Competencia Lateral 2D)" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Kohonen Balanceado" })
   ).toBeVisible();
 
   // "Iniciar Experimento" button
@@ -304,7 +307,7 @@ test("11. Cambiar de experimento", async ({ page }) => {
   await expect(page.locator("canvas")).toBeVisible();
 
   // Click Kohonen in the sidebar
-  await page.getByRole("button", { name: /Kohonen/i }).click();
+  await page.getByRole("button", { name: "Kohonen (Competencia Lateral 2D)" }).click();
 
   // Click "Iniciar Experimento"
   await page.getByRole("button", { name: "Iniciar Experimento" }).click();

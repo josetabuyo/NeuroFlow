@@ -8,11 +8,15 @@ export async function waitForConnection(page: Page): Promise<void> {
 /** Start an experiment and wait for the canvas to appear. */
 export async function startExperiment(
   page: Page,
-  experiment: "von_neumann" | "kohonen"
+  experiment: "von_neumann" | "kohonen" | "kohonen_balanced"
 ): Promise<void> {
   if (experiment === "kohonen") {
     await page
-      .getByRole("button", { name: /Kohonen/i })
+      .getByRole("button", { name: "Kohonen (Competencia Lateral 2D)" })
+      .click();
+  } else if (experiment === "kohonen_balanced") {
+    await page
+      .getByRole("button", { name: "Kohonen Balanceado" })
       .click();
   }
   await page.getByRole("button", { name: "Iniciar Experimento" }).click();

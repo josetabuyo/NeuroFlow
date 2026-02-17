@@ -26,6 +26,13 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
       "Mapa autoorganizado con excitación local e inhibición lateral",
     default_config: { width: 30, height: 30 },
   },
+  {
+    id: "kohonen_balanced",
+    name: "Kohonen Balanceado",
+    description:
+      "Kohonen con pesos balanceados: suma de pesos efectivos = balance",
+    default_config: { width: 30, height: 30, balance: 0.0 },
+  },
 ];
 
 function App() {
