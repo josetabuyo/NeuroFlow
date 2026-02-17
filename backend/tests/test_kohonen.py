@@ -11,7 +11,6 @@ import random
 import pytest
 from core.constructor import Constructor
 from core.neurona import Neurona, NeuronaEntrada
-from core.red import Red
 from experiments.kohonen import KohonenExperiment, KOHONEN_SIMPLE_MASK
 
 
