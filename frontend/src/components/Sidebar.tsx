@@ -1,6 +1,66 @@
 /** Sidebar — experiment selector and configuration. */
 
+import { useState, useEffect } from "react";
 import type { ExperimentInfo, ExperimentConfig } from "../types";
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px",
+  background: "#1a1a2e",
+  border: "1px solid #2a2a3e",
+  borderRadius: "4px",
+  color: "#e0e0ff",
+  fontSize: "0.9rem",
+};
+
+/** Numeric input that allows empty field while editing and normalizes , to . */
+function NumericInput({
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  integer,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  integer?: boolean;
+}) {
+  const [text, setText] = useState(String(value));
+
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+
+  const commit = (raw: string) => {
+    const normalized = raw.replace(",", ".");
+    const parsed = integer ? parseInt(normalized, 10) : parseFloat(normalized);
+    if (Number.isNaN(parsed)) return;
+    let clamped = parsed;
+    if (min !== undefined && clamped < min) clamped = min;
+    if (max !== undefined && clamped > max) clamped = max;
+    onChange(clamped);
+    setText(String(clamped));
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode={integer ? "numeric" : "decimal"}
+      value={text}
+      step={step}
+      onChange={(e) => setText(e.target.value.replace(",", "."))}
+      onBlur={() => commit(text)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit(text);
+      }}
+      style={inputStyle}
+    />
+  );
+}
 
 interface SidebarProps {
   experiments: ExperimentInfo[];
@@ -150,23 +210,12 @@ export function Sidebar({
               >
                 Ancho
               </label>
-              <input
-                type="number"
+              <NumericInput
                 value={config.width}
                 min={5}
                 max={200}
-                onChange={(e) =>
-                  onConfigChange({ ...config, width: Number(e.target.value) })
-                }
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  background: "#1a1a2e",
-                  border: "1px solid #2a2a3e",
-                  borderRadius: "4px",
-                  color: "#e0e0ff",
-                  fontSize: "0.9rem",
-                }}
+                integer
+                onChange={(v) => onConfigChange({ ...config, width: v })}
               />
             </div>
             <div style={{ flex: 1 }}>
@@ -180,23 +229,12 @@ export function Sidebar({
               >
                 Alto
               </label>
-              <input
-                type="number"
+              <NumericInput
                 value={config.height}
                 min={5}
                 max={200}
-                onChange={(e) =>
-                  onConfigChange({ ...config, height: Number(e.target.value) })
-                }
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  background: "#1a1a2e",
-                  border: "1px solid #2a2a3e",
-                  borderRadius: "4px",
-                  color: "#e0e0ff",
-                  fontSize: "0.9rem",
-                }}
+                integer
+                onChange={(v) => onConfigChange({ ...config, height: v })}
               />
             </div>
           </div>
@@ -213,27 +251,14 @@ export function Sidebar({
               >
                 Balance
               </label>
-              <input
-                type="number"
+              <NumericInput
                 value={config.balance ?? 0}
                 min={-1}
                 max={1}
                 step={0.1}
-                onChange={(e) =>
-                  onConfigChange({
-                    ...config,
-                    balance: Number(e.target.value),
-                  })
+                onChange={(v) =>
+                  onConfigChange({ ...config, balance: v })
                 }
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  background: "#1a1a2e",
-                  border: "1px solid #2a2a3e",
-                  borderRadius: "4px",
-                  color: "#e0e0ff",
-                  fontSize: "0.9rem",
-                }}
               />
               <span
                 style={{
