@@ -50,3 +50,9 @@ export interface ExperimentStats {
 }
 
 export type ExperimentState = "disconnected" | "ready" | "running" | "paused" | "complete";
+
+export interface BrushShape {
+  id: string;
+  name: string;
+  offsets: [number, number][];
+}

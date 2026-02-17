@@ -1,6 +1,6 @@
 /** HTML5 Canvas that renders the neuron grid and handles clicks. */
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 
 interface PixelCanvasProps {
   grid: number[][];
@@ -11,6 +11,7 @@ interface PixelCanvasProps {
   connectionMap?: (number | null)[][] | null;
   inspectedCell?: { x: number; y: number } | null;
   onCellClick: (x: number, y: number) => void;
+  onCellDrag?: (x: number, y: number) => void;
 }
 
 const COLORS = {
@@ -50,6 +51,7 @@ export function PixelCanvas({
   connectionMap,
   inspectedCell,
   onCellClick,
+  onCellDrag,
 }: PixelCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -144,22 +146,60 @@ export function PixelCanvas({
     return () => window.removeEventListener("resize", handleResize);
   }, [draw]);
 
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  const [isDragging, setIsDragging] = useState(false);
+  const lastCellRef = useRef<string | null>(null);
 
+  const getCellFromEvent = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } | null => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
       const cellSize = getCellSize();
       const x = Math.floor((e.clientX - rect.left) / cellSize);
       const y = Math.floor((e.clientY - rect.top) / cellSize);
-
-      if (x >= 0 && x < width && y >= 0 && y < height) {
-        onCellClick(x, y);
-      }
+      if (x >= 0 && x < width && y >= 0 && y < height) return { x, y };
+      return null;
     },
-    [width, height, getCellSize, onCellClick]
+    [width, height, getCellSize]
   );
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const cell = getCellFromEvent(e);
+      if (!cell) return;
+      setIsDragging(true);
+      lastCellRef.current = `${cell.x},${cell.y}`;
+      onCellClick(cell.x, cell.y);
+    },
+    [getCellFromEvent, onCellClick]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!isDragging) return;
+      const cell = getCellFromEvent(e);
+      if (!cell) return;
+      const key = `${cell.x},${cell.y}`;
+      if (key === lastCellRef.current) return;
+      lastCellRef.current = key;
+      onCellDrag?.(cell.x, cell.y);
+    },
+    [isDragging, getCellFromEvent, onCellDrag]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    lastCellRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+      lastCellRef.current = null;
+    };
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
+  }, []);
 
   return (
     <div
@@ -175,7 +215,9 @@ export function PixelCanvas({
     >
       <canvas
         ref={canvasRef}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         style={{
           cursor: "crosshair",
           imageRendering: "pixelated",

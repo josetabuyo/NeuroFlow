@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { PixelCanvas } from "./components/PixelCanvas";
 import { Sidebar } from "./components/Sidebar";
 import { Controls } from "./components/Controls";
+import { BrushPalette } from "./components/BrushPalette";
 import { useExperiment } from "./hooks/useExperiment";
+import { BRUSHES } from "./brushes";
 import type { ExperimentInfo, ExperimentConfig } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -43,14 +45,18 @@ function App() {
     inspectMode,
     connectionMap,
     inspectedCell,
+    selectedBrush,
+    brushMode,
     start,
-    click,
+    paint,
     step,
     play,
     pause,
     reset,
     inspect,
     toggleInspectMode,
+    setSelectedBrush,
+    toggleBrushMode,
   } = useExperiment();
 
   // Fetch experiments list
@@ -83,15 +89,40 @@ function App() {
     start(selectedExp, config);
   }, [start, selectedExp, config]);
 
+  const applyBrush = useCallback(
+    (x: number, y: number) => {
+      if (inspectMode) return;
+      const brush = BRUSHES.find((b) => b.id === selectedBrush);
+      if (!brush) return;
+      const value = brushMode === "activate" ? 1.0 : 0.0;
+      const cells = brush.offsets
+        .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
+        .filter(
+          (c) =>
+            c.x >= 0 && c.x < config.width && c.y >= 0 && c.y < config.height
+        );
+      paint(cells, value);
+    },
+    [inspectMode, selectedBrush, brushMode, config, paint]
+  );
+
   const handleCellClick = useCallback(
     (x: number, y: number) => {
       if (inspectMode) {
         inspect(x, y);
       } else {
-        click(x, y);
+        applyBrush(x, y);
       }
     },
-    [inspectMode, inspect, click]
+    [inspectMode, inspect, applyBrush]
+  );
+
+  const handleCellDrag = useCallback(
+    (x: number, y: number) => {
+      if (inspectMode) return;
+      applyBrush(x, y);
+    },
+    [inspectMode, applyBrush]
   );
 
   const handlePlay = useCallback(() => play(10), [play]);
@@ -153,20 +184,32 @@ function App() {
             border: "1px solid #1a1a2e",
             overflow: "hidden",
             padding: "16px",
+            position: "relative",
           }}
         >
           {hasGrid ? (
-            <PixelCanvas
-              grid={grid}
-              width={config.width}
-              height={config.height}
-              {...(selectedExp !== "kohonen"
-                ? { inputRow: config.height - 1, outputRow: 0 }
-                : {})}
-              connectionMap={connectionMap}
-              inspectedCell={inspectedCell}
-              onCellClick={handleCellClick}
-            />
+            <>
+              <PixelCanvas
+                grid={grid}
+                width={config.width}
+                height={config.height}
+                {...(selectedExp !== "kohonen"
+                  ? { inputRow: config.height - 1, outputRow: 0 }
+                  : {})}
+                connectionMap={connectionMap}
+                inspectedCell={inspectedCell}
+                onCellClick={handleCellClick}
+                onCellDrag={handleCellDrag}
+              />
+              <BrushPalette
+                brushes={BRUSHES}
+                selectedBrush={selectedBrush}
+                brushMode={brushMode}
+                disabled={inspectMode}
+                onSelectBrush={setSelectedBrush}
+                onToggleMode={toggleBrushMode}
+              />
+            </>
           ) : (
             <div
               style={{

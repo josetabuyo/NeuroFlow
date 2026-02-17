@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from core.constructor import Constructor
 from experiments.base import Experimento
 from experiments.von_neumann import VonNeumannExperiment
 from experiments.kohonen import KohonenExperiment
@@ -44,6 +45,7 @@ class ExperimentSession:
         handlers = {
             "start": self._handle_start,
             "click": self._handle_click,
+            "paint": self._handle_paint,
             "step": self._handle_step,
             "play": self._handle_play,
             "pause": self._handle_pause,
@@ -82,6 +84,26 @@ class ExperimentSession:
         x = message.get("x", 0)
         y = message.get("y", 0)
         self.experiment.click(x, y)
+        await self._send_frame()
+
+    async def _handle_paint(self, message: dict[str, Any]) -> None:
+        """Apply brush: activate/deactivate multiple neurons at once."""
+        if not self.experiment:
+            await self.send({"type": "error", "message": "No experiment started"})
+            return
+        cells: list[dict[str, int]] = message.get("cells", [])
+        value: float = message.get("value", 1.0)
+        if not self.experiment.red:
+            return
+        for cell in cells:
+            x = cell.get("x", 0)
+            y = cell.get("y", 0)
+            key = Constructor.key_by_coord(x, y)
+            try:
+                neurona = self.experiment.red.get_neurona(key)
+                neurona.activar_external(value)
+            except KeyError:
+                pass  # Celda fuera del grid (borde del pincel)
         await self._send_frame()
 
     async def _handle_step(self, _message: dict[str, Any]) -> None:

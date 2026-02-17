@@ -22,14 +22,19 @@ interface UseExperimentReturn {
   inspectMode: boolean;
   connectionMap: (number | null)[][] | null;
   inspectedCell: { x: number; y: number } | null;
+  selectedBrush: string;
+  brushMode: "activate" | "deactivate";
   start: (experiment: string, config: ExperimentConfig) => void;
   click: (x: number, y: number) => void;
+  paint: (cells: { x: number; y: number }[], value: number) => void;
   step: () => void;
   play: (fps?: number) => void;
   pause: () => void;
   reset: () => void;
   inspect: (x: number, y: number) => void;
   toggleInspectMode: () => void;
+  setSelectedBrush: (id: string) => void;
+  toggleBrushMode: () => void;
 }
 
 export function useExperiment(): UseExperimentReturn {
@@ -40,6 +45,8 @@ export function useExperiment(): UseExperimentReturn {
   const [inspectMode, setInspectMode] = useState(false);
   const [connectionMap, setConnectionMap] = useState<(number | null)[][] | null>(null);
   const [inspectedCell, setInspectedCell] = useState<{ x: number; y: number } | null>(null);
+  const [selectedBrush, setSelectedBrush] = useState("1x1");
+  const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
   const wsRef = useRef<WebSocket | null>(null);
 
   const send = useCallback((data: Record<string, unknown>) => {
@@ -128,12 +135,23 @@ export function useExperiment(): UseExperimentReturn {
     send({ action: "reset" });
   }, [send]);
 
+  const paint = useCallback(
+    (cells: { x: number; y: number }[], value: number) => {
+      send({ action: "paint", cells, value });
+    },
+    [send]
+  );
+
   const inspect = useCallback(
     (x: number, y: number) => {
       send({ action: "inspect", x, y });
     },
     [send]
   );
+
+  const toggleBrushMode = useCallback(() => {
+    setBrushMode((prev) => (prev === "activate" ? "deactivate" : "activate"));
+  }, []);
 
   const toggleInspectMode = useCallback(() => {
     setInspectMode((prev) => {
@@ -153,13 +171,18 @@ export function useExperiment(): UseExperimentReturn {
     inspectMode,
     connectionMap,
     inspectedCell,
+    selectedBrush,
+    brushMode,
     start,
     click,
+    paint,
     step,
     play,
     pause,
     reset,
     inspect,
     toggleInspectMode,
+    setSelectedBrush,
+    toggleBrushMode,
   };
 }
