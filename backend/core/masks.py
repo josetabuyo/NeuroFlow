@@ -248,6 +248,17 @@ MASK_GRADUAL_XXL_INH: MaskDef = [
     *_make_inhibitory(_sparse_ring(8, 30, step=4), -1.0, 8),
 ]
 
+MASK_MEXICAN_HAT: MaskDef = [
+    # Excitatory peak — sharp falloff
+    {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
+    {"peso_dendrita": 0.5, "offsets": _ring(2, 2)},
+    # Inhibitory profile — strong near center, decays with distance
+    *_make_inhibitory(_ring(3, 5), -1.0, 8),
+    *_make_inhibitory(_sparse_ring(6, 12, step=2), -0.6, 8),
+    *_make_inhibitory(_sparse_ring(13, 20, step=3), -0.25, 8),
+    *_make_inhibitory(_sparse_ring(21, 30, step=5), -0.08, 8),
+]
+
 
 # ---------------------------------------------------------------------------
 # Registry with metadata
@@ -388,6 +399,15 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "corona": "r=8-30, sparse step=4",
         "dendrites_inh": 8,
         "mask": MASK_GRADUAL_XXL_INH,
+    },
+    "mexican_hat": {
+        "id": "mexican_hat",
+        "name": "Sombrero Mexicano",
+        "description": "DoG teórico: exc. r=1-2, inh. gradual r=3-30 (peso decae con distancia).",
+        "center": "Gradual r=1→1.0, r=2→0.5",
+        "corona": "r=3-5(-1) → r=6-12(-0.6) → r=13-20(-0.25) → r=21-30(-0.08)",
+        "dendrites_inh": 32,
+        "mask": MASK_MEXICAN_HAT,
     },
 }
 
