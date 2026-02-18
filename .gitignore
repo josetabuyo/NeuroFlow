@@ -38,3 +38,6 @@ Thumbs.db
 
 # Playwright MCP
 .playwright-mcp/
+
+# Prompt scratchpad
+NEXT_PROMPT.md
