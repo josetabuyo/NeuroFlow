@@ -83,7 +83,7 @@ class TestMaskPresets:
 
     def test_get_mask_info_excludes_mask_data(self) -> None:
         info = get_mask_info()
-        assert len(info) == 12
+        assert len(info) == 14
         for entry in info:
             assert "mask" not in entry
             assert "id" in entry
@@ -474,38 +474,40 @@ class TestKohonenLabFunctionality:
 
 
 class TestDaemonMetrics:
-    """Tests para las m?tricas de daemons en Kohonen Lab."""
+    """Tests para las metricas de daemons en Kohonen Lab."""
 
     def test_stats_include_daemon_fields(self) -> None:
-        """get_stats() retorna daemon_count, stability y exclusion."""
+        """get_stats() retorna daemon_count, avg_daemon_size, noise_cells, stability y exclusion."""
         exp = KohonenLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         exp.step()
         stats = exp.get_stats()
         assert "daemon_count" in stats
+        assert "avg_daemon_size" in stats
+        assert "noise_cells" in stats
         assert "stability" in stats
         assert "exclusion" in stats
         assert isinstance(stats["daemon_count"], int)
-        assert isinstance(stats["stability"], float)
-        assert isinstance(stats["exclusion"], float)
+        assert isinstance(stats["avg_daemon_size"], float)
+        assert isinstance(stats["noise_cells"], int)
 
     def test_daemon_count_zero_for_empty_grid(self) -> None:
-        """All-zero grid has zero daemons."""
+        """All-zero grid has zero daemons and zero noise."""
         exp = KohonenLabExperiment()
         exp.setup({"width": 5, "height": 5, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
         stats = exp.get_stats()
         assert stats["daemon_count"] == 0
+        assert stats["noise_cells"] == 0
         assert stats["active_cells"] == 0
 
     def test_daemon_count_one_cluster(self) -> None:
-        """A single contiguous active region counts as one daemon."""
+        """A 3x3 contiguous active region counts as one daemon."""
         exp = KohonenLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
-        # Activate a 3x3 block at (3,3)
         for dy in range(3):
             for dx in range(3):
                 idx = (3 + dy) * 10 + (3 + dx)
@@ -513,30 +515,83 @@ class TestDaemonMetrics:
         stats = exp.get_stats()
         assert stats["daemon_count"] == 1
         assert stats["active_cells"] == 9
+        assert stats["avg_daemon_size"] == 9.0
+        assert stats["noise_cells"] == 0
 
-    def test_daemon_count_two_isolated_clusters(self) -> None:
-        """Two isolated active regions count as two daemons."""
+    def test_isolated_pixels_are_noise_not_daemons(self) -> None:
+        """Single isolated pixels count as noise, not daemons (min_size=3)."""
         exp = KohonenLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
-        # Cluster 1: (0,0)
+        # Two isolated pixels far apart
         exp.red_tensor.set_valor(0, 1.0)
-        # Cluster 2: (9,9) ? far enough to be disconnected
         exp.red_tensor.set_valor(9 * 10 + 9, 1.0)
         stats = exp.get_stats()
-        assert stats["daemon_count"] == 2
+        assert stats["daemon_count"] == 0
+        assert stats["noise_cells"] == 2
+        assert stats["active_cells"] == 2
 
-    def test_exclusion_perfect_for_binary(self) -> None:
-        """Binary grid (all 1s in daemons, all 0s outside) gives exclusion=1."""
+    def test_pair_is_noise_not_daemon(self) -> None:
+        """A pair of adjacent neurons is noise (below min_size=3)."""
         exp = KohonenLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
-        # Activate one cell
-        exp.red_tensor.set_valor(55, 1.0)
+        exp.red_tensor.set_valor(0, 1.0)
+        exp.red_tensor.set_valor(1, 1.0)
         stats = exp.get_stats()
-        assert stats["exclusion"] == pytest.approx(1.0, abs=0.01)
+        assert stats["daemon_count"] == 0
+        assert stats["noise_cells"] == 2
+
+    def test_two_real_clusters(self) -> None:
+        """Two 3-neuron clusters count as two daemons."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
+        # Cluster 1: 3 cells at top-left
+        exp.red_tensor.set_valor(0, 1.0)
+        exp.red_tensor.set_valor(1, 1.0)
+        exp.red_tensor.set_valor(10, 1.0)
+        # Cluster 2: 3 cells at bottom-right
+        exp.red_tensor.set_valor(98, 1.0)
+        exp.red_tensor.set_valor(99, 1.0)
+        exp.red_tensor.set_valor(89, 1.0)
+        stats = exp.get_stats()
+        assert stats["daemon_count"] == 2
+        assert stats["noise_cells"] == 0
+        assert stats["avg_daemon_size"] == 3.0
+
+    def test_mixed_daemons_and_noise(self) -> None:
+        """A grid with one real cluster and one isolated pixel."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
+        # One 3x3 daemon
+        for dy in range(3):
+            for dx in range(3):
+                exp.red_tensor.set_valor((dy) * 10 + dx, 1.0)
+        # One isolated pixel far away
+        exp.red_tensor.set_valor(99, 1.0)
+        stats = exp.get_stats()
+        assert stats["daemon_count"] == 1
+        assert stats["noise_cells"] == 1
+        assert stats["active_cells"] == 10
+
+    def test_exclusion_with_daemon_and_noise(self) -> None:
+        """Exclusion only considers daemon clusters, noise is 'outside'."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
+        # 3 adjacent cells = 1 daemon
+        exp.red_tensor.set_valor(0, 1.0)
+        exp.red_tensor.set_valor(1, 1.0)
+        exp.red_tensor.set_valor(10, 1.0)
+        stats = exp.get_stats()
+        assert stats["exclusion"] > 0.9
 
     def test_exclusion_zero_for_empty_grid(self) -> None:
         """Empty grid has exclusion=0."""

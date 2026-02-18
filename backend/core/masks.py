@@ -65,6 +65,20 @@ def _partition(offsets: list[tuple[int, int]], n_sectors: int) -> list[list[tupl
     return [s for s in sectors if s]
 
 
+def _sparse_ring(r_inner: int, r_outer: int, step: int = 2) -> list[tuple[int, int]]:
+    """Sparse annular ring: keeps only cells where (dx+dy) % step == 0.
+
+    step=2 gives ~50% density (checkerboard), step=3 gives ~33%, etc.
+    """
+    return [
+        (dx, dy)
+        for dx in range(-r_outer, r_outer + 1)
+        for dy in range(-r_outer, r_outer + 1)
+        if r_inner <= max(abs(dx), abs(dy)) <= r_outer
+        and (dx + dy) % step == 0
+    ]
+
+
 def _make_inhibitory(
     offsets: list[tuple[int, int]],
     peso: float,
@@ -213,6 +227,20 @@ MASK_STRONG_CENTER: MaskDef = [
     *_make_inhibitory(_ring(2, 4), -1.0, 8),
 ]
 
+MASK_GRADUAL_CENTER: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
+    {"peso_dendrita": 0.6, "offsets": _ring(2, 2)},
+    {"peso_dendrita": 0.3, "offsets": _ring(3, 3)},
+    *_make_inhibitory(_sparse_ring(6, 11), -1.0, 8),
+]
+
+MASK_GRADUAL_BIG_INH: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
+    {"peso_dendrita": 0.6, "offsets": _ring(2, 2)},
+    {"peso_dendrita": 0.3, "offsets": _ring(3, 3)},
+    *_make_inhibitory(_sparse_ring(8, 19, step=3), -1.0, 8),
+]
+
 
 # ---------------------------------------------------------------------------
 # Registry with metadata
@@ -326,6 +354,24 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "corona": "r=2-4, peso -1",
         "dendrites_inh": 8,
         "mask": MASK_STRONG_CENTER,
+    },
+    "gradual_center": {
+        "id": "gradual_center",
+        "name": "Centro Gradual",
+        "description": "Exc. gradual r=1(1.0) r=2(0.6) r=3(0.3), gap 2px, inh. sparse r=6-11.",
+        "center": "Gradual r=1→1.0, r=2→0.6, r=3→0.3",
+        "corona": "r=6-11, checkerboard sparse",
+        "dendrites_inh": 8,
+        "mask": MASK_GRADUAL_CENTER,
+    },
+    "gradual_big_inh": {
+        "id": "gradual_big_inh",
+        "name": "Centro Gradual Big Inh",
+        "description": "Exc. gradual r=1-3, gap 4px, inh. sparse r=8-19.",
+        "center": "Gradual r=1→1.0, r=2→0.6, r=3→0.3",
+        "corona": "r=8-19, sparse step=3",
+        "dendrites_inh": 8,
+        "mask": MASK_GRADUAL_BIG_INH,
     },
 }
 

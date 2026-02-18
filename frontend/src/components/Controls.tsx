@@ -175,13 +175,31 @@ export function Controls({
         </span>
         {stats?.daemon_count != null && (
           <>
-            <span>
+            <span
+              title="Clusters de ≥3 neuronas activas contiguas"
+            >
               Daemons:{" "}
               <strong style={{ color: "#f0a500" }}>
                 {stats.daemon_count}
               </strong>
+              <span style={{ color: "#555", fontSize: "0.7rem" }}>
+                {" "}(~{stats.avg_daemon_size ?? 0})
+              </span>
             </span>
-            <span>
+            <span
+              title="Neuronas activas sueltas (no forman daemon)"
+              style={{
+                color: (stats.noise_cells ?? 0) > (stats.active_cells * 0.3)
+                  ? "#f72585"
+                  : "#888",
+              }}
+            >
+              Ruido:{" "}
+              <strong>
+                {stats.noise_cells ?? 0}
+              </strong>
+            </span>
+            <span title="Estabilidad del conteo de daemons (ventana 20 frames)">
               Estab:{" "}
               <strong
                 style={{
@@ -196,7 +214,7 @@ export function Controls({
                 {(stats.stability ?? 0).toFixed(2)}
               </strong>
             </span>
-            <span>
+            <span title="Contraste entre activación dentro vs fuera de daemons">
               Excl:{" "}
               <strong style={{ color: "#7b61ff" }}>
                 {(stats.exclusion ?? 0).toFixed(2)}

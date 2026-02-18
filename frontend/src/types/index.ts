@@ -83,6 +83,8 @@ export interface ExperimentStats {
   steps: number;
   total_steps?: number;
   daemon_count?: number;
+  avg_daemon_size?: number;
+  noise_cells?: number;
   stability?: number;
   exclusion?: number;
 }

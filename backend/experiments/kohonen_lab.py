@@ -23,6 +23,25 @@ from .base import Experimento
 
 _STABILITY_WINDOW = 20
 _DAEMON_THRESHOLD = 0.5
+_MIN_DAEMON_SIZE = 3
+
+
+class _DaemonResult:
+    """Result of daemon detection: clusters, noise, sizes."""
+
+    __slots__ = ("count", "daemon_indices", "noise_indices", "sizes")
+
+    def __init__(
+        self,
+        count: int,
+        daemon_indices: set[int],
+        noise_indices: set[int],
+        sizes: list[int],
+    ) -> None:
+        self.count = count
+        self.daemon_indices = daemon_indices
+        self.noise_indices = noise_indices
+        self.sizes = sizes
 
 
 def _detect_daemons(
@@ -30,16 +49,19 @@ def _detect_daemons(
     width: int,
     height: int,
     threshold: float,
-) -> tuple[int, set[int]]:
+    min_size: int = _MIN_DAEMON_SIZE,
+) -> _DaemonResult:
     """Detect daemons as connected components of active neurons (8-connectivity).
 
-    Returns (daemon_count, set_of_indices_belonging_to_daemons).
+    Only clusters with >= min_size neurons count as daemons.
+    Smaller active groups are classified as noise.
     """
     n = width * height
     active = (values[:n] > threshold).tolist()
     visited = [False] * n
-    count = 0
     daemon_indices: set[int] = set()
+    noise_indices: set[int] = set()
+    sizes: list[int] = []
 
     for idx in range(n):
         if active[idx] and not visited[idx]:
@@ -60,10 +82,18 @@ def _detect_daemons(
                             if active[nidx] and not visited[nidx]:
                                 visited[nidx] = True
                                 queue.append(nidx)
-            count += 1
-            daemon_indices.update(cluster)
+            if len(cluster) >= min_size:
+                daemon_indices.update(cluster)
+                sizes.append(len(cluster))
+            else:
+                noise_indices.update(cluster)
 
-    return count, daemon_indices
+    return _DaemonResult(
+        count=len(sizes),
+        daemon_indices=daemon_indices,
+        noise_indices=noise_indices,
+        sizes=sizes,
+    )
 
 
 class KohonenLabExperiment(Experimento):
@@ -224,8 +254,10 @@ class KohonenLabExperiment(Experimento):
     def get_stats(self) -> dict[str, Any]:
         """Retorna estadísticas con métricas de daemons.
 
-        Daemon metrics:
-        - daemon_count: connected components of active neurons
+        Daemon metrics (only clusters >= _MIN_DAEMON_SIZE count as daemons):
+        - daemon_count: number of daemons (real clusters, not noise)
+        - avg_daemon_size: average neurons per daemon
+        - noise_cells: active neurons NOT in any daemon (isolated/small groups)
         - exclusion: mean activation inside daemons minus outside (higher = better)
         - stability: 1 - CV of daemon count over a sliding window (higher = more stable)
         """
@@ -233,18 +265,21 @@ class KohonenLabExperiment(Experimento):
             return super().get_stats()
 
         vals = self.red_tensor.valores[: self.width * self.height]
+        n = self.width * self.height
 
-        daemon_count, daemon_indices = _detect_daemons(
+        result = _detect_daemons(
             self.red_tensor.valores, self.width, self.height, _DAEMON_THRESHOLD
         )
 
         active = int((vals > _DAEMON_THRESHOLD).sum().item())
-        n = self.width * self.height
+        avg_size = round(sum(result.sizes) / len(result.sizes), 1) if result.sizes else 0.0
 
-        # Exclusion: mean activation inside daemons vs outside
-        if daemon_indices:
+        # Exclusion: mean activation inside daemons vs outside.
+        # "Outside" includes both dead zones and noise — a good mask has
+        # high contrast between organized daemon clusters and everything else.
+        if result.daemon_indices:
             daemon_mask = torch.zeros(n, dtype=torch.bool)
-            daemon_mask[list(daemon_indices)] = True
+            daemon_mask[list(result.daemon_indices)] = True
             inside_mean = vals[daemon_mask].mean().item()
             outside = vals[~daemon_mask]
             outside_mean = outside.mean().item() if outside.numel() > 0 else 0.0
@@ -253,10 +288,8 @@ class KohonenLabExperiment(Experimento):
             exclusion = 0.0
 
         # Stability: 1 - coefficient_of_variation over sliding window.
-        # Only record one sample per generation to avoid duplicates from
-        # multiple get_stats() calls within the same frame.
         if self.generation != self._last_history_gen:
-            self._daemon_history.append(daemon_count)
+            self._daemon_history.append(result.count)
             self._last_history_gen = self.generation
 
         if len(self._daemon_history) >= 2:
@@ -274,7 +307,9 @@ class KohonenLabExperiment(Experimento):
         return {
             "active_cells": active,
             "steps": self.generation,
-            "daemon_count": daemon_count,
+            "daemon_count": result.count,
+            "avg_daemon_size": avg_size,
+            "noise_cells": len(result.noise_indices),
             "stability": stability,
             "exclusion": round(exclusion, 3),
         }
