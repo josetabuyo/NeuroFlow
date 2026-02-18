@@ -37,21 +37,6 @@ EXPERIMENTS = {
             "height": 30,
         },
     },
-    "kohonen_balanced": {
-        "id": "kohonen_balanced",
-        "name": "Kohonen Balanceado",
-        "description": (
-            "Kohonen con balance configurable del Fuzzy OR. Con balance=0 "
-            "funciona idéntico al Kohonen simple. Valores positivos reducen "
-            "inhibición (sesgo excitatorio), negativos reducen excitación "
-            "(sesgo inhibitorio)."
-        ),
-        "default_config": {
-            "width": 30,
-            "height": 30,
-            "balance": 0.0,
-        },
-    },
     "kohonen_lab": {
         "id": "kohonen_lab",
         "name": "Kohonen Lab",

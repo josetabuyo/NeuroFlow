@@ -32,6 +32,27 @@ style.textContent = `
     background: #2a2a3e;
     border-radius: 3px;
   }
+  @keyframes neuro-spin {
+    to { transform: rotate(360deg); }
+  }
+  .neuro-spinner {
+    width: 36px;
+    height: 36px;
+    margin: 0 auto;
+    border: 3px solid #2a2a3e;
+    border-top-color: #4cc9f0;
+    border-radius: 50%;
+    animation: neuro-spin 0.8s linear infinite;
+  }
+  .neuro-spinner-sm {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #555;
+    border-top-color: #e0e0ff;
+    border-radius: 50%;
+    animation: neuro-spin 0.8s linear infinite;
+  }
 `;
 document.head.appendChild(style);
 

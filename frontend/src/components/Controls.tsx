@@ -53,10 +53,11 @@ export function Controls({
   onStepsPerTickChange,
 }: ControlsProps) {
   const hasExperiment = state !== "disconnected";
-  const canInteract = state === "ready" || state === "paused";
+  const isInitializing = state === "initializing";
+  const canInteract = !isInitializing && (state === "ready" || state === "paused");
   const isRunning = state === "running";
   const canStep = canInteract || isRunning;
-  const canReset = hasExperiment;
+  const canReset = hasExperiment && !isInitializing;
   const canInspect = canInteract || isRunning;
 
   return (
@@ -172,6 +173,37 @@ export function Controls({
             {stats?.active_cells ?? 0}
           </strong>
         </span>
+        {stats?.daemon_count != null && (
+          <>
+            <span>
+              Daemons:{" "}
+              <strong style={{ color: "#f0a500" }}>
+                {stats.daemon_count}
+              </strong>
+            </span>
+            <span>
+              Estab:{" "}
+              <strong
+                style={{
+                  color:
+                    (stats.stability ?? 0) > 0.8
+                      ? "#4ade80"
+                      : (stats.stability ?? 0) > 0.5
+                        ? "#f0a500"
+                        : "#f72585",
+                }}
+              >
+                {(stats.stability ?? 0).toFixed(2)}
+              </strong>
+            </span>
+            <span>
+              Excl:{" "}
+              <strong style={{ color: "#7b61ff" }}>
+                {(stats.exclusion ?? 0).toFixed(2)}
+              </strong>
+            </span>
+          </>
+        )}
         {perf && (
           <span
             style={{
@@ -192,20 +224,28 @@ export function Controls({
           style={{
             padding: "2px 8px",
             borderRadius: "4px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
             background:
               state === "running"
                 ? "#1a3a1a"
+                : state === "initializing"
+                ? "#1a1a3a"
                 : state === "complete"
                 ? "#3a1a1a"
                 : "#1a1a2e",
             color:
               state === "running"
                 ? "#4ade80"
+                : state === "initializing"
+                ? "#4cc9f0"
                 : state === "complete"
                 ? "#f72585"
                 : "#666",
           }}
         >
+          {isInitializing && <span className="neuro-spinner-sm" />}
           {state}
         </span>
       </div>

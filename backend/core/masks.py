@@ -361,11 +361,43 @@ def _compute_preview_grid(mask: MaskDef) -> list[list[float | None]]:
     return grid
 
 
+def _compute_mask_stats(mask: MaskDef) -> dict[str, Any]:
+    """Compute static wiring stats for a mask definition.
+
+    Returns per-neuron synapse counts and effective radii (Chebyshev distance).
+    """
+    exc_synapses = 0
+    inh_synapses = 0
+    max_exc_radius = 0
+    max_inh_radius = 0
+
+    for dendrite in mask:
+        peso: float = dendrite["peso_dendrita"]
+        offsets = dendrite["offsets"]
+        n = len(offsets)
+        max_r = max((max(abs(dx), abs(dy)) for dx, dy in offsets), default=0)
+        if peso > 0:
+            exc_synapses += n
+            max_exc_radius = max(max_exc_radius, max_r)
+        else:
+            inh_synapses += n
+            max_inh_radius = max(max_inh_radius, max_r)
+
+    return {
+        "excitatory_synapses": exc_synapses,
+        "inhibitory_synapses": inh_synapses,
+        "ratio_exc_inh": round(exc_synapses / max(inh_synapses, 1), 3),
+        "excitation_radius": max_exc_radius,
+        "inhibition_radius": max_inh_radius,
+    }
+
+
 def get_mask_info() -> list[dict[str, Any]]:
     """Get metadata for all mask presets (without the mask data itself)."""
     result = []
     for preset in MASK_PRESETS.values():
         entry = {k: v for k, v in preset.items() if k != "mask"}
         entry["preview_grid"] = _compute_preview_grid(preset["mask"])
+        entry["mask_stats"] = _compute_mask_stats(preset["mask"])
         result.append(entry)
     return result

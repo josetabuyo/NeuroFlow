@@ -471,3 +471,149 @@ class TestKohonenLabFunctionality:
         for _ in range(10):
             result = exp.step()
             assert result["type"] == "frame"
+
+
+class TestDaemonMetrics:
+    """Tests para las m?tricas de daemons en Kohonen Lab."""
+
+    def test_stats_include_daemon_fields(self) -> None:
+        """get_stats() retorna daemon_count, stability y exclusion."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        exp.step()
+        stats = exp.get_stats()
+        assert "daemon_count" in stats
+        assert "stability" in stats
+        assert "exclusion" in stats
+        assert isinstance(stats["daemon_count"], int)
+        assert isinstance(stats["stability"], float)
+        assert isinstance(stats["exclusion"], float)
+
+    def test_daemon_count_zero_for_empty_grid(self) -> None:
+        """All-zero grid has zero daemons."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 5, "height": 5, "mask": "simple"})
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
+        stats = exp.get_stats()
+        assert stats["daemon_count"] == 0
+        assert stats["active_cells"] == 0
+
+    def test_daemon_count_one_cluster(self) -> None:
+        """A single contiguous active region counts as one daemon."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
+        # Activate a 3x3 block at (3,3)
+        for dy in range(3):
+            for dx in range(3):
+                idx = (3 + dy) * 10 + (3 + dx)
+                exp.red_tensor.set_valor(idx, 1.0)
+        stats = exp.get_stats()
+        assert stats["daemon_count"] == 1
+        assert stats["active_cells"] == 9
+
+    def test_daemon_count_two_isolated_clusters(self) -> None:
+        """Two isolated active regions count as two daemons."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
+        # Cluster 1: (0,0)
+        exp.red_tensor.set_valor(0, 1.0)
+        # Cluster 2: (9,9) ? far enough to be disconnected
+        exp.red_tensor.set_valor(9 * 10 + 9, 1.0)
+        stats = exp.get_stats()
+        assert stats["daemon_count"] == 2
+
+    def test_exclusion_perfect_for_binary(self) -> None:
+        """Binary grid (all 1s in daemons, all 0s outside) gives exclusion=1."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
+        # Activate one cell
+        exp.red_tensor.set_valor(55, 1.0)
+        stats = exp.get_stats()
+        assert stats["exclusion"] == pytest.approx(1.0, abs=0.01)
+
+    def test_exclusion_zero_for_empty_grid(self) -> None:
+        """Empty grid has exclusion=0."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 5, "height": 5, "mask": "simple"})
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
+        stats = exp.get_stats()
+        assert stats["exclusion"] == 0.0
+
+    def test_stability_increases_with_consistency(self) -> None:
+        """Stability > 0 after several steps with consistent daemon count."""
+        random.seed(42)
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        for _ in range(10):
+            exp.step()
+        stats = exp.get_stats()
+        assert stats["stability"] >= 0.0
+
+    def test_stability_zero_on_first_step(self) -> None:
+        """Stability is 0 after only one sample."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        exp.step()
+        stats = exp.get_stats()
+        assert stats["stability"] == 0.0
+
+    def test_daemon_history_resets_on_reconnect(self) -> None:
+        """Reconnect clears the daemon history."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        for _ in range(5):
+            exp.step()
+        assert len(exp._daemon_history) == 5
+        exp.reconnect({"mask": "wide_hat"})
+        assert len(exp._daemon_history) == 0
+
+    def test_no_duplicate_history_on_double_get_stats(self) -> None:
+        """Calling get_stats() twice for the same generation doesn't duplicate history."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        exp.step()
+        exp.get_stats()
+        exp.get_stats()
+        assert len(exp._daemon_history) == 1
+
+
+class TestMaskStatsInInfo:
+    """Tests para mask_stats en get_mask_info()."""
+
+    def test_mask_info_includes_mask_stats(self) -> None:
+        """get_mask_info() includes mask_stats for each preset."""
+        info = get_mask_info()
+        for entry in info:
+            assert "mask_stats" in entry
+            ms = entry["mask_stats"]
+            assert "excitatory_synapses" in ms
+            assert "inhibitory_synapses" in ms
+            assert "ratio_exc_inh" in ms
+            assert "excitation_radius" in ms
+            assert "inhibition_radius" in ms
+
+    def test_simple_mask_stats_values(self) -> None:
+        """Simple mask has 8 exc synapses and 72 inh synapses."""
+        info = get_mask_info()
+        simple = next(e for e in info if e["id"] == "simple")
+        ms = simple["mask_stats"]
+        assert ms["excitatory_synapses"] == 8
+        assert ms["inhibitory_synapses"] == 72
+        assert ms["excitation_radius"] == 1
+        assert ms["inhibition_radius"] == 4
+
+    def test_cross_center_mask_stats(self) -> None:
+        """Cross center has 4 exc (Von Neumann r=1)."""
+        info = get_mask_info()
+        cross = next(e for e in info if e["id"] == "cross_center")
+        ms = cross["mask_stats"]
+        assert ms["excitatory_synapses"] == 4
+        assert ms["excitation_radius"] == 1

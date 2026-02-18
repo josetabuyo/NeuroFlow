@@ -13,7 +13,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from experiments.base import Experimento
 from experiments.von_neumann import VonNeumannExperiment
 from experiments.kohonen import KohonenExperiment
-from experiments.kohonen_balanced import KohonenBalancedExperiment
 from experiments.kohonen_lab import KohonenLabExperiment
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,6 @@ ws_router = APIRouter()
 EXPERIMENT_CLASSES: dict[str, type[Experimento]] = {
     "von_neumann": VonNeumannExperiment,
     "kohonen": KohonenExperiment,
-    "kohonen_balanced": KohonenBalancedExperiment,
     "kohonen_lab": KohonenLabExperiment,
 }
 
@@ -74,6 +72,9 @@ class ExperimentSession:
         if not exp_class:
             await self.send({"type": "error", "message": f"Unknown experiment: {experiment_id}"})
             return
+
+        await self.send({"type": "status", "state": "initializing"})
+        await asyncio.sleep(0)
 
         self.experiment = exp_class()
         self.experiment.setup(config)
@@ -184,6 +185,9 @@ class ExperimentSession:
 
         await self._stop_play_loop()
 
+        await self.send({"type": "status", "state": "initializing"})
+        await asyncio.sleep(0)
+
         config = message.get("config", {})
         self.experiment.reconnect(config)
         await self.send({"type": "status", "state": "ready"})
@@ -196,6 +200,9 @@ class ExperimentSession:
             return
 
         await self._stop_play_loop()
+
+        await self.send({"type": "status", "state": "initializing"})
+        await asyncio.sleep(0)
 
         self.experiment.reset()
         await self.send({"type": "status", "state": "ready"})

@@ -27,13 +27,6 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
     default_config: { width: 30, height: 30 },
   },
   {
-    id: "kohonen_balanced",
-    name: "Kohonen Balanceado",
-    description:
-      "Kohonen con balance configurable del Fuzzy OR",
-    default_config: { width: 30, height: 30, balance: 0.0 },
-  },
-  {
     id: "kohonen_lab",
     name: "Kohonen Lab",
     description:
@@ -170,6 +163,7 @@ function App() {
   );
 
   const connected = state !== "disconnected";
+  const isInitializing = state === "initializing";
   const hasGrid = grid.length > 0;
   const hasConnectionMap = connectionMap != null;
 
@@ -199,6 +193,7 @@ function App() {
         experiments={experiments}
         selectedExperiment={selectedExp}
         config={config}
+        state={state}
         onSelectExperiment={handleSelectExperiment}
         onConfigChange={setConfig}
         onStart={handleStart}
@@ -237,7 +232,7 @@ function App() {
                 grid={grid}
                 width={config.width}
                 height={config.height}
-                {...(selectedExp !== "kohonen" && selectedExp !== "kohonen_balanced" && selectedExp !== "kohonen_lab"
+                {...(selectedExp !== "kohonen" && selectedExp !== "kohonen_lab"
                   ? { inputRow: config.height - 1, outputRow: 0 }
                   : {})}
                 connectionMap={connectionMap}
@@ -253,6 +248,27 @@ function App() {
                 onSelectBrush={setSelectedBrush}
                 onToggleMode={toggleBrushMode}
               />
+              {isInitializing && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "rgba(10, 10, 15, 0.75)",
+                    borderRadius: "8px",
+                    zIndex: 10,
+                  }}
+                >
+                  <div style={{ textAlign: "center", color: "#888" }}>
+                    <div className="neuro-spinner" />
+                    <p style={{ marginTop: "12px", fontSize: "0.85rem" }}>
+                      Construyendo red...
+                    </p>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div
@@ -262,14 +278,23 @@ function App() {
                 fontSize: "0.9rem",
               }}
             >
-              <p style={{ fontSize: "2rem", marginBottom: "12px" }}>
-                {connected ? "\uD83E\uDDE0" : "\u23F3"}
-              </p>
-              <p>
-                {connected
-                  ? "Selecciona un experimento e inicia"
-                  : "Conectando al servidor..."}
-              </p>
+              {isInitializing ? (
+                <>
+                  <div className="neuro-spinner" style={{ margin: "0 auto 12px" }} />
+                  <p>Construyendo red...</p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: "2rem", marginBottom: "12px" }}>
+                    {connected ? "\uD83E\uDDE0" : "\u23F3"}
+                  </p>
+                  <p>
+                    {connected
+                      ? "Selecciona un experimento e inicia"
+                      : "Conectando al servidor..."}
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -320,7 +345,7 @@ function App() {
             </>
           ) : (
             <>
-              {selectedExp !== "kohonen" && selectedExp !== "kohonen_balanced" && selectedExp !== "kohonen_lab" && (
+              {selectedExp !== "kohonen" && selectedExp !== "kohonen_lab" && (
                 <>
                   <span>
                     <span style={colorSwatch("#4cc9f0")} />

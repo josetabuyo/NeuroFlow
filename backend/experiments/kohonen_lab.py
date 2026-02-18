@@ -3,17 +3,67 @@
 Permite elegir entre múltiples presets de conexionado (sombrero mexicano)
 y ajustar el balance excitación/inhibición. Soporta reconexión en caliente:
 cambiar máscara y balance sin perder el estado de las neuronas.
+
+Incluye métricas de "daemons" (Dennett): clusters de activación en forma de
+campana que compiten por exclusión lateral.
 """
 
 from __future__ import annotations
 
 import random
+from collections import deque
 from typing import Any
+
+import torch
 
 from core.constructor import Constructor
 from core.constructor_tensor import ConstructorTensor
 from core.masks import get_mask
 from .base import Experimento
+
+_STABILITY_WINDOW = 20
+_DAEMON_THRESHOLD = 0.5
+
+
+def _detect_daemons(
+    values: torch.Tensor,
+    width: int,
+    height: int,
+    threshold: float,
+) -> tuple[int, set[int]]:
+    """Detect daemons as connected components of active neurons (8-connectivity).
+
+    Returns (daemon_count, set_of_indices_belonging_to_daemons).
+    """
+    n = width * height
+    active = (values[:n] > threshold).tolist()
+    visited = [False] * n
+    count = 0
+    daemon_indices: set[int] = set()
+
+    for idx in range(n):
+        if active[idx] and not visited[idx]:
+            queue = deque([idx])
+            visited[idx] = True
+            cluster: list[int] = []
+            while queue:
+                cidx = queue.popleft()
+                cluster.append(cidx)
+                cx, cy = cidx % width, cidx // width
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        if dx == 0 and dy == 0:
+                            continue
+                        nx, ny = cx + dx, cy + dy
+                        if 0 <= nx < width and 0 <= ny < height:
+                            nidx = ny * width + nx
+                            if active[nidx] and not visited[nidx]:
+                                visited[nidx] = True
+                                queue.append(nidx)
+            count += 1
+            daemon_indices.update(cluster)
+
+    return count, daemon_indices
 
 
 class KohonenLabExperiment(Experimento):
@@ -23,6 +73,8 @@ class KohonenLabExperiment(Experimento):
         super().__init__()
         self._config: dict[str, Any] = {}
         self.red_tensor = None
+        self._daemon_history: deque[int] = deque(maxlen=_STABILITY_WINDOW)
+        self._last_history_gen: int = -1
 
     def setup(self, config: dict[str, Any]) -> None:
         """Configura grilla 2D con máscara, balance e inicialización elegidos.
@@ -76,6 +128,9 @@ class KohonenLabExperiment(Experimento):
 
         self.red_tensor = ConstructorTensor.compilar(self.red)
 
+        self._daemon_history.clear()
+        self._last_history_gen = -1
+
     def reconnect(self, config: dict[str, Any]) -> None:
         """Cambia máscara y/o balance preservando el estado de las neuronas.
 
@@ -124,6 +179,9 @@ class KohonenLabExperiment(Experimento):
 
         self.red_tensor = ConstructorTensor.compilar(self.red)
 
+        self._daemon_history.clear()
+        self._last_history_gen = -1
+
     def click(self, x: int, y: int) -> None:
         """Toggle: si valor < 0.5 -> activar (1.0), si >= 0.5 -> desactivar (0.0)."""
         idx = y * self.width + x
@@ -162,6 +220,64 @@ class KohonenLabExperiment(Experimento):
         if self.red_tensor:
             return self.red_tensor.get_grid(self.width, self.height)
         return super().get_frame()
+
+    def get_stats(self) -> dict[str, Any]:
+        """Retorna estadísticas con métricas de daemons.
+
+        Daemon metrics:
+        - daemon_count: connected components of active neurons
+        - exclusion: mean activation inside daemons minus outside (higher = better)
+        - stability: 1 - CV of daemon count over a sliding window (higher = more stable)
+        """
+        if self.red_tensor is None:
+            return super().get_stats()
+
+        vals = self.red_tensor.valores[: self.width * self.height]
+
+        daemon_count, daemon_indices = _detect_daemons(
+            self.red_tensor.valores, self.width, self.height, _DAEMON_THRESHOLD
+        )
+
+        active = int((vals > _DAEMON_THRESHOLD).sum().item())
+        n = self.width * self.height
+
+        # Exclusion: mean activation inside daemons vs outside
+        if daemon_indices:
+            daemon_mask = torch.zeros(n, dtype=torch.bool)
+            daemon_mask[list(daemon_indices)] = True
+            inside_mean = vals[daemon_mask].mean().item()
+            outside = vals[~daemon_mask]
+            outside_mean = outside.mean().item() if outside.numel() > 0 else 0.0
+            exclusion = inside_mean - outside_mean
+        else:
+            exclusion = 0.0
+
+        # Stability: 1 - coefficient_of_variation over sliding window.
+        # Only record one sample per generation to avoid duplicates from
+        # multiple get_stats() calls within the same frame.
+        if self.generation != self._last_history_gen:
+            self._daemon_history.append(daemon_count)
+            self._last_history_gen = self.generation
+
+        if len(self._daemon_history) >= 2:
+            counts = list(self._daemon_history)
+            mean_c = sum(counts) / len(counts)
+            if mean_c > 0:
+                variance = sum((c - mean_c) ** 2 for c in counts) / len(counts)
+                cv = (variance ** 0.5) / mean_c
+                stability = round(max(0.0, min(1.0, 1.0 - cv)), 3)
+            else:
+                stability = 1.0 if all(c == 0 for c in counts) else 0.0
+        else:
+            stability = 0.0
+
+        return {
+            "active_cells": active,
+            "steps": self.generation,
+            "daemon_count": daemon_count,
+            "stability": stability,
+            "exclusion": round(exclusion, 3),
+        }
 
     def reset(self) -> None:
         """Reinicia el experimento con la misma configuración."""

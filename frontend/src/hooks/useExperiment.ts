@@ -119,6 +119,7 @@ export function useExperiment(): UseExperimentReturn {
   const start = useCallback(
     (experiment: string, config: ExperimentConfig) => {
       setActiveExperiment(experiment);
+      setState("initializing");
       send({ action: "start", experiment, config });
     },
     [send]
@@ -126,6 +127,7 @@ export function useExperiment(): UseExperimentReturn {
 
   const reconnect = useCallback(
     (config: ExperimentConfig) => {
+      setState("initializing");
       send({ action: "reconnect", config });
     },
     [send]
@@ -151,6 +153,7 @@ export function useExperiment(): UseExperimentReturn {
   const reset = useCallback(() => {
     setConnectionMap(null);
     setInspectedCell(null);
+    setState("initializing");
     send({ action: "reset" });
   }, [send]);
 

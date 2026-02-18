@@ -1,5 +1,13 @@
 /** Shared types for NeuroFlow frontend. */
 
+export interface MaskStats {
+  excitatory_synapses: number;
+  inhibitory_synapses: number;
+  ratio_exc_inh: number;
+  excitation_radius: number;
+  inhibition_radius: number;
+}
+
 export interface MaskPresetInfo {
   id: string;
   name: string;
@@ -8,6 +16,7 @@ export interface MaskPresetInfo {
   corona: string;
   dendrites_inh: number;
   preview_grid: (number | null)[][];
+  mask_stats?: MaskStats;
 }
 
 export interface BalanceModeInfo {
@@ -50,7 +59,7 @@ export interface FrameMessage {
 
 export interface StatusMessage {
   type: "status";
-  state: "running" | "paused" | "ready" | "complete";
+  state: "running" | "paused" | "ready" | "complete" | "initializing";
 }
 
 export interface ErrorMessage {
@@ -73,9 +82,12 @@ export interface ExperimentStats {
   active_cells: number;
   steps: number;
   total_steps?: number;
+  daemon_count?: number;
+  stability?: number;
+  exclusion?: number;
 }
 
-export type ExperimentState = "disconnected" | "ready" | "running" | "paused" | "complete";
+export type ExperimentState = "disconnected" | "initializing" | "ready" | "running" | "paused" | "complete";
 
 export interface BrushShape {
   id: string;
