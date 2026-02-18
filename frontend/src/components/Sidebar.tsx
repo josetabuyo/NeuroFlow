@@ -475,42 +475,6 @@ export function Sidebar({
             </div>
           )}
 
-          {selectedExp.init_modes && selectedExp.init_modes.length > 0 && (
-            <div>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#888",
-                  display: "block",
-                  marginBottom: "4px",
-                }}
-              >
-                Inicialización
-              </label>
-              <select
-                value={config.init ?? "random"}
-                onChange={(e) =>
-                  onConfigChange({ ...config, init: e.target.value })
-                }
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  background: "#1a1a2e",
-                  border: "1px solid #2a2a3e",
-                  borderRadius: "4px",
-                  color: "#e0e0ff",
-                  fontSize: "0.9rem",
-                }}
-              >
-                {selectedExp.init_modes.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           {hasMasks && balancedGrid && (
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <label

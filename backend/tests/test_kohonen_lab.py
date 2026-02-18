@@ -212,59 +212,17 @@ class TestKohonenLabSetup:
         assert exp._config.get("balance") is None
 
 
-class TestKohonenLabInitModes:
-    """Tests para los modos de inicializaci?n."""
+class TestKohonenLabInit:
+    """Tests para la inicializacion aleatoria."""
 
-    def test_init_random_default(self) -> None:
-        """Sin init especificado, usa random (valores entre 0 y 1)."""
+    def test_init_random(self) -> None:
+        """Setup siempre usa random (valores entre 0 y 1)."""
         random.seed(42)
         exp = KohonenLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         frame = exp.get_frame()
         values = [v for row in frame for v in row]
         assert any(0 < v < 1 for v in values)
-
-    def test_init_all_on(self) -> None:
-        """init='all_on' pone todas las neuronas a 1.0."""
-        exp = KohonenLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple", "init": "all_on"})
-        frame = exp.get_frame()
-        values = [v for row in frame for v in row]
-        assert all(v == pytest.approx(1.0) for v in values)
-
-    def test_init_all_off(self) -> None:
-        """init='all_off' pone todas las neuronas a 0.0."""
-        exp = KohonenLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple", "init": "all_off"})
-        frame = exp.get_frame()
-        values = [v for row in frame for v in row]
-        assert all(v == pytest.approx(0.0) for v in values)
-
-    def test_init_all_on_runs_steps(self) -> None:
-        """init='all_on' puede ejecutar steps sin errores."""
-        exp = KohonenLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple", "init": "all_on"})
-        for _ in range(5):
-            result = exp.step()
-            assert result["type"] == "frame"
-
-    def test_init_all_off_runs_steps(self) -> None:
-        """init='all_off' puede ejecutar steps sin errores."""
-        exp = KohonenLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple", "init": "all_off"})
-        for _ in range(5):
-            result = exp.step()
-            assert result["type"] == "frame"
-
-    def test_reset_preserves_init_mode(self) -> None:
-        """Reset usa el mismo init mode que el setup original."""
-        exp = KohonenLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple", "init": "all_on"})
-        exp.step()
-        exp.reset()
-        frame = exp.get_frame()
-        values = [v for row in frame for v in row]
-        assert all(v == pytest.approx(1.0) for v in values)
 
 
 class TestKohonenLabBalanceMode:

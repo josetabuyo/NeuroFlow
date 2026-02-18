@@ -50,12 +50,7 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
       { id: "soft_inhibit", name: "Inhibicion Suave", description: "Moore r=1, corona r=2-4, peso inh. -0.5.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, peso -0.5", dendrites_inh: 8 },
       { id: "strong_center", name: "Centro Fuerte", description: "Moore r=1 x2 dendritas exc., corona r=2-4.", center: "Moore r=1 (2 dendritas exc.)", corona: "r=2-4, peso -1", dendrites_inh: 8 },
     ],
-    init_modes: [
-      { id: "random", name: "Aleatorio" },
-      { id: "all_on", name: "Todo ON" },
-      { id: "all_off", name: "Todo OFF" },
-    ],
-    default_config: { width: 30, height: 30, mask: "simple", balance: 0.0, init: "random" },
+    default_config: { width: 30, height: 30, mask: "simple", balance: 0.0 },
   },
 ];
 

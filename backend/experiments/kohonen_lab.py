@@ -37,8 +37,6 @@ class KohonenLabExperiment(Experimento):
                 "none" = sin balance (default),
                 "weight" = escala pesos sinápticos,
                 "synapse_count" = elimina sinapsis aleatorias.
-            init (str): Modo de inicialización: "random", "all_on", "all_off"
-                (default "random").
         """
         self._config = config
         self.width = config.get("width", 30)
@@ -48,7 +46,6 @@ class KohonenLabExperiment(Experimento):
         mask_id: str = config.get("mask", "simple")
         balance = config.get("balance", None)
         balance_mode: str = config.get("balance_mode", "none")
-        init_mode: str = config.get("init", "random")
         mask = get_mask(mask_id)
 
         constructor = Constructor()
@@ -75,12 +72,7 @@ class KohonenLabExperiment(Experimento):
             )
 
         for neurona in self.red.neuronas:
-            if init_mode == "all_on":
-                neurona.activar_external(1.0)
-            elif init_mode == "all_off":
-                neurona.activar_external(0.0)
-            else:
-                neurona.activar_external(random.random())
+            neurona.activar_external(random.random())
 
         self.red_tensor = ConstructorTensor.compilar(self.red)
 

@@ -10,11 +10,6 @@ export interface MaskPresetInfo {
   preview_grid: (number | null)[][];
 }
 
-export interface InitModeInfo {
-  id: string;
-  name: string;
-}
-
 export interface BalanceModeInfo {
   id: string;
   name: string;
@@ -27,7 +22,6 @@ export interface ExperimentConfig {
   balance?: number;
   balance_mode?: string;
   mask?: string;
-  init?: string;
 }
 
 export interface ExperimentInfo {
@@ -37,7 +31,6 @@ export interface ExperimentInfo {
   rules?: number[];
   masks?: MaskPresetInfo[];
   balance_modes?: BalanceModeInfo[];
-  init_modes?: InitModeInfo[];
   default_config: ExperimentConfig;
 }
 
