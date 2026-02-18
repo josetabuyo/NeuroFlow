@@ -210,6 +210,46 @@ class Constructor:
                         for s in dendrita.sinapsis:
                             s.peso = min(1.0, max(0.0, s.peso * factor))
 
+    def balancear_sinapsis(
+        self,
+        neuronas: list[Neurona],
+        target: float = 0.0,
+    ) -> None:
+        """Elimina sinapsis aleatorias de dendritas para desplazar el balance.
+
+        target > 0: elimina sinapsis de dendritas inhibitorias
+        target < 0: elimina sinapsis de dendritas excitatorias
+        target = 0: no hace nada
+
+        Cada dendrita afectada pierde floor(len(sinapsis) * |target|) sinapsis,
+        pero siempre conserva al menos 1.
+        """
+        if target == 0.0:
+            return
+
+        factor = abs(target)
+
+        for neurona in neuronas:
+            if isinstance(neurona, NeuronaEntrada):
+                continue
+            if not neurona.dendritas:
+                continue
+
+            for dendrita in neurona.dendritas:
+                if target > 0 and dendrita.peso >= 0:
+                    continue
+                if target < 0 and dendrita.peso <= 0:
+                    continue
+
+                n_total = len(dendrita.sinapsis)
+                if n_total <= 1:
+                    continue
+
+                n_remove = int(n_total * factor)
+                n_keep = max(1, n_total - n_remove)
+
+                dendrita.sinapsis = random.sample(dendrita.sinapsis, n_keep)
+
     def aplicar_mascara_2d(
         self,
         red: Red,

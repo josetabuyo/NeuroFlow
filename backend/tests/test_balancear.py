@@ -204,3 +204,128 @@ class TestBalancearPesosNuevaSemantica:
 
         inh_after = _get_syn_weights(neurona, "inh")
         assert inh_after[0] == pytest.approx(0.5 * 0.7, abs=1e-9)
+
+
+def _count_synapses(neurona: Neurona, kind: str) -> list[int]:
+    """Retorna lista de cantidades de sinapsis por dendrita del tipo dado."""
+    result = []
+    for d in neurona.dendritas:
+        if kind == "exc" and d.peso > 0:
+            result.append(len(d.sinapsis))
+        elif kind == "inh" and d.peso < 0:
+            result.append(len(d.sinapsis))
+    return result
+
+
+def _build_neuron_many_synapses(
+    n_exc: int = 8,
+    n_inh_dendritas: int = 8,
+    n_inh_sinapsis: int = 9,
+) -> Neurona:
+    """Crea una neurona con 1 dendrita excitatoria y N inhibitorias."""
+    dummy = NeuronaEntrada(id="dummy")
+
+    exc_sinapsis = [Sinapsis(neurona_entrante=dummy, peso=0.6) for _ in range(n_exc)]
+    dendritas = [Dendrita(sinapsis=exc_sinapsis, peso=1.0)]
+
+    for _ in range(n_inh_dendritas):
+        inh_sinapsis = [
+            Sinapsis(neurona_entrante=dummy, peso=0.6)
+            for _ in range(n_inh_sinapsis)
+        ]
+        dendritas.append(Dendrita(sinapsis=inh_sinapsis, peso=-1.0))
+
+    return Neurona(id="test", dendritas=dendritas)
+
+
+class TestBalancearSinapsis:
+    """Constructor.balancear_sinapsis: eliminación de sinapsis."""
+
+    def test_target_cero_no_elimina_sinapsis(self) -> None:
+        """Con target=0, no se elimina ninguna sinapsis."""
+        neurona = _build_neuron_many_synapses()
+        counts_before = _count_synapses(neurona, "inh")
+
+        constructor = Constructor()
+        constructor.balancear_sinapsis([neurona], target=0.0)
+
+        counts_after = _count_synapses(neurona, "inh")
+        assert counts_before == counts_after
+
+    def test_target_positivo_elimina_inhibitorias(self) -> None:
+        """Con target=0.5, cada dendrita inhibitoria pierde ~50% de sinapsis."""
+        neurona = _build_neuron_many_synapses(n_inh_sinapsis=10)
+
+        constructor = Constructor()
+        constructor.balancear_sinapsis([neurona], target=0.5)
+
+        for d in neurona.dendritas:
+            if d.peso < 0:
+                assert len(d.sinapsis) == 5  # 10 - floor(10 * 0.5) = 5
+
+    def test_target_positivo_no_toca_excitatorias(self) -> None:
+        """Con target>0, las dendritas excitatorias no pierden sinapsis."""
+        neurona = _build_neuron_many_synapses(n_exc=8)
+        exc_before = _count_synapses(neurona, "exc")
+
+        constructor = Constructor()
+        constructor.balancear_sinapsis([neurona], target=0.5)
+
+        exc_after = _count_synapses(neurona, "exc")
+        assert exc_before == exc_after
+
+    def test_target_negativo_elimina_excitatorias(self) -> None:
+        """Con target=-0.5, dendritas excitatorias pierden ~50% de sinapsis."""
+        neurona = _build_neuron_many_synapses(n_exc=10)
+
+        constructor = Constructor()
+        constructor.balancear_sinapsis([neurona], target=-0.5)
+
+        exc_counts = _count_synapses(neurona, "exc")
+        assert exc_counts[0] == 5  # 10 - floor(10 * 0.5) = 5
+
+    def test_target_negativo_no_toca_inhibitorias(self) -> None:
+        """Con target<0, las dendritas inhibitorias no pierden sinapsis."""
+        neurona = _build_neuron_many_synapses(n_inh_sinapsis=9)
+        inh_before = _count_synapses(neurona, "inh")
+
+        constructor = Constructor()
+        constructor.balancear_sinapsis([neurona], target=-0.5)
+
+        inh_after = _count_synapses(neurona, "inh")
+        assert inh_before == inh_after
+
+    def test_target_uno_deja_una_sinapsis(self) -> None:
+        """Con target=1.0, cada dendrita inhibitoria queda con 1 sinapsis."""
+        neurona = _build_neuron_many_synapses(n_inh_sinapsis=9)
+
+        constructor = Constructor()
+        constructor.balancear_sinapsis([neurona], target=1.0)
+
+        for d in neurona.dendritas:
+            if d.peso < 0:
+                assert len(d.sinapsis) == 1
+
+    def test_siempre_al_menos_una_sinapsis(self) -> None:
+        """Nunca se eliminan todas las sinapsis de una dendrita."""
+        neurona = _build_neuron_many_synapses(n_inh_sinapsis=2)
+
+        constructor = Constructor()
+        constructor.balancear_sinapsis([neurona], target=0.99)
+
+        for d in neurona.dendritas:
+            assert len(d.sinapsis) >= 1
+
+    def test_neurona_entrada_se_ignora(self) -> None:
+        """NeuronaEntrada se salta sin modificar."""
+        entrada = NeuronaEntrada(id="entrada")
+        constructor = Constructor()
+        constructor.balancear_sinapsis([entrada], target=0.5)
+        assert entrada.dendritas == []
+
+    def test_neurona_sin_dendritas_no_falla(self) -> None:
+        """Neuronas sin dendritas se ignoran sin error."""
+        neurona = Neurona(id="vacia")
+        constructor = Constructor()
+        constructor.balancear_sinapsis([neurona], target=0.5)
+        assert neurona.dendritas == []

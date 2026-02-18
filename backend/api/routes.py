@@ -61,6 +61,11 @@ EXPERIMENTS = {
             "Soporta reconexión en caliente sin perder estado."
         ),
         "masks": get_mask_info(),
+        "balance_modes": [
+            {"id": "none", "name": "Sin balance"},
+            {"id": "weight", "name": "Por peso"},
+            {"id": "synapse_count", "name": "Por cantidad de sinapsis"},
+        ],
         "init_modes": [
             {"id": "random", "name": "Aleatorio"},
             {"id": "all_on", "name": "Todo ON"},
@@ -71,6 +76,7 @@ EXPERIMENTS = {
             "height": 30,
             "mask": "simple",
             "balance": 0.0,
+            "balance_mode": "none",
             "init": "random",
         },
     },

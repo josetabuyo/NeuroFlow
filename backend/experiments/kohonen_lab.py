@@ -33,6 +33,10 @@ class KohonenLabExperiment(Experimento):
             mask (str): ID del preset de máscara (default "simple").
             balance (float | None): Balance excitación/inhibición (default None).
                 0.0 = sin cambio, >0 reduce inhibición, <0 reduce excitación.
+            balance_mode (str): Modo de balance:
+                "none" = sin balance (default),
+                "weight" = escala pesos sinápticos,
+                "synapse_count" = elimina sinapsis aleatorias.
             init (str): Modo de inicialización: "random", "all_on", "all_off"
                 (default "random").
         """
@@ -43,6 +47,7 @@ class KohonenLabExperiment(Experimento):
 
         mask_id: str = config.get("mask", "simple")
         balance = config.get("balance", None)
+        balance_mode: str = config.get("balance_mode", "none")
         init_mode: str = config.get("init", "random")
         mask = get_mask(mask_id)
 
@@ -60,8 +65,12 @@ class KohonenLabExperiment(Experimento):
             self.red, self.width, self.height, mask
         )
 
-        if balance is not None:
+        if balance is not None and balance_mode == "weight":
             constructor.balancear_pesos(
+                list(self.red.neuronas), target=balance
+            )
+        elif balance is not None and balance_mode == "synapse_count":
+            constructor.balancear_sinapsis(
                 list(self.red.neuronas), target=balance
             )
 
@@ -87,8 +96,12 @@ class KohonenLabExperiment(Experimento):
 
         mask_id = config.get("mask", self._config.get("mask", "simple"))
         balance = config.get("balance", self._config.get("balance", None))
+        balance_mode = config.get(
+            "balance_mode", self._config.get("balance_mode", "none")
+        )
         self._config["mask"] = mask_id
         self._config["balance"] = balance
+        self._config["balance_mode"] = balance_mode
 
         mask = get_mask(mask_id)
         constructor = Constructor()
@@ -105,8 +118,12 @@ class KohonenLabExperiment(Experimento):
             self.red, self.width, self.height, mask
         )
 
-        if balance is not None:
+        if balance is not None and balance_mode == "weight":
             constructor.balancear_pesos(
+                list(self.red.neuronas), target=balance
+            )
+        elif balance is not None and balance_mode == "synapse_count":
+            constructor.balancear_sinapsis(
                 list(self.red.neuronas), target=balance
             )
 

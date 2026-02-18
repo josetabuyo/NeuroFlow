@@ -1,10 +1,10 @@
-"""Tests para Kohonen Lab — laboratorio de conexionados con máscara configurable.
+"""Tests para Kohonen Lab ? laboratorio de conexionados con m?scara configurable.
 
 Valida:
-- Todos los presets de máscara se aplican correctamente
+- Todos los presets de m?scara se aplican correctamente
 - Equivalencia con KohonenExperiment cuando mask="simple"
-- Reconexión preserva valores
-- Funcionalidad estándar (step, click, reset, get_frame)
+- Reconexi?n preserva valores
+- Funcionalidad est?ndar (step, click, reset, get_frame)
 """
 
 import random
@@ -26,7 +26,7 @@ from experiments.kohonen_lab import KohonenLabExperiment
 
 
 class TestMaskHelpers:
-    """Tests para las funciones helper de generación de offsets."""
+    """Tests para las funciones helper de generaci?n de offsets."""
 
     def test_moore_radius_1_gives_8_neighbors(self) -> None:
         offsets = _moore(1)
@@ -60,7 +60,7 @@ class TestMaskHelpers:
 
 
 class TestMaskPresets:
-    """Tests para cada preset de máscara."""
+    """Tests para cada preset de m?scara."""
 
     def test_all_presets_exist(self) -> None:
         expected = [
@@ -144,7 +144,7 @@ class TestKohonenLabSetup:
         assert len(neurona.dendritas) == 9
 
     def test_setup_wide_hat(self) -> None:
-        """Setup con wide_hat produce más dendritas inhibitorias."""
+        """Setup con wide_hat produce m?s dendritas inhibitorias."""
         exp = KohonenLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "wide_hat"})
         neurona = exp.red.get_neurona("x7y7")
@@ -173,7 +173,7 @@ class TestKohonenLabSetup:
 
         random.seed(42)
         exp_bal = KohonenLabExperiment()
-        exp_bal.setup({"width": 10, "height": 10, "mask": "simple", "balance": 0.5})
+        exp_bal.setup({"width": 10, "height": 10, "mask": "simple", "balance": 0.5, "balance_mode": "weight"})
 
         n_no = exp_no.red.get_neurona("x5y5")
         n_bal = exp_bal.red.get_neurona("x5y5")
@@ -209,7 +209,7 @@ class TestKohonenLabSetup:
 
 
 class TestKohonenLabInitModes:
-    """Tests para los modos de inicialización."""
+    """Tests para los modos de inicializaci?n."""
 
     def test_init_random_default(self) -> None:
         """Sin init especificado, usa random (valores entre 0 y 1)."""
@@ -263,6 +263,91 @@ class TestKohonenLabInitModes:
         assert all(v == pytest.approx(1.0) for v in values)
 
 
+class TestKohonenLabBalanceMode:
+    """Tests para balance_mode en Kohonen Lab."""
+
+    def test_balance_mode_none_no_modifica(self) -> None:
+        """balance_mode='none' no modifica pesos ni sinapsis."""
+        random.seed(42)
+        exp_ref = KohonenLabExperiment()
+        exp_ref.setup({"width": 10, "height": 10, "mask": "simple"})
+
+        random.seed(42)
+        exp = KohonenLabExperiment()
+        exp.setup({
+            "width": 10, "height": 10, "mask": "simple",
+            "balance": 0.5, "balance_mode": "none",
+        })
+
+        n_ref = exp_ref.red.get_neurona("x5y5")
+        n_test = exp.red.get_neurona("x5y5")
+
+        for d_ref, d_test in zip(n_ref.dendritas, n_test.dendritas):
+            assert len(d_ref.sinapsis) == len(d_test.sinapsis)
+            for s_ref, s_test in zip(d_ref.sinapsis, d_test.sinapsis):
+                assert s_ref.peso == pytest.approx(s_test.peso, abs=1e-9)
+
+    def test_balance_mode_weight_scales_weights(self) -> None:
+        """balance_mode='weight' escala pesos inhibitorios (comportamiento existente)."""
+        random.seed(42)
+        exp_ref = KohonenLabExperiment()
+        exp_ref.setup({"width": 10, "height": 10, "mask": "simple"})
+
+        random.seed(42)
+        exp = KohonenLabExperiment()
+        exp.setup({
+            "width": 10, "height": 10, "mask": "simple",
+            "balance": 0.5, "balance_mode": "weight",
+        })
+
+        n_ref = exp_ref.red.get_neurona("x5y5")
+        n_test = exp.red.get_neurona("x5y5")
+
+        for d_ref, d_test in zip(n_ref.dendritas, n_test.dendritas):
+            assert len(d_ref.sinapsis) == len(d_test.sinapsis)
+            if d_ref.peso < 0:
+                for s_ref, s_test in zip(d_ref.sinapsis, d_test.sinapsis):
+                    assert s_test.peso == pytest.approx(s_ref.peso * 0.5, abs=1e-9)
+
+    def test_balance_mode_synapse_count_reduces_synapses(self) -> None:
+        """balance_mode='synapse_count' reduce cantidad de sinapsis inhibitorias."""
+        random.seed(42)
+        exp_ref = KohonenLabExperiment()
+        exp_ref.setup({"width": 10, "height": 10, "mask": "simple"})
+
+        random.seed(42)
+        exp = KohonenLabExperiment()
+        exp.setup({
+            "width": 10, "height": 10, "mask": "simple",
+            "balance": 0.5, "balance_mode": "synapse_count",
+        })
+
+        n_ref = exp_ref.red.get_neurona("x5y5")
+        n_test = exp.red.get_neurona("x5y5")
+
+        for d_ref, d_test in zip(n_ref.dendritas, n_test.dendritas):
+            if d_ref.peso < 0:
+                assert len(d_test.sinapsis) < len(d_ref.sinapsis)
+            else:
+                assert len(d_test.sinapsis) == len(d_ref.sinapsis)
+
+    def test_reconnect_with_balance_mode_synapse_count(self) -> None:
+        """Reconnect con balance_mode='synapse_count' reduce sinapsis."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+
+        exp.reconnect({
+            "mask": "simple",
+            "balance": 0.5,
+            "balance_mode": "synapse_count",
+        })
+
+        n = exp.red.get_neurona("x5y5")
+        for d in n.dendritas:
+            if d.peso < 0:
+                assert len(d.sinapsis) < 9  # simple mask has 9 inh per dendrita
+
+
 class TestKohonenLabEquivalence:
     """Equivalencia con KohonenExperiment cuando mask=simple."""
 
@@ -300,7 +385,7 @@ class TestKohonenLabEquivalence:
 
 
 class TestKohonenLabReconnect:
-    """Reconexión: cambiar máscara preservando valores."""
+    """Reconexi?n: cambiar m?scara preservando valores."""
 
     def test_reconnect_preserves_values(self) -> None:
         """Reconnect mantiene los valores de las neuronas."""
@@ -343,7 +428,7 @@ class TestKohonenLabReconnect:
 
         # Reconnect without balance (seed controls grid creation)
         random.seed(99)
-        exp.reconnect({"mask": "simple", "balance": 0.0})
+        exp.reconnect({"mask": "simple", "balance": 0.0, "balance_mode": "weight"})
         n_no = exp.red.get_neurona("x5y5")
         inh_weights_no = []
         for d in n_no.dendritas:
@@ -352,7 +437,7 @@ class TestKohonenLabReconnect:
 
         # Reconnect again with same seed but balance=0.5
         random.seed(99)
-        exp.reconnect({"mask": "simple", "balance": 0.5})
+        exp.reconnect({"mask": "simple", "balance": 0.5, "balance_mode": "weight"})
         n_bal = exp.red.get_neurona("x5y5")
         inh_weights_bal = []
         for d in n_bal.dendritas:
@@ -366,7 +451,7 @@ class TestKohonenLabReconnect:
 
 
 class TestKohonenLabFunctionality:
-    """Funcionalidad estándar del experimento."""
+    """Funcionalidad est?ndar del experimento."""
 
     def test_step_avanza_generacion(self) -> None:
         exp = KohonenLabExperiment()

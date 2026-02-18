@@ -14,11 +14,17 @@ export interface InitModeInfo {
   name: string;
 }
 
+export interface BalanceModeInfo {
+  id: string;
+  name: string;
+}
+
 export interface ExperimentConfig {
   width: number;
   height: number;
   rule?: number;
   balance?: number;
+  balance_mode?: string;
   mask?: string;
   init?: string;
 }
@@ -29,6 +35,7 @@ export interface ExperimentInfo {
   description: string;
   rules?: number[];
   masks?: MaskPresetInfo[];
+  balance_modes?: BalanceModeInfo[];
   init_modes?: InitModeInfo[];
   default_config: ExperimentConfig;
 }

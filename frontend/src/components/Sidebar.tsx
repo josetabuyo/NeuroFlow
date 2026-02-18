@@ -317,7 +317,80 @@ export function Sidebar({
             </div>
           )}
 
-          {selectedExp.default_config.balance !== undefined && (
+          {selectedExp.balance_modes && selectedExp.balance_modes.length > 0 && (
+            <div>
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#888",
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Modo de balance
+              </label>
+              <select
+                value={config.balance_mode ?? "none"}
+                onChange={(e) =>
+                  onConfigChange({ ...config, balance_mode: e.target.value })
+                }
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  background: "#1a1a2e",
+                  border: "1px solid #2a2a3e",
+                  borderRadius: "4px",
+                  color: "#e0e0ff",
+                  fontSize: "0.9rem",
+                }}
+              >
+                {selectedExp.balance_modes.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {selectedExp.default_config.balance !== undefined &&
+            config.balance_mode !== undefined &&
+            config.balance_mode !== "none" && (
+            <div>
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#888",
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Balance
+              </label>
+              <NumericInput
+                value={config.balance ?? 0}
+                min={-1}
+                max={1}
+                step={0.1}
+                onChange={(v) =>
+                  onConfigChange({ ...config, balance: v })
+                }
+              />
+              <span
+                style={{
+                  fontSize: "0.65rem",
+                  color: "#555",
+                  marginTop: "2px",
+                  display: "block",
+                }}
+              >
+                0 = sin cambio, + excitatorio, − inhibitorio
+              </span>
+            </div>
+          )}
+
+          {selectedExp.default_config.balance !== undefined &&
+            !selectedExp.balance_modes && (
             <div>
               <label
                 style={{
