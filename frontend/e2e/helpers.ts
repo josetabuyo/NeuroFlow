@@ -8,7 +8,7 @@ export async function waitForConnection(page: Page): Promise<void> {
 /** Start an experiment and wait for the canvas to appear. */
 export async function startExperiment(
   page: Page,
-  experiment: "von_neumann" | "kohonen" | "kohonen_lab"
+  experiment: "kohonen" | "kohonen_lab"
 ): Promise<void> {
   if (experiment === "kohonen") {
     await page

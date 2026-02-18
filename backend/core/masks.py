@@ -261,6 +261,40 @@ MASK_MEXICAN_HAT: MaskDef = [
 
 
 # ---------------------------------------------------------------------------
+# Wolfram elementary CA rules as masks
+# ---------------------------------------------------------------------------
+
+_WOLFRAM_OFFSETS: list[tuple[int, int]] = [(-1, 1), (0, 1), (1, 1)]
+
+
+def _wolfram_mask(rule: int) -> MaskDef:
+    """Generate a mask for a 1D Wolfram elementary CA rule.
+
+    Each active pattern (3 bits) becomes a dendrite with explicit synapse
+    weights encoding the expected input. The fuzzy OR + high threshold (0.99)
+    means the neuron fires if ANY pattern matches exactly.
+    """
+    dendrites: MaskDef = []
+    for pattern in range(8):
+        if rule & (1 << pattern):
+            weights = [
+                float((pattern >> 2) & 1),
+                float((pattern >> 1) & 1),
+                float(pattern & 1),
+            ]
+            dendrites.append({
+                "peso_dendrita": 1.0,
+                "offsets": _WOLFRAM_OFFSETS,
+                "pesos_sinapsis": weights,
+            })
+    return dendrites
+
+
+MASK_RULE_110 = _wolfram_mask(110)
+MASK_RULE_30 = _wolfram_mask(30)
+
+
+# ---------------------------------------------------------------------------
 # Registry with metadata
 # ---------------------------------------------------------------------------
 
@@ -272,6 +306,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (8 vecinos)",
         "corona": "sin inhibición",
         "dendrites_inh": 0,
+        "random_weights": True,
         "mask": MASK_ALL_EXC,
     },
     "all_inh": {
@@ -281,6 +316,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (8 vecinos)",
         "corona": "sin excitación",
         "dendrites_inh": 1,
+        "random_weights": True,
         "mask": MASK_ALL_INH,
     },
     "simple": {
@@ -290,6 +326,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (8 vecinos)",
         "corona": "r=2-4, 8 bloques 3x3",
         "dendrites_inh": 8,
+        "random_weights": True,
         "mask": MASK_SIMPLE,
     },
     "wide_hat": {
@@ -299,6 +336,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (8 vecinos)",
         "corona": "r=2-7, corona grande",
         "dendrites_inh": 8,
+        "random_weights": True,
         "mask": MASK_WIDE_HAT,
     },
     "narrow_hat": {
@@ -308,6 +346,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (8 vecinos)",
         "corona": "r=2-3, corona cercana",
         "dendrites_inh": 8,
+        "random_weights": True,
         "mask": MASK_NARROW_HAT,
     },
     "big_center": {
@@ -317,6 +356,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=2 (24 vecinos)",
         "corona": "r=4-7, corona lejana",
         "dendrites_inh": 8,
+        "random_weights": True,
         "mask": MASK_BIG_CENTER,
     },
     "cross_center": {
@@ -326,6 +366,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Von Neumann r=1 (4 vecinos)",
         "corona": "r=2-4, 4 bloques cardinales",
         "dendrites_inh": 4,
+        "random_weights": True,
         "mask": MASK_CROSS_CENTER,
     },
     "one_dendrite": {
@@ -335,6 +376,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (8 vecinos)",
         "corona": "r=2-4, todo en 1 dendrita",
         "dendrites_inh": 1,
+        "random_weights": True,
         "mask": MASK_ONE_DENDRITE,
     },
     "fine_grain": {
@@ -344,6 +386,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (8 vecinos)",
         "corona": "r=2-4, 16 sectores",
         "dendrites_inh": 16,
+        "random_weights": True,
         "mask": MASK_FINE_GRAIN,
     },
     "double_ring": {
@@ -353,6 +396,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (8 vecinos)",
         "corona": "r=2-3 (-1) + r=5-7 (-0.5)",
         "dendrites_inh": 16,
+        "random_weights": True,
         "mask": MASK_DOUBLE_RING,
     },
     "soft_inhibit": {
@@ -362,6 +406,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (8 vecinos)",
         "corona": "r=2-4, peso -0.5",
         "dendrites_inh": 8,
+        "random_weights": True,
         "mask": MASK_SOFT_INHIBIT,
     },
     "strong_center": {
@@ -371,6 +416,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Moore r=1 (2 dendritas exc.)",
         "corona": "r=2-4, peso -1",
         "dendrites_inh": 8,
+        "random_weights": True,
         "mask": MASK_STRONG_CENTER,
     },
     "gradual_center": {
@@ -380,6 +426,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Gradual r=1→1.0, r=2→0.6, r=3→0.3",
         "corona": "r=6-11, checkerboard sparse",
         "dendrites_inh": 8,
+        "random_weights": True,
         "mask": MASK_GRADUAL_CENTER,
     },
     "gradual_big_inh": {
@@ -389,6 +436,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Gradual r=1→1.0, r=2→0.6, r=3→0.3",
         "corona": "r=8-19, sparse step=3",
         "dendrites_inh": 8,
+        "random_weights": True,
         "mask": MASK_GRADUAL_BIG_INH,
     },
     "gradual_xxl_inh": {
@@ -398,6 +446,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Gradual r=1→1.0, r=2→0.6, r=3→0.3",
         "corona": "r=8-30, sparse step=4",
         "dendrites_inh": 8,
+        "random_weights": True,
         "mask": MASK_GRADUAL_XXL_INH,
     },
     "mexican_hat": {
@@ -407,7 +456,30 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "center": "Gradual r=1→1.0, r=2→0.5",
         "corona": "r=3-5(-1) → r=6-12(-0.6) → r=13-20(-0.25) → r=21-30(-0.08)",
         "dendrites_inh": 32,
+        "random_weights": True,
         "mask": MASK_MEXICAN_HAT,
+    },
+    "rule_110": {
+        "id": "rule_110",
+        "name": "Wolfram Rule 110",
+        "description": "Autómata celular elemental Rule 110 (Turing-completo).",
+        "center": "3 vecinos fila inferior",
+        "corona": "sin inhibición",
+        "dendrites_inh": 0,
+        "random_weights": False,
+        "mask_type": "wolfram",
+        "mask": MASK_RULE_110,
+    },
+    "rule_30": {
+        "id": "rule_30",
+        "name": "Wolfram Rule 30",
+        "description": "Autómata celular elemental Rule 30 (caótico, pseudo-random).",
+        "center": "3 vecinos fila inferior",
+        "corona": "sin inhibición",
+        "dendrites_inh": 0,
+        "random_weights": False,
+        "mask_type": "wolfram",
+        "mask": MASK_RULE_30,
     },
 }
 
@@ -415,6 +487,16 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
 def get_mask(mask_id: str) -> MaskDef:
     """Get a mask definition by its ID. Raises KeyError if not found."""
     return MASK_PRESETS[mask_id]["mask"]
+
+
+def get_mask_type(mask_id: str) -> str:
+    """Get the mask type: 'kohonen' (default) or 'wolfram'."""
+    return MASK_PRESETS[mask_id].get("mask_type", "kohonen")
+
+
+def get_random_weights(mask_id: str) -> bool:
+    """Whether the mask uses random synapse weights (True) or fixed 1.0 (False)."""
+    return MASK_PRESETS[mask_id].get("random_weights", True)
 
 
 def _compute_preview_grid(mask: MaskDef) -> list[list[float | None]]:

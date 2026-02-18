@@ -22,7 +22,6 @@ from core.dendrita import Dendrita
 from core.neurona import Neurona, NeuronaEntrada
 from core.red import Red
 from experiments.kohonen import KohonenExperiment, KOHONEN_SIMPLE_MASK
-from experiments.von_neumann import VonNeumannExperiment
 
 
 class TestInspect:
@@ -156,20 +155,6 @@ class TestInspect:
                 if cell is not None and cell != 999:
                     assert -1.0 <= cell <= 1.0, f"Peso {cell} fuera de rango [-1, 1]"
 
-    def test_von_neumann_conexiones_fila_inferior(self) -> None:
-        """Von Neumann: neurona interna tiene conexiones a la fila inferior."""
-        exp = VonNeumannExperiment()
-        exp.setup({"width": 10, "height": 10, "rule": 111})
-
-        # Fila 8 es la última fila interna (fila 9 es entrada)
-        # La neurona x5y8 está conectada a x4y9, x5y9, x6y9 (fila inferior)
-        result = exp.inspect(5, 8)
-        grid = result["weight_grid"]
-
-        # Debe tener conexiones a la fila inferior (y=9)
-        conexiones_fila_inf = [grid[9][col] for col in range(10) if grid[9][col] is not None]
-        assert len(conexiones_fila_inf) > 0, "Debería tener conexiones a la fila inferior"
-
     def test_neurona_fuente_multiples_dendritas_suma(self) -> None:
         """Si una neurona fuente aparece en múltiples dendritas, los pesos se suman."""
         # Crear un mini experimento manual donde una fuente está en 2 dendritas
@@ -208,19 +193,3 @@ class TestInspect:
         # Peso neto = 0.8 + (-0.5) = 0.3
         assert grid[0][0] == pytest.approx(0.3, abs=1e-9)
 
-    def test_von_neumann_celda_entrada_sin_dendritas(self) -> None:
-        """La fila de entrada en Von Neumann no tiene dendritas → inspect retorna solo 999."""
-        exp = VonNeumannExperiment()
-        exp.setup({"width": 10, "height": 10, "rule": 111})
-
-        # Fila 9 es la entrada
-        result = exp.inspect(5, 9)
-
-        assert result["total_dendritas"] == 0
-        assert result["total_sinapsis"] == 0
-
-        grid = result["weight_grid"]
-        # Solo la celda inspeccionada tiene valor, el resto es None
-        assert grid[9][5] == 999
-        non_none = sum(1 for row in grid for cell in row if cell is not None)
-        assert non_none == 1  # Solo la celda inspeccionada

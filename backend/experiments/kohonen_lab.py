@@ -18,7 +18,7 @@ import torch
 
 from core.constructor import Constructor
 from core.constructor_tensor import ConstructorTensor
-from core.masks import get_mask
+from core.masks import get_mask, get_mask_type, get_random_weights
 from .base import Experimento
 
 _STABILITY_WINDOW = 20
@@ -114,11 +114,10 @@ class KohonenLabExperiment(Experimento):
             height (int): Alto de la grilla (default 30).
             mask (str): ID del preset de máscara (default "simple").
             balance (float | None): Balance excitación/inhibición (default None).
-                0.0 = sin cambio, >0 reduce inhibición, <0 reduce excitación.
-            balance_mode (str): Modo de balance:
-                "none" = sin balance (default),
-                "weight" = escala pesos sinápticos,
-                "synapse_count" = elimina sinapsis aleatorias.
+            balance_mode (str): "none", "weight", or "synapse_count".
+
+        Wolfram masks (mask_type == "wolfram") automatically set:
+            umbral=0.99, bottom row as input, single center cell initialization.
         """
         self._config = config
         self.width = config.get("width", 30)
@@ -129,19 +128,24 @@ class KohonenLabExperiment(Experimento):
         balance = config.get("balance", None)
         balance_mode: str = config.get("balance_mode", "none")
         mask = get_mask(mask_id)
+        self._mask_type = get_mask_type(mask_id)
+        self._random_weights = get_random_weights(mask_id)
 
         constructor = Constructor()
+
+        is_wolfram = self._mask_type == "wolfram"
 
         self.red, self.regiones = constructor.crear_grilla(
             width=self.width,
             height=self.height,
-            filas_entrada=[],
+            filas_entrada=[self.height - 1] if is_wolfram else [],
             filas_salida=[],
-            umbral=0.0,
+            umbral=0.99 if is_wolfram else 0.0,
         )
 
         constructor.aplicar_mascara_2d(
-            self.red, self.width, self.height, mask
+            self.red, self.width, self.height, mask,
+            random_weights=self._random_weights,
         )
 
         if balance is not None and balance_mode == "weight":
@@ -153,8 +157,17 @@ class KohonenLabExperiment(Experimento):
                 list(self.red.neuronas), target=balance
             )
 
-        for neurona in self.red.neuronas:
-            neurona.activar_external(random.random())
+        if is_wolfram:
+            for neurona in self.red.neuronas:
+                neurona.activar_external(0.0)
+            center_x = self.width // 2
+            bottom_y = self.height - 1
+            self.red.get_neurona(
+                f"x{center_x}y{bottom_y}"
+            ).activar_external(1.0)
+        else:
+            for neurona in self.red.neuronas:
+                neurona.activar_external(random.random())
 
         self.red_tensor = ConstructorTensor.compilar(self.red)
 
@@ -162,16 +175,26 @@ class KohonenLabExperiment(Experimento):
         self._last_history_gen = -1
 
     def reconnect(self, config: dict[str, Any]) -> None:
-        """Cambia máscara y/o balance preservando el estado de las neuronas.
-
-        Rebuild connectivity from scratch but restore the current tensor values.
-        """
+        """Cambia máscara y/o balance. Wolfram masks do a full reset (new init)."""
         if self.red_tensor is None:
+            return
+
+        mask_id = config.get("mask", self._config.get("mask", "simple"))
+        new_mask_type = get_mask_type(mask_id)
+
+        if new_mask_type != self._mask_type:
+            self._config["mask"] = mask_id
+            self._config["balance"] = config.get(
+                "balance", self._config.get("balance", None)
+            )
+            self._config["balance_mode"] = config.get(
+                "balance_mode", self._config.get("balance_mode", "none")
+            )
+            self.setup(self._config)
             return
 
         saved_values = self.red_tensor.valores[: self.red_tensor.n_real].clone()
 
-        mask_id = config.get("mask", self._config.get("mask", "simple"))
         balance = config.get("balance", self._config.get("balance", None))
         balance_mode = config.get(
             "balance_mode", self._config.get("balance_mode", "none")
@@ -181,18 +204,21 @@ class KohonenLabExperiment(Experimento):
         self._config["balance_mode"] = balance_mode
 
         mask = get_mask(mask_id)
+        self._random_weights = get_random_weights(mask_id)
+        is_wolfram = self._mask_type == "wolfram"
         constructor = Constructor()
 
         self.red, self.regiones = constructor.crear_grilla(
             width=self.width,
             height=self.height,
-            filas_entrada=[],
+            filas_entrada=[self.height - 1] if is_wolfram else [],
             filas_salida=[],
-            umbral=0.0,
+            umbral=0.99 if is_wolfram else 0.0,
         )
 
         constructor.aplicar_mascara_2d(
-            self.red, self.width, self.height, mask
+            self.red, self.width, self.height, mask,
+            random_weights=self._random_weights,
         )
 
         if balance is not None and balance_mode == "weight":

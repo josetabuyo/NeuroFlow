@@ -67,7 +67,8 @@ NeuroFlow/
 │   ├── experiments/               # Experimentos (plug-in)
 │   │   ├── __init__.py
 │   │   ├── base.py                # Clase base Experiment
-│   │   └── von_neumann.py         # Exp 0: Autómata elemental
+│   │   ├── kohonen.py             # Kohonen (competencia lateral 2D)
+│   │   └── kohonen_lab.py         # Kohonen Lab (laboratorio de conexionados)
 │   ├── api/
 │   │   ├── __init__.py
 │   │   ├── websocket.py           # Handler WebSocket
@@ -80,7 +81,9 @@ NeuroFlow/
 │       ├── test_red.py             # Red NO sabe de regiones
 │       ├── test_region.py          # Region es solo agrupación
 │       ├── test_constructor.py     # Constructor arma Red + Regiones
-│       └── test_von_neumann.py
+│       ├── test_kohonen.py
+│       ├── test_kohonen_lab.py
+│       └── test_red_tensor.py
 │
 ├── frontend/
 │   ├── package.json
@@ -477,10 +480,10 @@ El modelo neuronal (Sinapsis, Dendrita, Neurona, Red) no cambia.
 
 ```
 GET  /api/experiments
-     → [{ id: "von_neumann", name: "Autómata Elemental", rules: [111, 30, 90, 110] }]
+     → [{ id: "kohonen_lab", name: "Kohonen Lab", masks: [...] }]
 
 GET  /api/experiments/:id
-     → { id, name, description, default_config: { width: 50, height: 50, rule: 111 } }
+     → { id, name, description, default_config: { width: 30, height: 30, mask: "simple" } }
 
 GET  /api/health
      → { status: "ok", version: "0.1.0" }
@@ -494,8 +497,8 @@ Conexión: ws://host/ws/experiment
 ─── Cliente → Servidor ───────────────────────────────────
 
 { "action": "start",
-  "experiment": "von_neumann",
-  "config": { "width": 50, "height": 50, "rule": 111 } }
+  "experiment": "kohonen_lab",
+  "config": { "width": 30, "height": 30, "mask": "simple" } }
 
 { "action": "click", "x": 25, "y": 49 }    // Activar neurona
 
@@ -648,10 +651,10 @@ app.add_middleware(
 ```
 1. [Tests]  → test_sinapsis.py, test_dendrita.py, test_neurona.py, test_red.py
 2. [Core]   → sinapsis.py, dendrita.py, neurona.py, red.py, constructor.py
-3. [Tests]  → test_von_neumann.py (verificar que Rule 111 produce output correcto)
+3. [Tests]  → test_kohonen.py, test_kohonen_lab.py, test_red_tensor.py
 4. [API]    → main.py con WebSocket + endpoint de experimentos
 5. [UI]     → React app con Canvas, sidebar, controles
-6. [Exp 0]  → Von Neumann Rule 111 end-to-end
+6. [Exp]    → Kohonen Lab (todos los conexionados + Wolfram) end-to-end
 7. [Deploy] → Backend en Render, Frontend en Vercel
 ```
 

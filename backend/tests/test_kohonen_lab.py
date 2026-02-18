@@ -83,7 +83,7 @@ class TestMaskPresets:
 
     def test_get_mask_info_excludes_mask_data(self) -> None:
         info = get_mask_info()
-        assert len(info) == 16
+        assert len(info) == 18
         for entry in info:
             assert "mask" not in entry
             assert "id" in entry
@@ -104,9 +104,11 @@ class TestMaskPresets:
 
     @pytest.mark.parametrize("preset_id", list(MASK_PRESETS.keys()))
     def test_preset_has_at_least_one_inhibitory(self, preset_id: str) -> None:
-        """Every preset has at least one inhibitory dendrite (skip pure-exc diagnostic masks)."""
+        """Every preset has at least one inhibitory dendrite (skip pure-exc/wolfram masks)."""
         if preset_id == "all_exc":
             pytest.skip("all_exc is a pure-excitatory diagnostic mask by design")
+        if MASK_PRESETS[preset_id].get("mask_type") == "wolfram":
+            pytest.skip("wolfram masks use only excitatory dendrites")
         mask = get_mask(preset_id)
         inh = [d for d in mask if d["peso_dendrita"] < 0]
         assert len(inh) >= 1
@@ -672,3 +674,67 @@ class TestMaskStatsInInfo:
         ms = cross["mask_stats"]
         assert ms["excitatory_synapses"] == 4
         assert ms["excitation_radius"] == 1
+
+
+class TestWolframMasksInKohonenLab:
+    """Tests para Wolfram elementary CA rules ejecutados como m?scaras en Kohonen Lab."""
+
+    def _get_row(self, exp: KohonenLabExperiment, row: int) -> list[int]:
+        """Extract a row from the frame as binary ints."""
+        frame = exp.get_frame()
+        return [int(round(v)) for v in frame[row]]
+
+    def test_rule_110_setup_initializes_correctly(self) -> None:
+        """Wolfram mask sets bottom row input + single center cell."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 9, "height": 5, "mask": "rule_110"})
+        frame = exp.get_frame()
+        bottom = [int(round(v)) for v in frame[4]]
+        assert bottom == [0, 0, 0, 0, 1, 0, 0, 0, 0]
+        for row in range(4):
+            assert all(v == 0.0 for v in frame[row])
+
+    def test_rule_110_one_step(self) -> None:
+        """Rule 110: single center cell ? correct first generation.
+
+        Rule 110 = 01101110: 000?0, 001?1, 010?1, 011?1, 100?0, 101?1, 110?1, 111?0
+        Input:  [0, 0, 0, 0, 1, 0, 0, 0, 0]
+        Gen 1:  [0, 0, 0, 1, 1, 0, 0, 0, 0]  (cell 3 sees 0,1,0?1; cell 4 sees 1,0,0?0; etc.)
+        """
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 9, "height": 5, "mask": "rule_110"})
+        exp.step()
+        row3 = self._get_row(exp, 3)
+        assert row3 == [0, 0, 0, 1, 1, 0, 0, 0, 0]
+
+    def test_rule_30_one_step(self) -> None:
+        """Rule 30: single center cell ? correct first generation.
+
+        Rule 30 = 00011110: 000?0, 001?1, 010?1, 011?1, 100?1, 101?0, 110?0, 111?0
+        Input:  [0, 0, 0, 0, 1, 0, 0, 0, 0]
+        Gen 1:  [0, 0, 0, 1, 1, 1, 0, 0, 0]
+        """
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 9, "height": 5, "mask": "rule_30"})
+        exp.step()
+        row3 = self._get_row(exp, 3)
+        assert row3 == [0, 0, 0, 1, 1, 1, 0, 0, 0]
+
+    def test_wolfram_reset_reinitializes(self) -> None:
+        """Reset of a Wolfram mask re-creates the single center cell."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 9, "height": 5, "mask": "rule_110"})
+        for _ in range(3):
+            exp.step()
+        exp.reset()
+        frame = exp.get_frame()
+        bottom = [int(round(v)) for v in frame[4]]
+        assert bottom == [0, 0, 0, 0, 1, 0, 0, 0, 0]
+
+    def test_reconnect_wolfram_to_kohonen_does_full_reset(self) -> None:
+        """Switching from wolfram to kohonen mask type does a full reset."""
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 10, "height": 10, "mask": "rule_110"})
+        exp.step()
+        exp.reconnect({"mask": "simple"})
+        assert exp._mask_type == "kohonen"

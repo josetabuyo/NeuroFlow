@@ -9,21 +9,6 @@ from core.masks import get_mask_info
 router = APIRouter(prefix="/api")
 
 EXPERIMENTS = {
-    "von_neumann": {
-        "id": "von_neumann",
-        "name": "Autómata Elemental (Von Neumann)",
-        "description": (
-            "Autómata celular elemental 1D (reglas de Wolfram) implementado "
-            "con sinapsis, dendritas y neuronas. Cada fila es una generación "
-            "del autómata, propagándose de abajo hacia arriba."
-        ),
-        "rules": [111, 30, 90, 110],
-        "default_config": {
-            "width": 50,
-            "height": 50,
-            "rule": 111,
-        },
-    },
     "kohonen": {
         "id": "kohonen",
         "name": "Kohonen (Competencia Lateral 2D)",

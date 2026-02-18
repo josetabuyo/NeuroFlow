@@ -255,6 +255,8 @@ class Constructor:
         width: int,
         height: int,
         mascara: list[dict[str, object]],
+        *,
+        random_weights: bool = True,
     ) -> None:
         """Aplica una máscara de conexión a cada neurona de la grilla 2D.
 
@@ -264,11 +266,13 @@ class Constructor:
             height: Alto de la grilla.
             mascara: Lista de definiciones de dendritas. Cada una:
                 {
-                    "peso_dendrita": float,  # Peso de la dendrita (+1.0 o -1.0)
-                    "offsets": [(dx, dy), ...],  # Offsets relativos a la neurona
+                    "peso_dendrita": float,
+                    "offsets": [(dx, dy), ...],
+                    "pesos_sinapsis": [float, ...],  # optional, explicit weights
                 }
-                Los pesos sinápticos se generan aleatorios en [0.2, 1.0].
-                Sinapsis cuyo offset cae fuera de la grilla se ignoran.
+            random_weights: If True, synapses without explicit pesos_sinapsis
+                get random weights in [0.2, 1.0]. If False, they get 1.0.
+                Dendrites with pesos_sinapsis always use those exact values.
         """
         for y in range(height):
             for x in range(width):
@@ -277,19 +281,33 @@ class Constructor:
                 for def_dendrita in mascara:
                     peso_dendrita: float = def_dendrita["peso_dendrita"]  # type: ignore[assignment]
                     offsets: list[tuple[int, int]] = def_dendrita["offsets"]  # type: ignore[assignment]
+                    pesos_explicitos: list[float] | None = def_dendrita.get("pesos_sinapsis")  # type: ignore[assignment]
 
                     sinapsis_list: list[Sinapsis] = []
-                    for dx, dy in offsets:
+                    for i, (dx, dy) in enumerate(offsets):
                         nx = x + dx
                         ny = y + dy
                         if 0 <= nx < width and 0 <= ny < height:
                             neurona_fuente = red.get_neurona(
                                 self.key_by_coord(nx, ny)
                             )
-                            peso = random.uniform(0.2, 1.0)
-                            sinapsis_list.append(
-                                Sinapsis(neurona_entrante=neurona_fuente, peso=peso)
+                        elif pesos_explicitos is not None:
+                            neurona_fuente = NeuronaEntrada(
+                                id=f"_borde_{nx}_{ny}"
                             )
+                            neurona_fuente.activar_external(0.0)
+                        else:
+                            continue
+
+                        if pesos_explicitos is not None:
+                            peso = pesos_explicitos[i]
+                        elif random_weights:
+                            peso = random.uniform(0.2, 1.0)
+                        else:
+                            peso = 1.0
+                        sinapsis_list.append(
+                            Sinapsis(neurona_entrante=neurona_fuente, peso=peso)
+                        )
 
                     if sinapsis_list:
                         dendrita = Dendrita(

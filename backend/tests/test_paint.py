@@ -6,12 +6,10 @@ Valida:
 - Paint con múltiples celdas activa todas
 - Paint con celdas fuera del grid no falla
 - Paint actualiza el frame (el grid refleja los cambios)
-- Paint funciona en Von Neumann
 """
 
 import pytest
 from experiments.kohonen import KohonenExperiment
-from experiments.von_neumann import VonNeumannExperiment
 
 
 class TestPaint:
@@ -108,15 +106,3 @@ class TestPaint:
                 assert frame_despues[5 + dy][5 + dx] == 1.0, \
                     f"Celda ({5+dx},{5+dy}) debería estar activa en el frame"
 
-    def test_paint_funciona_en_von_neumann(self) -> None:
-        """Paint funciona igual en Von Neumann — set_valor via tensor."""
-        exp = VonNeumannExperiment()
-        exp.setup({"width": 20, "height": 20, "rule": 111})
-
-        idx = 19 * 20 + 10  # y=19, x=10
-        exp.red_tensor.set_valor(idx, 1.0)
-
-        assert exp.red_tensor.valores[idx].item() == 1.0
-
-        frame = exp.get_frame()
-        assert frame[19][10] == 1.0

@@ -21,13 +21,10 @@ test("1. Carga inicial", async ({ page }) => {
 
   // Experiment buttons in the sidebar
   await expect(
-    page.getByRole("button", { name: /Von Neumann/i })
-  ).toBeVisible();
-  await expect(
     page.getByRole("button", { name: "Kohonen (Competencia Lateral 2D)" })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Kohonen Balanceado" })
+    page.getByRole("button", { name: "Kohonen Lab" })
   ).toBeVisible();
 
   // "Iniciar Experimento" button
@@ -40,10 +37,10 @@ test("1. Carga inicial", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Iniciar Von Neumann
+// 2. Iniciar Kohonen Lab
 // ---------------------------------------------------------------------------
-test("2. Iniciar Von Neumann", async ({ page }) => {
-  await startExperiment(page, "von_neumann");
+test("2. Iniciar Kohonen Lab", async ({ page }) => {
+  await startExperiment(page, "kohonen_lab");
 
   // Canvas is visible
   await expect(page.locator("canvas")).toBeVisible();
@@ -55,14 +52,6 @@ test("2. Iniciar Von Neumann", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Cruz" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Diamante" })).toBeVisible();
   await expect(page.getByRole("button", { name: "ON", exact: true })).toBeVisible();
-
-  // Generation shows "0/50"
-  const gen = await getGeneration(page);
-  expect(gen).toBe("0/50");
-
-  // Active cells = 0
-  const active = await getActiveCount(page);
-  expect(active).toBe(0);
 
   // Controls are enabled
   await expect(
@@ -184,20 +173,20 @@ test("6. Paint con pincel — verificar vía WebSocket", async ({ page }) => {
 // 7. Step avanza la generación
 // ---------------------------------------------------------------------------
 test("7. Step avanza la generación", async ({ page }) => {
-  await startExperiment(page, "von_neumann");
+  await startExperiment(page, "kohonen_lab");
 
-  // Gen starts at "0/50"
-  expect(await getGeneration(page)).toBe("0/50");
+  // Gen starts at "0/30"
+  expect(await getGeneration(page)).toBe("0/30");
 
   // Click Step
   await page.getByRole("button", { name: "Step" }).click();
-  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("1/50", {
+  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("1/30", {
     timeout: 3_000,
   });
 
   // Click Step again
   await page.getByRole("button", { name: "Step" }).click();
-  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("2/50", {
+  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("2/30", {
     timeout: 3_000,
   });
 });
@@ -302,8 +291,8 @@ test("10. Inspeccionar desactiva la paleta", async ({ page }) => {
 // 11. Cambiar de experimento
 // ---------------------------------------------------------------------------
 test("11. Cambiar de experimento", async ({ page }) => {
-  // Start Von Neumann
-  await startExperiment(page, "von_neumann");
+  // Start Kohonen Lab
+  await startExperiment(page, "kohonen_lab");
   await expect(page.locator("canvas")).toBeVisible();
 
   // Click Kohonen in the sidebar

@@ -13,13 +13,6 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 
 const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
   {
-    id: "von_neumann",
-    name: "Autómata Elemental (Von Neumann)",
-    description: "Autómata celular elemental 1D (reglas de Wolfram)",
-    rules: [111, 30, 90, 110],
-    default_config: { width: 50, height: 50, rule: 111 },
-  },
-  {
     id: "kohonen",
     name: "Kohonen (Competencia Lateral 2D)",
     description:
@@ -49,11 +42,12 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
 
 function App() {
   const [experiments, setExperiments] = useState<ExperimentInfo[]>(DEFAULT_EXPERIMENTS);
-  const [selectedExp, setSelectedExp] = useState("von_neumann");
+  const [selectedExp, setSelectedExp] = useState("kohonen_lab");
   const [config, setConfig] = useState<ExperimentConfig>({
-    width: 50,
-    height: 50,
-    rule: 111,
+    width: 30,
+    height: 30,
+    mask: "simple",
+    balance: 0.0,
   });
   const [stepsPerTick, setStepsPerTick] = useState(1);
 
@@ -232,9 +226,6 @@ function App() {
                 grid={grid}
                 width={config.width}
                 height={config.height}
-                {...(selectedExp !== "kohonen" && selectedExp !== "kohonen_lab"
-                  ? { inputRow: config.height - 1, outputRow: 0 }
-                  : {})}
                 connectionMap={connectionMap}
                 inspectedCell={inspectedCell}
                 onCellClick={handleCellClick}
@@ -345,18 +336,6 @@ function App() {
             </>
           ) : (
             <>
-              {selectedExp !== "kohonen" && selectedExp !== "kohonen_lab" && (
-                <>
-                  <span>
-                    <span style={colorSwatch("#4cc9f0")} />
-                    ENTRADA
-                  </span>
-                  <span>
-                    <span style={colorSwatch("#f72585")} />
-                    SALIDA
-                  </span>
-                </>
-              )}
               <span>
                 <span style={colorSwatch("#ffffff")} />
                 Activa
