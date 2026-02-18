@@ -308,9 +308,37 @@ def get_mask(mask_id: str) -> MaskDef:
     return MASK_PRESETS[mask_id]["mask"]
 
 
+def _compute_preview_grid(mask: MaskDef) -> list[list[float | None]]:
+    """Compute a 19×19 preview grid for a mask definition.
+
+    Center is at (9, 9). The center cell is marked with 999.0 (inspected-cell
+    convention). Each offset (dx, dy) maps to col=9+dx, row=9+dy. If two
+    dendrites overlap on the same cell the one with the larger absolute weight
+    wins.
+    """
+    size = 19
+    center = 9
+    grid: list[list[float | None]] = [[None] * size for _ in range(size)]
+    grid[center][center] = 999.0
+
+    for dendrite in mask:
+        peso: float = dendrite["peso_dendrita"]
+        for dx, dy in dendrite["offsets"]:
+            col = center + dx
+            row = center + dy
+            if 0 <= row < size and 0 <= col < size:
+                existing = grid[row][col]
+                if existing is None or abs(peso) > abs(existing):
+                    grid[row][col] = peso
+
+    return grid
+
+
 def get_mask_info() -> list[dict[str, Any]]:
     """Get metadata for all mask presets (without the mask data itself)."""
-    return [
-        {k: v for k, v in preset.items() if k != "mask"}
-        for preset in MASK_PRESETS.values()
-    ]
+    result = []
+    for preset in MASK_PRESETS.values():
+        entry = {k: v for k, v in preset.items() if k != "mask"}
+        entry["preview_grid"] = _compute_preview_grid(preset["mask"])
+        result.append(entry)
+    return result

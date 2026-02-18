@@ -7,6 +7,7 @@ export interface MaskPresetInfo {
   center: string;
   corona: string;
   dendrites_inh: number;
+  preview_grid: (number | null)[][];
 }
 
 export interface InitModeInfo {

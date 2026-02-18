@@ -1,7 +1,82 @@
 /** Sidebar — experiment selector and configuration. */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { ExperimentInfo, ExperimentConfig } from "../types";
+
+function weightToColor(weight: number | null): string {
+  if (weight === null) return "#111111";
+  if (weight === 999) return "#ffff00";
+
+  const w = Math.max(-1, Math.min(1, weight));
+  if (w > 0) {
+    const g = Math.round(w * 255);
+    return `rgb(0, ${g}, 0)`;
+  } else if (w < 0) {
+    const abs = Math.abs(w);
+    const r = Math.round(abs * 139);
+    const b = Math.round(abs * 255);
+    return `rgb(${r}, 0, ${b})`;
+  }
+  return "#000000";
+}
+
+/** Apply weight-based balance scaling to a preview grid (approximation). */
+function applyBalance(
+  grid: (number | null)[][],
+  balance: number,
+): (number | null)[][] {
+  return grid.map((row) =>
+    row.map((cell) => {
+      if (cell === null || cell === 999) return cell;
+      if (balance > 0 && cell < 0) return cell * (1 - balance);
+      if (balance < 0 && cell > 0) return cell * (1 + balance);
+      return cell;
+    }),
+  );
+}
+
+const MASK_CELL = 10; // px per cell in the canvas backing buffer
+
+function MaskPreview({ grid }: { grid: (number | null)[][] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rows = grid.length;
+    const cols = rows > 0 ? grid[0].length : 0;
+    if (rows === 0 || cols === 0) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = MASK_CELL * cols;
+    canvas.height = MASK_CELL * rows;
+
+    ctx.fillStyle = "#0a0a0a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        ctx.fillStyle = weightToColor(grid[row][col]);
+        ctx.fillRect(col * MASK_CELL, row * MASK_CELL, MASK_CELL, MASK_CELL);
+      }
+    }
+  }, [grid]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        width: "100%",
+        aspectRatio: "1 / 1",
+        display: "block",
+        imageRendering: "pixelated",
+        borderRadius: "4px",
+      }}
+    />
+  );
+}
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -88,6 +163,18 @@ export function Sidebar({
   const selectedExp = experiments.find((e) => e.id === selectedExperiment);
   const hasMasks = selectedExp?.masks && selectedExp.masks.length > 0;
   const canReconnect = experimentActive && hasMasks;
+
+  const masks = selectedExp?.masks ?? [];
+  const activeMask = masks.length > 0
+    ? (masks.find((m) => m.id === config.mask) ?? masks[0])
+    : null;
+
+  const balancedGrid = useMemo(() => {
+    if (!activeMask) return null;
+    const balance = config.balance ?? 0;
+    if (balance === 0 || config.balance_mode === "none") return activeMask.preview_grid;
+    return applyBalance(activeMask.preview_grid, balance);
+  }, [activeMask, config.balance, config.balance_mode]);
 
   return (
     <aside
@@ -245,75 +332,39 @@ export function Sidebar({
             </div>
           </div>
 
-          {hasMasks && (
-            <div>
+          {hasMasks && activeMask && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               <label
                 style={{
                   fontSize: "0.75rem",
                   textTransform: "uppercase",
                   color: "#888",
                   display: "block",
-                  marginBottom: "6px",
                   letterSpacing: "0.1em",
                 }}
               >
                 Conexionado
               </label>
-              <div
+              <select
+                value={config.mask ?? masks[0].id}
+                onChange={(e) => onConfigChange({ ...config, mask: e.target.value })}
+                style={inputStyle}
+              >
+                {masks.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <span
                 style={{
-                  maxHeight: "220px",
-                  overflowY: "auto",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "3px",
+                  fontSize: "0.65rem",
+                  color: "#555",
+                  display: "block",
                 }}
               >
-                {selectedExp!.masks!.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() =>
-                      onConfigChange({ ...config, mask: m.id })
-                    }
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "6px 8px",
-                      background:
-                        config.mask === m.id ? "#1a1a3a" : "transparent",
-                      border:
-                        config.mask === m.id
-                          ? "1px solid #f72585"
-                          : "1px solid #222",
-                      borderRadius: "4px",
-                      color: config.mask === m.id ? "#f72585" : "#999",
-                      cursor: "pointer",
-                      fontSize: "0.78rem",
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontWeight: 600,
-                        display: "block",
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      {m.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "0.65rem",
-                        color: config.mask === m.id ? "#c7608b" : "#555",
-                        display: "block",
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      {m.description}
-                    </span>
-                  </button>
-                ))}
-              </div>
+                {activeMask.description}
+              </span>
             </div>
           )}
 
@@ -457,6 +508,23 @@ export function Sidebar({
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {hasMasks && balancedGrid && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  textTransform: "uppercase",
+                  color: "#888",
+                  display: "block",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                Vista previa
+              </label>
+              <MaskPreview grid={balancedGrid} />
             </div>
           )}
 
