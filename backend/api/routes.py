@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from core.masks import get_mask_info
+
 router = APIRouter(prefix="/api")
 
 EXPERIMENTS = {
@@ -39,15 +41,37 @@ EXPERIMENTS = {
         "id": "kohonen_balanced",
         "name": "Kohonen Balanceado",
         "description": (
-            "Kohonen con pesos balanceados: la suma de pesos efectivos "
-            "(sinapsis × dendrita) de cada neurona iguala el valor de balance. "
-            "Con balance=0 excitación e inhibición se anulan; con 0.1 hay "
-            "sesgo excitatorio."
+            "Kohonen con balance configurable del Fuzzy OR. Con balance=0 "
+            "funciona idéntico al Kohonen simple. Valores positivos reducen "
+            "inhibición (sesgo excitatorio), negativos reducen excitación "
+            "(sesgo inhibitorio)."
         ),
         "default_config": {
             "width": 30,
             "height": 30,
             "balance": 0.0,
+        },
+    },
+    "kohonen_lab": {
+        "id": "kohonen_lab",
+        "name": "Kohonen Lab",
+        "description": (
+            "Laboratorio de conexionados Kohonen. Elige entre múltiples presets "
+            "de sombrero mexicano y ajusta el balance excitación/inhibición. "
+            "Soporta reconexión en caliente sin perder estado."
+        ),
+        "masks": get_mask_info(),
+        "init_modes": [
+            {"id": "random", "name": "Aleatorio"},
+            {"id": "all_on", "name": "Todo ON"},
+            {"id": "all_off", "name": "Todo OFF"},
+        ],
+        "default_config": {
+            "width": 30,
+            "height": 30,
+            "mask": "simple",
+            "balance": 0.0,
+            "init": "random",
         },
     },
 }

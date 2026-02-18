@@ -1,11 +1,17 @@
 /** Shared types for NeuroFlow frontend. */
 
-export interface ExperimentInfo {
+export interface MaskPresetInfo {
   id: string;
   name: string;
   description: string;
-  rules?: number[];
-  default_config: ExperimentConfig;
+  center: string;
+  corona: string;
+  dendrites_inh: number;
+}
+
+export interface InitModeInfo {
+  id: string;
+  name: string;
 }
 
 export interface ExperimentConfig {
@@ -13,6 +19,18 @@ export interface ExperimentConfig {
   height: number;
   rule?: number;
   balance?: number;
+  mask?: string;
+  init?: string;
+}
+
+export interface ExperimentInfo {
+  id: string;
+  name: string;
+  description: string;
+  rules?: number[];
+  masks?: MaskPresetInfo[];
+  init_modes?: InitModeInfo[];
+  default_config: ExperimentConfig;
 }
 
 export interface PerfMetrics {

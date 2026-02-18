@@ -30,8 +30,32 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
     id: "kohonen_balanced",
     name: "Kohonen Balanceado",
     description:
-      "Kohonen con pesos balanceados: suma de pesos efectivos = balance",
+      "Kohonen con balance configurable del Fuzzy OR",
     default_config: { width: 30, height: 30, balance: 0.0 },
+  },
+  {
+    id: "kohonen_lab",
+    name: "Kohonen Lab",
+    description:
+      "Laboratorio de conexionados con máscara y balance configurables",
+    masks: [
+      { id: "simple", name: "Kohonen Simple", description: "Moore r=1, corona r=2-4, 8 dendritas inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, 8 bloques 3x3", dendrites_inh: 8 },
+      { id: "wide_hat", name: "Sombrero Ancho", description: "Moore r=1, corona r=2-7, 8 dendritas inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-7, corona grande", dendrites_inh: 8 },
+      { id: "narrow_hat", name: "Sombrero Estrecho", description: "Moore r=1, corona r=2-3, 8 dendritas inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-3, corona cercana", dendrites_inh: 8 },
+      { id: "big_center", name: "Centro Grande", description: "Moore r=2 (24 vecinos), corona r=4-7, 8 dendritas inh.", center: "Moore r=2 (24 vecinos)", corona: "r=4-7, corona lejana", dendrites_inh: 8 },
+      { id: "cross_center", name: "Cruz Central", description: "Von Neumann r=1 (4 vecinos), corona r=2-4, 4 dendritas inh.", center: "Von Neumann r=1 (4 vecinos)", corona: "r=2-4, 4 bloques cardinales", dendrites_inh: 4 },
+      { id: "one_dendrite", name: "Una Dendrita", description: "Moore r=1, corona r=2-4 en 1 sola dendrita inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, todo en 1 dendrita", dendrites_inh: 1 },
+      { id: "fine_grain", name: "Grano Fino", description: "Moore r=1, corona r=2-4, 16 sectores inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, 16 sectores", dendrites_inh: 16 },
+      { id: "double_ring", name: "Doble Anillo", description: "Moore r=1, anillo r=2-3 (-1) + anillo r=5-7 (-0.5).", center: "Moore r=1 (8 vecinos)", corona: "r=2-3 (-1) + r=5-7 (-0.5)", dendrites_inh: 16 },
+      { id: "soft_inhibit", name: "Inhibicion Suave", description: "Moore r=1, corona r=2-4, peso inh. -0.5.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, peso -0.5", dendrites_inh: 8 },
+      { id: "strong_center", name: "Centro Fuerte", description: "Moore r=1 x2 dendritas exc., corona r=2-4.", center: "Moore r=1 (2 dendritas exc.)", corona: "r=2-4, peso -1", dendrites_inh: 8 },
+    ],
+    init_modes: [
+      { id: "random", name: "Aleatorio" },
+      { id: "all_on", name: "Todo ON" },
+      { id: "all_off", name: "Todo OFF" },
+    ],
+    default_config: { width: 30, height: 30, mask: "simple", balance: 0.0, init: "random" },
   },
 ];
 
@@ -51,12 +75,14 @@ function App() {
     stats,
     perf,
     generation,
+    activeExperiment,
     inspectMode,
     connectionMap,
     inspectedCell,
     selectedBrush,
     brushMode,
     start,
+    reconnect,
     paint,
     step,
     play,
@@ -97,6 +123,10 @@ function App() {
   const handleStart = useCallback(() => {
     start(selectedExp, config);
   }, [start, selectedExp, config]);
+
+  const handleReconnect = useCallback(() => {
+    reconnect(config);
+  }, [reconnect, config]);
 
   const applyBrush = useCallback(
     (x: number, y: number) => {
@@ -177,7 +207,9 @@ function App() {
         onSelectExperiment={handleSelectExperiment}
         onConfigChange={setConfig}
         onStart={handleStart}
+        onReconnect={handleReconnect}
         connected={connected}
+        experimentActive={hasGrid && activeExperiment === selectedExp}
       />
 
       <main
@@ -210,7 +242,7 @@ function App() {
                 grid={grid}
                 width={config.width}
                 height={config.height}
-                {...(selectedExp !== "kohonen"
+                {...(selectedExp !== "kohonen" && selectedExp !== "kohonen_balanced" && selectedExp !== "kohonen_lab"
                   ? { inputRow: config.height - 1, outputRow: 0 }
                   : {})}
                 connectionMap={connectionMap}
@@ -293,7 +325,7 @@ function App() {
             </>
           ) : (
             <>
-              {selectedExp !== "kohonen" && (
+              {selectedExp !== "kohonen" && selectedExp !== "kohonen_balanced" && selectedExp !== "kohonen_lab" && (
                 <>
                   <span>
                     <span style={colorSwatch("#4cc9f0")} />

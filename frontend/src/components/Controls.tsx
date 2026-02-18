@@ -55,6 +55,9 @@ export function Controls({
   const hasExperiment = state !== "disconnected";
   const canInteract = state === "ready" || state === "paused";
   const isRunning = state === "running";
+  const canStep = canInteract || isRunning;
+  const canReset = hasExperiment;
+  const canInspect = canInteract || isRunning;
 
   return (
     <div
@@ -82,23 +85,23 @@ export function Controls({
           </button>
         )}
         <button
-          style={btnStyle(canInteract, "#7b61ff")}
+          style={btnStyle(canStep, "#7b61ff")}
           onClick={onStep}
-          disabled={!canInteract}
+          disabled={!canStep}
         >
           Step
         </button>
         <button
-          style={btnStyle(hasExperiment && !isRunning, "#ff9e00")}
+          style={btnStyle(canReset, "#ff9e00")}
           onClick={onReset}
-          disabled={!hasExperiment || isRunning}
+          disabled={!canReset}
         >
           Reset
         </button>
         <button
-          style={btnStyle(inspectMode, "#ffff00")}
+          style={btnStyle(canInspect || inspectMode, "#ffff00")}
           onClick={onToggleInspect}
-          disabled={!canInteract}
+          disabled={!canInspect}
         >
           {inspectMode ? "\u2715 Inspeccionar" : "Inspeccionar"}
         </button>

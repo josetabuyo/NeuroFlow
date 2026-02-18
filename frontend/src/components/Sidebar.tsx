@@ -69,7 +69,9 @@ interface SidebarProps {
   onSelectExperiment: (id: string) => void;
   onConfigChange: (config: ExperimentConfig) => void;
   onStart: () => void;
+  onReconnect?: () => void;
   connected: boolean;
+  experimentActive?: boolean;
 }
 
 export function Sidebar({
@@ -79,9 +81,13 @@ export function Sidebar({
   onSelectExperiment,
   onConfigChange,
   onStart,
+  onReconnect,
   connected,
+  experimentActive,
 }: SidebarProps) {
   const selectedExp = experiments.find((e) => e.id === selectedExperiment);
+  const hasMasks = selectedExp?.masks && selectedExp.masks.length > 0;
+  const canReconnect = experimentActive && hasMasks;
 
   return (
     <aside
@@ -239,6 +245,78 @@ export function Sidebar({
             </div>
           </div>
 
+          {hasMasks && (
+            <div>
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  textTransform: "uppercase",
+                  color: "#888",
+                  display: "block",
+                  marginBottom: "6px",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                Conexionado
+              </label>
+              <div
+                style={{
+                  maxHeight: "220px",
+                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "3px",
+                }}
+              >
+                {selectedExp!.masks!.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() =>
+                      onConfigChange({ ...config, mask: m.id })
+                    }
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "6px 8px",
+                      background:
+                        config.mask === m.id ? "#1a1a3a" : "transparent",
+                      border:
+                        config.mask === m.id
+                          ? "1px solid #f72585"
+                          : "1px solid #222",
+                      borderRadius: "4px",
+                      color: config.mask === m.id ? "#f72585" : "#999",
+                      cursor: "pointer",
+                      fontSize: "0.78rem",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        display: "block",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {m.name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.65rem",
+                        color: config.mask === m.id ? "#c7608b" : "#555",
+                        display: "block",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {m.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {selectedExp.default_config.balance !== undefined && (
             <div>
               <label
@@ -268,8 +346,44 @@ export function Sidebar({
                   display: "block",
                 }}
               >
-                0 = neutro, + excitatorio, − inhibitorio
+                0 = sin cambio, + excitatorio, − inhibitorio
               </span>
+            </div>
+          )}
+
+          {selectedExp.init_modes && selectedExp.init_modes.length > 0 && (
+            <div>
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#888",
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Inicialización
+              </label>
+              <select
+                value={config.init ?? "random"}
+                onChange={(e) =>
+                  onConfigChange({ ...config, init: e.target.value })
+                }
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  background: "#1a1a2e",
+                  border: "1px solid #2a2a3e",
+                  borderRadius: "4px",
+                  color: "#e0e0ff",
+                  fontSize: "0.9rem",
+                }}
+              >
+                {selectedExp.init_modes.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -290,6 +404,25 @@ export function Sidebar({
           >
             {connected ? "Iniciar Experimento" : "Conectando..."}
           </button>
+
+          {canReconnect && onReconnect && (
+            <button
+              onClick={onReconnect}
+              style={{
+                padding: "8px",
+                background: "transparent",
+                color: "#f72585",
+                border: "1px solid #f72585",
+                borderRadius: "6px",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              Reconectar
+            </button>
+          )}
         </div>
       )}
 

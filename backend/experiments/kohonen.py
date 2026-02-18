@@ -15,96 +15,12 @@ from typing import Any
 
 from core.constructor import Constructor
 from core.constructor_tensor import ConstructorTensor
+from core.masks import MASK_SIMPLE
 from .base import Experimento
 
 
-# ---------------------------------------------------------------------------
-# Máscara kohonen_simple — offsets exactos del proyecto JS original
-# ---------------------------------------------------------------------------
-
-KOHONEN_SIMPLE_MASK: list[dict[str, object]] = [
-    # D0 — Excitatoria: 8 vecinos inmediatos (Moore neighborhood)
-    {
-        "peso_dendrita": 1.0,
-        "offsets": [
-            (-1, -1), (-1, 0), (-1, 1),
-            (0, -1),           (0, 1),
-            (1, -1),  (1, 0),  (1, 1),
-        ],
-    },
-    # D1 — Inhibitoria NE: bloque 3×3 en (+2..+4, -4..-2)
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (2, -4), (2, -3), (2, -2),
-            (3, -4), (3, -3), (3, -2),
-            (4, -4), (4, -3), (4, -2),
-        ],
-    },
-    # D2 — Inhibitoria E: bloque 3×3 en (+2..+4, -1..+1)
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (2, -1), (2, 0), (2, 1),
-            (3, -1), (3, 0), (3, 1),
-            (4, -1), (4, 0), (4, 1),
-        ],
-    },
-    # D3 — Inhibitoria SE: bloque 3×3 en (+2..+4, +2..+4)
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (2, 2), (2, 3), (2, 4),
-            (3, 2), (3, 3), (3, 4),
-            (4, 2), (4, 3), (4, 4),
-        ],
-    },
-    # D4 — Inhibitoria S: bloque 3×3 en (-1..+1, +2..+4)
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-1, 2), (-1, 3), (-1, 4),
-            (0, 2),  (0, 3),  (0, 4),
-            (1, 2),  (1, 3),  (1, 4),
-        ],
-    },
-    # D5 — Inhibitoria SW: bloque 3×3 en (-4..-2, +2..+4)
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-4, 2), (-4, 3), (-4, 4),
-            (-3, 2), (-3, 3), (-3, 4),
-            (-2, 2), (-2, 3), (-2, 4),
-        ],
-    },
-    # D6 — Inhibitoria W: bloque 3×3 en (-4..-2, -1..+1)
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-4, -1), (-4, 0), (-4, 1),
-            (-3, -1), (-3, 0), (-3, 1),
-            (-2, -1), (-2, 0), (-2, 1),
-        ],
-    },
-    # D7 — Inhibitoria NW: bloque 3×3 en (-4..-2, -4..-2)
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-4, -4), (-4, -3), (-4, -2),
-            (-3, -4), (-3, -3), (-3, -2),
-            (-2, -4), (-2, -3), (-2, -2),
-        ],
-    },
-    # D8 — Inhibitoria N: bloque 3×3 en (-1..+1, -4..-2)
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-1, -4), (-1, -3), (-1, -2),
-            (0, -4),  (0, -3),  (0, -2),
-            (1, -4),  (1, -3),  (1, -2),
-        ],
-    },
-]
+# Re-export for backward compatibility
+KOHONEN_SIMPLE_MASK: list[dict[str, object]] = MASK_SIMPLE
 
 
 class KohonenExperiment(Experimento):

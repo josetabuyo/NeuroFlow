@@ -1,12 +1,12 @@
-"""Experimento Kohonen Balanceado — competencia lateral 2D con pesos balanceados.
+"""Experimento Kohonen Balanceado — competencia lateral 2D con balance configurable.
 
 Idéntico al experimento Kohonen original pero aplica el balanceador del
 Constructor después de cablear las conexiones.  El parámetro `balance`
-(default 0.0) controla el punto de equilibrio excitación/inhibición:
+(default 0.0) desplaza el punto de operación del Fuzzy OR:
 
-  balance = 0.0  -> pesos excitatorios == inhibitorios (neutro)
-  balance = 0.1  -> ligero sesgo excitatorio
-  balance = -0.1 -> ligero sesgo inhibitorio
+  balance = 0.0  -> sin cambio (dinámica natural, idéntico a Kohonen simple)
+  balance > 0    -> escala sinapsis inhibitorias (sesgo excitatorio)
+  balance < 0    -> escala sinapsis excitatorias (sesgo inhibitorio)
 """
 
 from __future__ import annotations

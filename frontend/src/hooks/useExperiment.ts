@@ -21,12 +21,14 @@ interface UseExperimentReturn {
   stats: ExperimentStats | null;
   perf: PerfMetrics | null;
   generation: number;
+  activeExperiment: string | null;
   inspectMode: boolean;
   connectionMap: (number | null)[][] | null;
   inspectedCell: { x: number; y: number } | null;
   selectedBrush: string;
   brushMode: "activate" | "deactivate";
   start: (experiment: string, config: ExperimentConfig) => void;
+  reconnect: (config: ExperimentConfig) => void;
   click: (x: number, y: number) => void;
   paint: (cells: { x: number; y: number }[], value: number) => void;
   step: (count?: number) => void;
@@ -48,6 +50,7 @@ export function useExperiment(): UseExperimentReturn {
   const [connectionMap, setConnectionMap] = useState<(number | null)[][] | null>(null);
   const [inspectedCell, setInspectedCell] = useState<{ x: number; y: number } | null>(null);
   const [perf, setPerf] = useState<PerfMetrics | null>(null);
+  const [activeExperiment, setActiveExperiment] = useState<string | null>(null);
   const [selectedBrush, setSelectedBrush] = useState("1x1");
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
   const wsRef = useRef<WebSocket | null>(null);
@@ -115,7 +118,15 @@ export function useExperiment(): UseExperimentReturn {
 
   const start = useCallback(
     (experiment: string, config: ExperimentConfig) => {
+      setActiveExperiment(experiment);
       send({ action: "start", experiment, config });
+    },
+    [send]
+  );
+
+  const reconnect = useCallback(
+    (config: ExperimentConfig) => {
+      send({ action: "reconnect", config });
     },
     [send]
   );
@@ -177,12 +188,14 @@ export function useExperiment(): UseExperimentReturn {
     stats,
     perf,
     generation,
+    activeExperiment,
     inspectMode,
     connectionMap,
     inspectedCell,
     selectedBrush,
     brushMode,
     start,
+    reconnect,
     click,
     paint,
     step,

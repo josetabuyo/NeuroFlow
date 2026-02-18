@@ -14,6 +14,7 @@ from experiments.base import Experimento
 from experiments.von_neumann import VonNeumannExperiment
 from experiments.kohonen import KohonenExperiment
 from experiments.kohonen_balanced import KohonenBalancedExperiment
+from experiments.kohonen_lab import KohonenLabExperiment
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ EXPERIMENT_CLASSES: dict[str, type[Experimento]] = {
     "von_neumann": VonNeumannExperiment,
     "kohonen": KohonenExperiment,
     "kohonen_balanced": KohonenBalancedExperiment,
+    "kohonen_lab": KohonenLabExperiment,
 }
 
 
@@ -54,6 +56,7 @@ class ExperimentSession:
             "pause": self._handle_pause,
             "reset": self._handle_reset,
             "inspect": self._handle_inspect,
+            "reconnect": self._handle_reconnect,
         }
 
         handler = handlers.get(action)
@@ -108,11 +111,21 @@ class ExperimentSession:
                     red_tensor.set_valor(idx, value)
         await self._send_frame()
 
+    async def _stop_play_loop(self) -> None:
+        """Stop the play loop if active and notify client."""
+        if self._playing:
+            self._playing = False
+            if self._play_task and not self._play_task.done():
+                self._play_task.cancel()
+            await self.send({"type": "status", "state": "paused"})
+
     async def _handle_step(self, message: dict[str, Any]) -> None:
         """Process one or more steps. Supports {"action": "step", "count": N}."""
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
+
+        await self._stop_play_loop()
 
         count = max(1, message.get("count", 1))
 
@@ -144,20 +157,37 @@ class ExperimentSession:
 
     async def _handle_pause(self, _message: dict[str, Any]) -> None:
         """Pause continuous processing."""
-        self._playing = False
-        if self._play_task and not self._play_task.done():
-            self._play_task.cancel()
-        await self.send({"type": "status", "state": "paused"})
+        await self._stop_play_loop()
 
     async def _handle_inspect(self, message: dict[str, Any]) -> None:
         """Return connection weights for a neuron."""
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
+
+        await self._stop_play_loop()
+
         x = message.get("x", 0)
         y = message.get("y", 0)
         result = self.experiment.inspect(x, y)
         await self.send(result)
+
+    async def _handle_reconnect(self, message: dict[str, Any]) -> None:
+        """Reconnect with new mask/balance, preserving neuron state."""
+        if not self.experiment:
+            await self.send({"type": "error", "message": "No experiment started"})
+            return
+
+        if not hasattr(self.experiment, "reconnect"):
+            await self.send({"type": "error", "message": "Experiment doesn't support reconnect"})
+            return
+
+        await self._stop_play_loop()
+
+        config = message.get("config", {})
+        self.experiment.reconnect(config)
+        await self.send({"type": "status", "state": "ready"})
+        await self._send_frame()
 
     async def _handle_reset(self, _message: dict[str, Any]) -> None:
         """Reset the experiment."""
@@ -165,9 +195,7 @@ class ExperimentSession:
             await self.send({"type": "error", "message": "No experiment started"})
             return
 
-        self._playing = False
-        if self._play_task and not self._play_task.done():
-            self._play_task.cancel()
+        await self._stop_play_loop()
 
         self.experiment.reset()
         await self.send({"type": "status", "state": "ready"})

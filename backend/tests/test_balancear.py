@@ -1,19 +1,18 @@
-"""Tests para Constructor.balancear_pesos — balanceo de pesos excitatorios/inhibitorios."""
+"""Tests para Constructor.balancear_pesos — escalado Fuzzy OR-compatible.
+
+Nueva semántica:
+  target = 0.0  → sin cambio (retorno inmediato)
+  target > 0    → escala sinapsis inhibitorias por (1 - target)
+  target < 0    → escala sinapsis excitatorias por (1 + target)
+  target = +1   → inhibición eliminada
+  target = -1   → excitación eliminada
+"""
 
 import pytest
 from core.constructor import Constructor
 from core.sinapsis import Sinapsis
 from core.dendrita import Dendrita
 from core.neurona import Neurona, NeuronaEntrada
-
-
-def _effective_sum(neurona: Neurona) -> float:
-    """Calcula la suma de pesos efectivos (s.peso * d.peso) de una neurona."""
-    total = 0.0
-    for d in neurona.dendritas:
-        for s in d.sinapsis:
-            total += s.peso * d.peso
-    return total
 
 
 def _build_neuron_with_dendrites(
@@ -36,61 +35,111 @@ def _build_neuron_with_dendrites(
     return Neurona(id="test", dendritas=dendritas)
 
 
-class TestBalancearPesos:
-    """Constructor.balancear_pesos: normaliza balance excitación/inhibición."""
+def _get_syn_weights(neurona: Neurona, kind: str) -> list[float]:
+    """Retorna pesos sinápticos de dendritas excitatorias o inhibitorias."""
+    result = []
+    for d in neurona.dendritas:
+        if kind == "exc" and d.peso > 0:
+            result.extend(s.peso for s in d.sinapsis)
+        elif kind == "inh" and d.peso < 0:
+            result.extend(s.peso for s in d.sinapsis)
+    return result
 
-    def test_target_cero_produce_balance_exacto(self) -> None:
-        """Con target=0, la suma de pesos efectivos debe ser ~0."""
+
+class TestBalancearPesosNuevaSemantica:
+    """Constructor.balancear_pesos: escalado Fuzzy OR-compatible."""
+
+    def test_target_cero_no_modifica_nada(self) -> None:
+        """Con target=0, los pesos no se tocan (retorno inmediato)."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.8, 0.9, 0.7],
             inh_weights=[0.3, 0.2],
         )
-        # Before: unbalanced
-        before = _effective_sum(neurona)
-        assert before != pytest.approx(0.0, abs=0.01)
+        exc_before = _get_syn_weights(neurona, "exc")[:]
+        inh_before = _get_syn_weights(neurona, "inh")[:]
 
         constructor = Constructor()
         constructor.balancear_pesos([neurona], target=0.0)
 
-        after = _effective_sum(neurona)
-        assert after == pytest.approx(0.0, abs=1e-9)
+        assert _get_syn_weights(neurona, "exc") == exc_before
+        assert _get_syn_weights(neurona, "inh") == inh_before
 
-    def test_target_positivo_produce_sesgo_excitatorio(self) -> None:
-        """Con target=0.1, la suma de pesos efectivos debe ser ~0.1."""
+    def test_target_positivo_reduce_inhibitorias(self) -> None:
+        """Con target>0, las sinapsis inhibitorias se escalan por (1 - target)."""
         neurona = _build_neuron_with_dendrites(
-            exc_weights=[0.5, 0.6, 0.7],
-            inh_weights=[0.4, 0.5, 0.6],
+            exc_weights=[0.6, 0.8],
+            inh_weights=[0.5, 0.4],
+        )
+        exc_before = _get_syn_weights(neurona, "exc")[:]
+        inh_before = _get_syn_weights(neurona, "inh")[:]
+
+        constructor = Constructor()
+        constructor.balancear_pesos([neurona], target=0.5)
+
+        # Excitatorias no cambian
+        assert _get_syn_weights(neurona, "exc") == exc_before
+        # Inhibitorias se escalaron por 0.5
+        inh_after = _get_syn_weights(neurona, "inh")
+        for before, after in zip(inh_before, inh_after):
+            assert after == pytest.approx(before * 0.5, abs=1e-9)
+
+    def test_target_negativo_reduce_excitatorias(self) -> None:
+        """Con target<0, las sinapsis excitatorias se escalan por (1 + target)."""
+        neurona = _build_neuron_with_dendrites(
+            exc_weights=[0.6, 0.8],
+            inh_weights=[0.5, 0.4],
+        )
+        exc_before = _get_syn_weights(neurona, "exc")[:]
+        inh_before = _get_syn_weights(neurona, "inh")[:]
+
+        constructor = Constructor()
+        constructor.balancear_pesos([neurona], target=-0.5)
+
+        # Inhibitorias no cambian
+        assert _get_syn_weights(neurona, "inh") == inh_before
+        # Excitatorias se escalaron por 0.5
+        exc_after = _get_syn_weights(neurona, "exc")
+        for before, after in zip(exc_before, exc_after):
+            assert after == pytest.approx(before * 0.5, abs=1e-9)
+
+    def test_target_uno_elimina_inhibicion(self) -> None:
+        """Con target=+1, inhibición se escala por 0.01 (~eliminada)."""
+        neurona = _build_neuron_with_dendrites(
+            exc_weights=[0.6],
+            inh_weights=[0.5, 0.4],
         )
         constructor = Constructor()
-        constructor.balancear_pesos([neurona], target=0.1)
+        constructor.balancear_pesos([neurona], target=1.0)
 
-        after = _effective_sum(neurona)
-        assert after == pytest.approx(0.1, abs=1e-9)
+        inh_after = _get_syn_weights(neurona, "inh")
+        for w in inh_after:
+            assert w < 0.01  # casi cero
 
-    def test_target_negativo_produce_sesgo_inhibitorio(self) -> None:
-        """Con target=-0.1, la suma de pesos efectivos debe ser ~-0.1."""
+    def test_target_menos_uno_elimina_excitacion(self) -> None:
+        """Con target=-1, excitación se escala por 0.01 (~eliminada)."""
         neurona = _build_neuron_with_dendrites(
-            exc_weights=[0.5, 0.6, 0.7],
-            inh_weights=[0.4, 0.5, 0.6],
+            exc_weights=[0.6, 0.8],
+            inh_weights=[0.5],
         )
         constructor = Constructor()
-        constructor.balancear_pesos([neurona], target=-0.1)
+        constructor.balancear_pesos([neurona], target=-1.0)
 
-        after = _effective_sum(neurona)
-        assert after == pytest.approx(-0.1, abs=1e-9)
+        exc_after = _get_syn_weights(neurona, "exc")
+        for w in exc_after:
+            assert w < 0.01  # casi cero
 
     def test_neurona_sin_dendritas_no_falla(self) -> None:
         """Neuronas sin dendritas se ignoran sin error."""
         neurona = Neurona(id="vacia")
         constructor = Constructor()
-        constructor.balancear_pesos([neurona], target=0.0)
+        constructor.balancear_pesos([neurona], target=0.5)
         assert neurona.dendritas == []
 
     def test_neurona_entrada_se_ignora(self) -> None:
         """NeuronaEntrada se salta sin modificar."""
         entrada = NeuronaEntrada(id="entrada")
         constructor = Constructor()
-        constructor.balancear_pesos([entrada], target=0.0)
+        constructor.balancear_pesos([entrada], target=0.5)
         assert entrada.dendritas == []
 
     def test_pesos_se_mantienen_en_rango(self) -> None:
@@ -100,7 +149,7 @@ class TestBalancearPesos:
             inh_weights=[0.1],
         )
         constructor = Constructor()
-        constructor.balancear_pesos([neurona], target=0.0)
+        constructor.balancear_pesos([neurona], target=0.5)
 
         for d in neurona.dendritas:
             for s in d.sinapsis:
@@ -116,28 +165,42 @@ class TestBalancearPesos:
             exc_weights=[0.8, 0.7],
             inh_weights=[0.3, 0.2],
         )
-        constructor = Constructor()
-        constructor.balancear_pesos([n1, n2], target=0.0)
+        inh_before_1 = _get_syn_weights(n1, "inh")[:]
+        inh_before_2 = _get_syn_weights(n2, "inh")[:]
 
-        assert _effective_sum(n1) == pytest.approx(0.0, abs=1e-9)
-        assert _effective_sum(n2) == pytest.approx(0.0, abs=1e-9)
+        constructor = Constructor()
+        constructor.balancear_pesos([n1, n2], target=0.5)
+
+        inh_after_1 = _get_syn_weights(n1, "inh")
+        inh_after_2 = _get_syn_weights(n2, "inh")
+        for before, after in zip(inh_before_1, inh_after_1):
+            assert after == pytest.approx(before * 0.5, abs=1e-9)
+        for before, after in zip(inh_before_2, inh_after_2):
+            assert after == pytest.approx(before * 0.5, abs=1e-9)
 
     def test_escala_siempre_hacia_abajo(self) -> None:
-        """Los factores de escala son <= 1 (pesos nunca suben por encima del original)."""
+        """Los pesos siempre se reducen o quedan igual, nunca suben."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.6, 0.7, 0.8],
             inh_weights=[0.4, 0.5],
         )
-        # Guardar pesos originales
         pesos_antes = [s.peso for d in neurona.dendritas for s in d.sinapsis]
 
         constructor = Constructor()
-        constructor.balancear_pesos([neurona], target=0.0)
+        constructor.balancear_pesos([neurona], target=0.3)
 
         pesos_despues = [s.peso for d in neurona.dendritas for s in d.sinapsis]
-
-        # Al menos uno debe haber cambiado (red no estaba balanceada)
-        assert pesos_antes != pesos_despues
-        # Ninguno subió por encima de su valor original
         for antes, despues in zip(pesos_antes, pesos_despues):
             assert despues <= antes + 1e-9
+
+    def test_factor_proporcional_a_target(self) -> None:
+        """target=0.3 produce factor 0.7 en inhibitorias."""
+        neurona = _build_neuron_with_dendrites(
+            exc_weights=[0.6],
+            inh_weights=[0.5],
+        )
+        constructor = Constructor()
+        constructor.balancear_pesos([neurona], target=0.3)
+
+        inh_after = _get_syn_weights(neurona, "inh")
+        assert inh_after[0] == pytest.approx(0.5 * 0.7, abs=1e-9)
