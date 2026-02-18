@@ -99,44 +99,39 @@ class TestAplicarMascara2D:
 
 
 class TestDinamicaKohonen:
-    """Dinámica de excitación local + inhibición lateral."""
+    """Dinámica de excitación local + inhibición lateral (via RedTensor)."""
 
     def test_vecinos_activos_sin_inhibicion_activa_neurona(self) -> None:
-        """Neurona con vecinos activos y sin inhibición → tensión positiva → se activa."""
-        # Crear una red mínima donde solo hay excitación (sin zonas inhibitorias)
+        """Neurona con vecinos activos y sin inhibición → se activa."""
+        from core.constructor_tensor import ConstructorTensor
+
         constructor = Constructor()
-        # 3x3 grid: solo excitación (sin inhibición por falta de neuronas lejanas)
         red, _ = constructor.crear_grilla(
             width=3, height=3, filas_entrada=[], filas_salida=[], umbral=0.0
         )
-        # Solo aplicar dendrita excitatoria (D0)
         mascara_solo_exc = [KOHONEN_SIMPLE_MASK[0]]
         constructor.aplicar_mascara_2d(red, 3, 3, mascara_solo_exc)
 
-        # Activar todos los vecinos de la neurona central (1,1)
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
                 if dx == 0 and dy == 0:
                     continue
                 red.get_neurona(f"x{1+dx}y{1+dy}").activar_external(1.0)
 
-        # Procesar
-        neurona_central = red.get_neurona("x1y1")
-        neurona_central.procesar()
-        neurona_central.activar()
+        rt = ConstructorTensor.compilar(red)
+        rt.procesar()
 
-        # Con todos los vecinos activos y pesos aleatorios,
-        # la dendrita excitatoria produce un valor positivo
-        assert neurona_central.valor == 1.0
+        idx_centro = 1 * 3 + 1
+        assert rt.valores[idx_centro].item() == 1.0
 
     def test_inhibicion_fuerte_desactiva_neurona(self) -> None:
-        """Neurona con inhibición fuerte → tensión negativa → no se activa."""
+        """Neurona con solo inhibición fuerte → no se activa."""
+        from core.constructor_tensor import ConstructorTensor
+
         constructor = Constructor()
         red, _ = constructor.crear_grilla(
             width=10, height=10, filas_entrada=[], filas_salida=[], umbral=0.0
         )
-
-        # Máscara: solo una dendrita inhibitoria con offsets que caigan dentro del grid
         mascara_inh = [
             {
                 "peso_dendrita": -1.0,
@@ -146,48 +141,41 @@ class TestDinamicaKohonen:
         ]
         constructor.aplicar_mascara_2d(red, 10, 10, mascara_inh)
 
-        # Activar todos los vecinos con valor 1.0
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
                 if dx == 0 and dy == 0:
                     continue
                 red.get_neurona(f"x{5+dx}y{5+dy}").activar_external(1.0)
 
-        # Procesar la neurona central
-        neurona = red.get_neurona("x5y5")
-        neurona.procesar()
-        neurona.activar()
+        rt = ConstructorTensor.compilar(red)
+        rt.procesar()
 
-        # Con inhibición fuerte, la tensión debería ser negativa
-        assert neurona.tension_superficial < 0
-        assert neurona.valor == 0.0
+        idx_centro = 5 * 10 + 5
+        assert rt.valores[idx_centro].item() == 0.0
 
     def test_red_pequena_activar_centro_propaga_excitacion(self) -> None:
         """Red 5x5: activar centro → después de 1 step, vecinos se activan."""
+        from core.constructor_tensor import ConstructorTensor
+
         random.seed(42)
         constructor = Constructor()
         red, _ = constructor.crear_grilla(
             width=5, height=5, filas_entrada=[], filas_salida=[], umbral=0.0
         )
-        # Solo excitación para probar propagación limpia
         mascara_exc = [KOHONEN_SIMPLE_MASK[0]]
         constructor.aplicar_mascara_2d(red, 5, 5, mascara_exc)
 
-        # Inicializar todo a 0
         for n in red.neuronas:
             n.activar_external(0.0)
-
-        # Activar centro
         red.get_neurona("x2y2").activar_external(1.0)
 
-        # Un step completo
-        red.procesar()
+        rt = ConstructorTensor.compilar(red)
+        rt.procesar()
 
-        # Al menos algunos vecinos del centro deberían activarse
         vecinos_activos = 0
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            n = red.get_neurona(f"x{2+dx}y{2+dy}")
-            if n.valor > 0:
+            idx = (2 + dy) * 5 + (2 + dx)
+            if rt.valores[idx].item() > 0:
                 vecinos_activos += 1
         assert vecinos_activos > 0
 
@@ -242,7 +230,7 @@ class TestKohonenExperiment:
         assert exp.red_tensor.valores[idx].item() == 0.0
 
     def test_step_procesa_toda_la_red(self) -> None:
-        """Un step procesa toda la red de golpe (red.procesar())."""
+        """Un step procesa toda la red de golpe (red_tensor.procesar())."""
         random.seed(42)
         exp = KohonenExperiment()
         exp.setup({"width": 10, "height": 10})

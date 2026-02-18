@@ -92,35 +92,10 @@ class ConstructorTensor:
                     if src_id in id_to_idx:
                         indices_fuente[i, syn_idx] = id_to_idx[src_id]
                     else:
-                        # Border neuron (not in the Red): point to self,
-                        # but mask will handle it. We use index 0 as safe default
-                        # and set synapse weight to match expected behavior.
-                        # Border neurons have value 0, so 1 - |w - 0| = 1 - w.
-                        # The legacy code creates a NeuronaEntrada with value 0.
-                        # We need to replicate: point to a neuron with value 0.
-                        # Since this synapse IS valid and contributes, we use idx 0
-                        # but need a "zero neuron". Instead, we'll handle this by
-                        # creating a virtual zero entry.
-                        # Simplest approach: point to index 0 — this works if we
-                        # prepend a virtual zero-value neuron. But that changes N.
-                        # Better approach: these border synapses contribute a fixed
-                        # value of 1 - |peso - 0| = 1 - peso. We can pre-compute
-                        # this and treat the synapse as pointing to itself with the
-                        # mask still valid. But the value won't be 0 necessarily.
-                        #
-                        # Cleanest: mark as invalid (mask=False). The border neuron
-                        # in legacy has value=0 and contributes to the average.
-                        # But border neurons DO participate in the computation!
-                        #
-                        # Actually let's reconsider: border neurons are created by
-                        # conectar_filas with value 0. They contribute:
-                        #   sinapsis.procesar() = 1 - |peso - 0| = 1 - peso
-                        # This IS factored into the average. So we need them.
-                        #
-                        # Solution: We'll add a single "zero neuron" at index N
-                        # that always has value 0, and point border synapses there.
-                        # We'll handle this after the loop.
-                        indices_fuente[i, syn_idx] = N  # Will point to zero neuron
+                        # Border neuron (not in the Red): created by conectar_filas
+                        # with value 0, contributes 1 - |peso - 0| = 1 - peso.
+                        # Point to a virtual zero neuron at index N.
+                        indices_fuente[i, syn_idx] = N
 
                     syn_idx += 1
 

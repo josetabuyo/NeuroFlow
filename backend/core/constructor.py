@@ -2,8 +2,7 @@
 
 Crea neuronas, las agrupa en regiones,
 construye la conectividad (dendritas, sinapsis).
-Conoce de topología y patrones de conexión.
-Es el ÚNICO que sabe cómo cablear la red.
+La Red resultante se compila a RedTensor para procesamiento paralelo.
 """
 
 from __future__ import annotations

@@ -119,9 +119,8 @@ class RedTensor:
         dendrita_valores = promedios * self._dend_pesos  # [NR, max_dend]
 
         # 5. Fuzzy OR: max(0, dendritas) + min(0, dendritas)
-        # Legacy code initializes max_valor=0.0, min_valor=0.0 before iterating
-        # dendrites, so max is at least 0 and min is at most 0.
-        # For invalid dendrites, set values to 0 (neutral for both max and min).
+        # max is clamped to >=0, min to <=0, so no-dendrite neurons get tension=0.
+        # Invalid dendrites are set to 0 (neutral for both max and min).
         dendrita_para_calc = dendrita_valores.where(self._dendrita_mascara, torch.zeros(1, device=self.device))
 
         max_vals = dendrita_para_calc.max(dim=1).values.clamp(min=0.0)  # [NR]

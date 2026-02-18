@@ -1,7 +1,7 @@
-"""Red — contenedor tonto de neuronas.
+"""Red — contenedor de neuronas y topología.
 
-Solo contiene neuronas. Solo las procesa a todas.
-NO sabe qué es input ni output. NO tiene regiones.
+Almacena neuronas y su conectividad (dendritas, sinapsis).
+El procesamiento real se hace en RedTensor (paralelo).
 """
 
 from __future__ import annotations
@@ -10,26 +10,13 @@ from .neurona import Neurona
 
 
 class Red:
-    """Contenedor de neuronas — solo las itera y procesa."""
+    """Contenedor de neuronas — estructura de datos para construcción."""
 
     __slots__ = ("neuronas", "_neuronas_dict")
 
     def __init__(self, neuronas: list[Neurona]) -> None:
         self.neuronas: list[Neurona] = neuronas
         self._neuronas_dict: dict[str, Neurona] = {n.id: n for n in neuronas}
-
-    def procesar(self) -> None:
-        """Procesa TODAS las neuronas en dos fases:
-
-        1. Fase de procesamiento: cada neurona evalúa sus dendritas
-        2. Fase de activación: cada neurona aplica su umbral
-
-        NeuronaEntrada simplemente no hace nada en ambas fases.
-        """
-        for neurona in self.neuronas:
-            neurona.procesar()
-        for neurona in self.neuronas:
-            neurona.activar()
 
     def get_neurona(self, id: str) -> Neurona:
         """Retorna una neurona por su ID."""

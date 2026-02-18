@@ -29,17 +29,16 @@ class TestRegion:
         assert "e1" in region.ids()
         assert region.valores() == [1.0]
 
-    def test_region_no_afecta_procesamiento_de_red(self) -> None:
-        """Region no afecta el procesamiento de Red."""
+    def test_region_no_afecta_valores_de_red(self) -> None:
+        """Region no afecta los valores de las neuronas en la Red."""
         n = NeuronaEntrada(id="n1")
         n.activar_external(1.0)
         red = Red(neuronas=[n])
         region = Region(nombre="grupo")
         region.agregar(n)
 
-        # Procesar la red — la region no interfiere
-        red.procesar()
         assert n.valor == 1.0
+        assert red.get_neurona("n1").valor == 1.0
 
     def test_multiples_regiones_misma_red(self) -> None:
         """Múltiples regiones pueden compartir la misma Red."""
