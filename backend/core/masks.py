@@ -81,6 +81,15 @@ def _make_inhibitory(
 # Mask presets
 # ---------------------------------------------------------------------------
 
+# Diagnostic masks — minimal single-dendrite cases for validating activation flow
+MASK_ALL_EXC: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(1)},
+]
+
+MASK_ALL_INH: MaskDef = [
+    {"peso_dendrita": -1.0, "offsets": _moore(1)},
+]
+
 # simple — exact copy of the original KOHONEN_SIMPLE_MASK
 MASK_SIMPLE: MaskDef = [
     {
@@ -210,6 +219,24 @@ MASK_STRONG_CENTER: MaskDef = [
 # ---------------------------------------------------------------------------
 
 MASK_PRESETS: dict[str, dict[str, Any]] = {
+    "all_exc": {
+        "id": "all_exc",
+        "name": "Todo Exc",
+        "description": "1 dendrita exc. r=1 (8 vecinos).",
+        "center": "Moore r=1 (8 vecinos)",
+        "corona": "sin inhibición",
+        "dendrites_inh": 0,
+        "mask": MASK_ALL_EXC,
+    },
+    "all_inh": {
+        "id": "all_inh",
+        "name": "Todo Inh",
+        "description": "1 dendrita inh. r=1 (8 vecinos).",
+        "center": "Moore r=1 (8 vecinos)",
+        "corona": "sin excitación",
+        "dendrites_inh": 1,
+        "mask": MASK_ALL_INH,
+    },
     "simple": {
         "id": "simple",
         "name": "Kohonen Simple",

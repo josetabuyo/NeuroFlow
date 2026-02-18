@@ -35,3 +35,6 @@ Thumbs.db
 
 # Render / Vercel
 .vercel/
+
+# Playwright MCP
+.playwright-mcp/

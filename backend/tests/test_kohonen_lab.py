@@ -83,7 +83,7 @@ class TestMaskPresets:
 
     def test_get_mask_info_excludes_mask_data(self) -> None:
         info = get_mask_info()
-        assert len(info) == 10
+        assert len(info) == 12
         for entry in info:
             assert "mask" not in entry
             assert "id" in entry
@@ -95,14 +95,18 @@ class TestMaskPresets:
 
     @pytest.mark.parametrize("preset_id", list(MASK_PRESETS.keys()))
     def test_preset_has_at_least_one_excitatory(self, preset_id: str) -> None:
-        """Every preset has at least one excitatory dendrite."""
+        """Every preset has at least one excitatory dendrite (skip pure-inh diagnostic masks)."""
+        if preset_id == "all_inh":
+            pytest.skip("all_inh is a pure-inhibitory diagnostic mask by design")
         mask = get_mask(preset_id)
         exc = [d for d in mask if d["peso_dendrita"] > 0]
         assert len(exc) >= 1
 
     @pytest.mark.parametrize("preset_id", list(MASK_PRESETS.keys()))
     def test_preset_has_at_least_one_inhibitory(self, preset_id: str) -> None:
-        """Every preset has at least one inhibitory dendrite."""
+        """Every preset has at least one inhibitory dendrite (skip pure-exc diagnostic masks)."""
+        if preset_id == "all_exc":
+            pytest.skip("all_exc is a pure-excitatory diagnostic mask by design")
         mask = get_mask(preset_id)
         inh = [d for d in mask if d["peso_dendrita"] < 0]
         assert len(inh) >= 1
@@ -129,7 +133,7 @@ class TestMaskPresets:
         )
         constructor.aplicar_mascara_2d(red, 15, 15, mask)
         neurona = red.get_neurona("x7y7")
-        assert len(neurona.dendritas) >= 2
+        assert len(neurona.dendritas) >= 1
 
 
 class TestKohonenLabSetup:
