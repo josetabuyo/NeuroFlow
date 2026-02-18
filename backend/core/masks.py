@@ -241,6 +241,13 @@ MASK_GRADUAL_BIG_INH: MaskDef = [
     *_make_inhibitory(_sparse_ring(8, 19, step=3), -1.0, 8),
 ]
 
+MASK_GRADUAL_XXL_INH: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
+    {"peso_dendrita": 0.6, "offsets": _ring(2, 2)},
+    {"peso_dendrita": 0.3, "offsets": _ring(3, 3)},
+    *_make_inhibitory(_sparse_ring(8, 30, step=4), -1.0, 8),
+]
+
 
 # ---------------------------------------------------------------------------
 # Registry with metadata
@@ -372,6 +379,15 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "corona": "r=8-19, sparse step=3",
         "dendrites_inh": 8,
         "mask": MASK_GRADUAL_BIG_INH,
+    },
+    "gradual_xxl_inh": {
+        "id": "gradual_xxl_inh",
+        "name": "Centro Gradual XXL Inh",
+        "description": "Exc. gradual r=1-3, gap 4px, inh. sparse r=8-30.",
+        "center": "Gradual r=1→1.0, r=2→0.6, r=3→0.3",
+        "corona": "r=8-30, sparse step=4",
+        "dendrites_inh": 8,
+        "mask": MASK_GRADUAL_XXL_INH,
     },
 }
 
