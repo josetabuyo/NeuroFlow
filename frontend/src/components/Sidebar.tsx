@@ -35,7 +35,7 @@ function applyBalance(
   );
 }
 
-const MASK_CELL = 10; // px per cell in the canvas backing buffer
+const PREVIEW_DISPLAY_PX = 220;
 
 function MaskPreview({ grid }: { grid: (number | null)[][] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -50,8 +50,9 @@ function MaskPreview({ grid }: { grid: (number | null)[][] }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    canvas.width = MASK_CELL * cols;
-    canvas.height = MASK_CELL * rows;
+    const cellPx = Math.max(1, Math.floor(PREVIEW_DISPLAY_PX / Math.max(rows, cols)));
+    canvas.width = cellPx * cols;
+    canvas.height = cellPx * rows;
 
     ctx.fillStyle = "#0a0a0a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -59,7 +60,7 @@ function MaskPreview({ grid }: { grid: (number | null)[][] }) {
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         ctx.fillStyle = weightToColor(grid[row][col]);
-        ctx.fillRect(col * MASK_CELL, row * MASK_CELL, MASK_CELL, MASK_CELL);
+        ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
       }
     }
   }, [grid]);

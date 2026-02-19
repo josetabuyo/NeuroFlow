@@ -83,7 +83,7 @@ class TestMaskPresets:
 
     def test_get_mask_info_excludes_mask_data(self) -> None:
         info = get_mask_info()
-        assert len(info) == 18
+        assert len(info) == 19
         for entry in info:
             assert "mask" not in entry
             assert "id" in entry

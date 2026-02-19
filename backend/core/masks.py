@@ -248,6 +248,11 @@ MASK_GRADUAL_XXL_INH: MaskDef = [
     *_make_inhibitory(_sparse_ring(8, 30, step=4), -1.0, 8),
 ]
 
+MASK_GRADUAL_XXL_INH_SMALL: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
+    *_make_inhibitory(_sparse_ring(5, 30, step=4), -1.0, 8),
+]
+
 MASK_MEXICAN_HAT: MaskDef = [
     # Excitatory peak — sharp falloff
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
@@ -449,6 +454,16 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "random_weights": True,
         "mask": MASK_GRADUAL_XXL_INH,
     },
+    "gradual_xxl_inh_small": {
+        "id": "gradual_xxl_inh_small",
+        "name": "Centro Chico XXL Inh",
+        "description": "Exc. solo r=1, gap 3px, inh. sparse r=5-30.",
+        "center": "r=1→1.0 (solo vecinos inmediatos)",
+        "corona": "r=5-30, sparse step=4",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_GRADUAL_XXL_INH_SMALL,
+    },
     "mexican_hat": {
         "id": "mexican_hat",
         "name": "Sombrero Mexicano",
@@ -500,15 +515,21 @@ def get_random_weights(mask_id: str) -> bool:
 
 
 def _compute_preview_grid(mask: MaskDef) -> list[list[float | None]]:
-    """Compute a 19×19 preview grid for a mask definition.
+    """Compute a preview grid sized to fit 100% of the mask.
 
-    Center is at (9, 9). The center cell is marked with 999.0 (inspected-cell
-    convention). Each offset (dx, dy) maps to col=9+dx, row=9+dy. If two
+    The grid is (2*max_r+1) square, with the center cell marked as 999.0.
+    Each offset (dx, dy) maps to col=center+dx, row=center+dy. If two
     dendrites overlap on the same cell the one with the larger absolute weight
     wins.
     """
-    size = 19
-    center = 9
+    max_r = 0
+    for dendrite in mask:
+        for dx, dy in dendrite["offsets"]:
+            max_r = max(max_r, abs(dx), abs(dy))
+
+    max_r = max(max_r, 1)
+    size = 2 * max_r + 1
+    center = max_r
     grid: list[list[float | None]] = [[None] * size for _ in range(size)]
     grid[center][center] = 999.0
 
