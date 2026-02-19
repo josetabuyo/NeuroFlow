@@ -34,8 +34,8 @@ class KohonenExperiment(Experimento):
     def setup(self, config: dict[str, Any]) -> None:
         """Configura el experimento: grilla 2D con máscara kohonen_simple."""
         self._config = config
-        self.width = config.get("width", 30)
-        self.height = config.get("height", 30)
+        self.width = config.get("width", 50)
+        self.height = config.get("height", 50)
         self.generation = 0
 
         constructor = Constructor()

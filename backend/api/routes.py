@@ -18,8 +18,8 @@ EXPERIMENTS = {
             "cercanas e inhiben a las lejanas, formando clusters que compiten."
         ),
         "default_config": {
-            "width": 30,
-            "height": 30,
+            "width": 50,
+            "height": 50,
         },
     },
     "kohonen_lab": {
@@ -37,8 +37,8 @@ EXPERIMENTS = {
             {"id": "synapse_count", "name": "Por cantidad de sinapsis"},
         ],
         "default_config": {
-            "width": 30,
-            "height": 30,
+            "width": 50,
+            "height": 50,
             "mask": "simple",
             "balance": 0.0,
             "balance_mode": "none",

@@ -110,8 +110,8 @@ class KohonenLabExperiment(Experimento):
         """Configura grilla 2D con máscara, balance e inicialización elegidos.
 
         Config keys:
-            width (int): Ancho de la grilla (default 30).
-            height (int): Alto de la grilla (default 30).
+            width (int): Ancho de la grilla (default 50).
+            height (int): Alto de la grilla (default 50).
             mask (str): ID del preset de máscara (default "simple").
             balance (float | None): Balance excitación/inhibición (default None).
             balance_mode (str): "none", "weight", or "synapse_count".
@@ -120,8 +120,8 @@ class KohonenLabExperiment(Experimento):
             umbral=0.99, bottom row as input, single center cell initialization.
         """
         self._config = config
-        self.width = config.get("width", 30)
-        self.height = config.get("height", 30)
+        self.width = config.get("width", 50)
+        self.height = config.get("height", 50)
         self.generation = 0
 
         mask_id: str = config.get("mask", "simple")
