@@ -200,6 +200,11 @@ MASK_BIG_CENTER_WIDE_INH: MaskDef = [
     *_make_inhibitory(_ring(4, 10), -1.0, 8),
 ]
 
+MASK_BIG_CENTER_WIDE_INH_X2: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(2)},
+    *_make_inhibitory(_ring(4, 14), -1.0, 8),
+]
+
 MASK_BIG_CENTER_SOFT_WIDE_INH: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
     {"peso_dendrita": 0.7, "offsets": _ring(2, 2)},
@@ -384,6 +389,16 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "dendrites_inh": 8,
         "random_weights": True,
         "mask": MASK_BIG_CENTER_WIDE_INH,
+    },
+    "big_center_wide_inh_x2": {
+        "id": "big_center_wide_inh_x2",
+        "name": "Centro Grande Inh Ancha x2",
+        "description": "Moore r=2 (24 vecinos), corona r=4-14 (4x superficie inh original).",
+        "center": "Moore r=2 (24 vecinos)",
+        "corona": "r=4-14, corona muy extendida",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_BIG_CENTER_WIDE_INH_X2,
     },
     "big_center_soft_wide_inh": {
         "id": "big_center_soft_wide_inh",
