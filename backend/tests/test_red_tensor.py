@@ -46,7 +46,7 @@ def _crear_red_von_neumann(width: int = 10, height: int = 10, regla: int = 110, 
     )
     for fila in range(height - 2, -1, -1):
         constructor.aplicar_regla_wolfram(
-            red=red, regla=regla, fila_destino=fila, width=width,
+            red=red, regla=regla, fila_destino=fila, width=width, height=height,
         )
     for x in range(width):
         key = Constructor.key_by_coord(x, fila_entrada)

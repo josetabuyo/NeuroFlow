@@ -63,6 +63,7 @@ class TestConstructor:
             red=red,
             fila_destino=1,
             width=5,
+            height=3,
             mascara_relativa=mascara,
             regla_pesos=[[1.0, 1.0, 1.0]],  # Una dendrita que reconoce todo 1s
         )
@@ -87,6 +88,7 @@ class TestConstructor:
             red=red,
             fila_destino=1,
             width=5,
+            height=3,
             mascara_relativa=mascara,
             regla_pesos=[[1.0, 0.0, 1.0]],
         )

@@ -6,7 +6,7 @@ Valida:
 - Kohonen: bloques inhibitorios con peso negativo
 - Celdas sin conexión → None
 - Celda inspeccionada marcada con 999
-- Neurona en borde: menos conexiones
+- Neurona en borde: mismas conexiones que centro (topología toroidal)
 - total_dendritas y total_sinapsis correctos
 - Pesos efectivos clampeados a [-1, 1]
 - Von Neumann: neurona tiene conexiones a fila inferior
@@ -104,8 +104,8 @@ class TestInspect:
 
         assert grid[5][5] == 999
 
-    def test_neurona_borde_menos_conexiones(self) -> None:
-        """Neurona en el borde tiene menos conexiones que una central."""
+    def test_neurona_borde_mismas_conexiones_que_centro(self) -> None:
+        """Toroidal: border neuron has the same connection count as center."""
         random.seed(42)
         exp = KohonenExperiment()
         exp.setup({"width": 30, "height": 30})
@@ -123,7 +123,7 @@ class TestInspect:
             1 for row in grid_borde for cell in row if cell is not None and cell != 999
         )
 
-        assert conexiones_borde < conexiones_centro
+        assert conexiones_borde == conexiones_centro
 
     def test_total_dendritas_y_sinapsis_correctos(self) -> None:
         """total_dendritas y total_sinapsis reflejan la estructura real."""

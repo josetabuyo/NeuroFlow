@@ -56,19 +56,26 @@ class TestAplicarMascara2D:
             assert dendrita_inh.peso == -1.0
             assert len(dendrita_inh.sinapsis) == 9
 
-    def test_neuronas_borde_menos_sinapsis(self) -> None:
-        """Neuronas del borde tienen menos sinapsis (vecinos fuera del grid ignorados)."""
+    def test_neuronas_borde_mismas_sinapsis_que_centro(self) -> None:
+        """Toroidal: border neurons have the same synapse count as center neurons."""
         constructor = Constructor()
         red, _ = constructor.crear_grilla(
             width=10, height=10, filas_entrada=[], filas_salida=[], umbral=0.0
         )
         constructor.aplicar_mascara_2d(red, 10, 10, KOHONEN_SIMPLE_MASK)
 
-        # Esquina (0, 0): la dendrita excitatoria pierde vecinos fuera del borde
+        neurona_centro = red.get_neurona("x5y5")
         neurona_esquina = red.get_neurona("x0y0")
-        dendrita_exc = neurona_esquina.dendritas[0]
-        # Solo tiene 3 vecinos válidos: (1,0), (0,1), (1,1)
-        assert len(dendrita_exc.sinapsis) == 3
+        neurona_lateral = red.get_neurona("x0y5")
+
+        assert len(neurona_esquina.dendritas) == len(neurona_centro.dendritas)
+        assert len(neurona_lateral.dendritas) == len(neurona_centro.dendritas)
+
+        for d_centro, d_esquina in zip(neurona_centro.dendritas, neurona_esquina.dendritas):
+            assert len(d_esquina.sinapsis) == len(d_centro.sinapsis)
+
+        dendrita_exc_esquina = neurona_esquina.dendritas[0]
+        assert len(dendrita_exc_esquina.sinapsis) == 8
 
     def test_pesos_dendriticos_correctos(self) -> None:
         """D0 tiene peso +1.0, D1-D8 tienen peso -1.0."""

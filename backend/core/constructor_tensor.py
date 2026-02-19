@@ -87,14 +87,10 @@ class ConstructorTensor:
                     mascara_valida[i, syn_idx] = True
                     dendrita_ids[i, syn_idx] = d_idx
 
-                    # Resolve source neuron index
                     src_id = sinapsis.neurona_entrante.id
                     if src_id in id_to_idx:
                         indices_fuente[i, syn_idx] = id_to_idx[src_id]
                     else:
-                        # Border neuron (not in the Red): created by conectar_filas
-                        # with value 0, contributes 1 - |peso - 0| = 1 - peso.
-                        # Point to a virtual zero neuron at index N.
                         indices_fuente[i, syn_idx] = N
 
                     syn_idx += 1

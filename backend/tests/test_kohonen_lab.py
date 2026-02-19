@@ -475,6 +475,61 @@ class TestKohonenLabFunctionality:
             assert result["type"] == "frame"
 
 
+class TestToroidalTopology:
+    """Toroidal (wrap-around) topology: border neurons have identical connectivity."""
+
+    @pytest.mark.parametrize("preset_id", [
+        k for k, v in MASK_PRESETS.items() if v.get("mask_type") != "wolfram"
+    ])
+    def test_border_same_dendrites_as_center(self, preset_id: str) -> None:
+        """Every Kohonen preset: corner neuron has same dendrite count as center."""
+        random.seed(42)
+        mask = get_mask(preset_id)
+        constructor = Constructor()
+        red, _ = constructor.crear_grilla(
+            width=15, height=15, filas_entrada=[], filas_salida=[], umbral=0.0
+        )
+        constructor.aplicar_mascara_2d(red, 15, 15, mask)
+
+        n_center = red.get_neurona("x7y7")
+        n_corner = red.get_neurona("x0y0")
+        n_edge = red.get_neurona("x0y7")
+
+        assert len(n_corner.dendritas) == len(n_center.dendritas), (
+            f"{preset_id}: corner has {len(n_corner.dendritas)} dendritas "
+            f"vs center {len(n_center.dendritas)}"
+        )
+        assert len(n_edge.dendritas) == len(n_center.dendritas)
+
+        for d_center, d_corner in zip(n_center.dendritas, n_corner.dendritas):
+            assert len(d_corner.sinapsis) == len(d_center.sinapsis), (
+                f"{preset_id}: corner dendrite has {len(d_corner.sinapsis)} "
+                f"sinapsis vs center {len(d_center.sinapsis)}"
+            )
+
+    def test_wolfram_border_wraps_horizontally(self) -> None:
+        """Wolfram Rule 110: rightmost cell reads from leftmost via wrap-around.
+
+        Input on bottom row: only x0 active.
+        Cell (4,1) sees neighbors (x3y2=0, x4y2=0, x0y2=1) via wrap ? pattern 001.
+        Rule 110 bit 1 = 1 ? cell (4,1) fires.
+        """
+        exp = KohonenLabExperiment()
+        exp.setup({"width": 5, "height": 3, "mask": "rule_110"})
+
+        for i in range(exp.red_tensor.n_real):
+            exp.red_tensor.set_valor(i, 0.0)
+        exp.red_tensor.set_valor(2 * 5 + 0, 1.0)  # x0y2
+
+        exp.red_tensor.procesar()
+
+        frame = exp.red_tensor.get_grid(5, 3)
+        row1 = [int(round(v)) for v in frame[1]]
+        assert row1[4] == 1, (
+            f"Rightmost cell should fire from wrap-around; got row1={row1}"
+        )
+
+
 class TestDaemonMetrics:
     """Tests para las metricas de daemons en Kohonen Lab."""
 

@@ -78,16 +78,21 @@ class Constructor:
         red: Red,
         fila_destino: int,
         width: int,
+        height: int,
         mascara_relativa: list[tuple[int, int]],
         regla_pesos: list[list[float]],
         peso_dendrita: float = 1.0,
     ) -> None:
         """Conecta neuronas de una fila con sus vecinas según una máscara relativa.
 
+        Uses toroidal (wrap-around) topology: offsets that fall outside the
+        grid wrap to the opposite edge via modular arithmetic.
+
         Args:
             red: La red que contiene las neuronas.
             fila_destino: Índice de fila cuyas neuronas recibirán las conexiones.
             width: Ancho de la grilla.
+            height: Alto de la grilla.
             mascara_relativa: Lista de offsets (dx, dy) para encontrar vecinos.
             regla_pesos: Lista de dendritas, cada una es una lista de pesos para las sinapsis.
                          Cada lista de pesos corresponde a un patrón que debe reconocer.
@@ -100,17 +105,9 @@ class Constructor:
                 sinapsis_list: list[Sinapsis] = []
 
                 for i, (dx, dy) in enumerate(mascara_relativa):
-                    nx = x + dx
-                    ny = fila_destino + dy
-
-                    # Bordes: neuronas fuera del rango se tratan como inactivas (valor 0)
-                    key = self.key_by_coord(nx, ny)
-                    try:
-                        neurona_fuente = red.get_neurona(key)
-                    except KeyError:
-                        # Fuera del borde: crear sinapsis "fantasma" con NeuronaEntrada inactiva
-                        neurona_fuente = NeuronaEntrada(id=f"_borde_{nx}_{ny}")
-                        neurona_fuente.activar_external(0.0)
+                    nx = (x + dx) % width
+                    ny = (fila_destino + dy) % height
+                    neurona_fuente = red.get_neurona(self.key_by_coord(nx, ny))
 
                     peso_sinapsis = pesos_sinapsis[i] if i < len(pesos_sinapsis) else 0.0
                     sinapsis_list.append(
@@ -126,6 +123,7 @@ class Constructor:
         regla: int,
         fila_destino: int,
         width: int,
+        height: int,
     ) -> None:
         """Configura las dendritas de una fila según una regla de Wolfram.
 
@@ -137,6 +135,7 @@ class Constructor:
             regla: Número de regla de Wolfram (0-255).
             fila_destino: Fila a configurar.
             width: Ancho de la grilla.
+            height: Alto de la grilla.
         """
         # Decodificar la regla: para cada patrón de 3 bits, ¿produce 1?
         patrones_activos: list[list[float]] = []
@@ -154,6 +153,7 @@ class Constructor:
             red=red,
             fila_destino=fila_destino,
             width=width,
+            height=height,
             mascara_relativa=mascara,
             regla_pesos=patrones_activos,
             peso_dendrita=1.0,
@@ -285,19 +285,11 @@ class Constructor:
 
                     sinapsis_list: list[Sinapsis] = []
                     for i, (dx, dy) in enumerate(offsets):
-                        nx = x + dx
-                        ny = y + dy
-                        if 0 <= nx < width and 0 <= ny < height:
-                            neurona_fuente = red.get_neurona(
-                                self.key_by_coord(nx, ny)
-                            )
-                        elif pesos_explicitos is not None:
-                            neurona_fuente = NeuronaEntrada(
-                                id=f"_borde_{nx}_{ny}"
-                            )
-                            neurona_fuente.activar_external(0.0)
-                        else:
-                            continue
+                        nx = (x + dx) % width
+                        ny = (y + dy) % height
+                        neurona_fuente = red.get_neurona(
+                            self.key_by_coord(nx, ny)
+                        )
 
                         if pesos_explicitos is not None:
                             peso = pesos_explicitos[i]
