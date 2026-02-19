@@ -200,9 +200,19 @@ MASK_BIG_CENTER_WIDE_INH: MaskDef = [
     *_make_inhibitory(_ring(4, 10), -1.0, 8),
 ]
 
+MASK_SMALL_CENTER_GAP_WIDE_INH_X2: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(1)},
+    *_make_inhibitory(_ring(3, 13), -1.0, 8),
+]
+
 MASK_BIG_CENTER_WIDE_INH_X2: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(2)},
     *_make_inhibitory(_ring(4, 14), -1.0, 8),
+]
+
+MASK_XL_CENTER_GAP_WIDE_INH_X2: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_ring(5, 15), -1.0, 8),
 ]
 
 MASK_BIG_CENTER_SOFT_WIDE_INH: MaskDef = [
@@ -390,6 +400,16 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "random_weights": True,
         "mask": MASK_BIG_CENTER_WIDE_INH,
     },
+    "small_center_gap_wide_inh_x2": {
+        "id": "small_center_gap_wide_inh_x2",
+        "name": "Centro Chico + Gap + Inh Ancha x2",
+        "description": "Moore r=1 (8 vecinos), gap r=2, corona r=3-13 (misma superficie inh que x2).",
+        "center": "Moore r=1 (8 vecinos)",
+        "corona": "r=3-13, gap r=2 silencio",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_SMALL_CENTER_GAP_WIDE_INH_X2,
+    },
     "big_center_wide_inh_x2": {
         "id": "big_center_wide_inh_x2",
         "name": "Centro Grande Inh Ancha x2",
@@ -399,6 +419,16 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "dendrites_inh": 8,
         "random_weights": True,
         "mask": MASK_BIG_CENTER_WIDE_INH_X2,
+    },
+    "xl_center_gap_wide_inh_x2": {
+        "id": "xl_center_gap_wide_inh_x2",
+        "name": "Centro XL + Gap + Inh Ancha x2",
+        "description": "Moore r=3 (48 vecinos), gap r=4, corona r=5-15 (misma superficie inh que x2).",
+        "center": "Moore r=3 (48 vecinos)",
+        "corona": "r=5-15, gap r=4 silencio",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_XL_CENTER_GAP_WIDE_INH_X2,
     },
     "big_center_soft_wide_inh": {
         "id": "big_center_soft_wide_inh",
