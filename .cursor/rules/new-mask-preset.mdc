@@ -1,0 +1,63 @@
+---
+description: Procedimiento para agregar un nuevo preset de máscara/conexionado a NeuroFlow
+globs: backend/core/masks.py
+alwaysApply: false
+---
+
+# Agregar nuevo preset de máscara
+
+Cuando el usuario pida un nuevo conexionado/máscara, seguir estos pasos en orden:
+
+## 1. Definir la máscara en `backend/core/masks.py`
+
+- Agregar la constante `MASK_<NOMBRE>: MaskDef = [...]` junto a las demás.
+- Usar los helpers existentes: `_moore()`, `_ring()`, `_von_neumann()`, `_sparse_ring()`, `_make_inhibitory()`, `_partition()`.
+- Respetar la convención: dendritas excitatorias primero (peso > 0), luego inhibitorias (peso < 0).
+
+## 2. Registrar en `MASK_PRESETS`
+
+Agregar la entrada en el dict `MASK_PRESETS` del mismo archivo con todos los campos:
+
+```python
+"mi_mask_id": {
+    "id": "mi_mask_id",
+    "name": "Nombre Visible",
+    "description": "Descripción corta del conexionado.",
+    "center": "Descripción del centro excitatorio",
+    "corona": "Descripción de la corona inhibitoria",
+    "dendrites_inh": 8,  # cantidad de dendritas inhibitorias
+    "random_weights": True,
+    "mask": MASK_MI_MASK,
+},
+```
+
+## 3. Actualizar test de conteo
+
+En `backend/tests/test_kohonen_lab.py`, buscar `assert len(info) == N` dentro de `test_get_mask_info_excludes_mask_data` e incrementar N en 1 por cada máscara nueva.
+
+## 4. Correr tests
+
+```bash
+cd /Users/josetabuyo/Personal/NeuroFlow && ./venv/bin/python -m pytest backend/tests/ -x -q
+```
+
+Verificar 0 fallos antes de continuar.
+
+## 5. Verificar la web
+
+- Usar `browser_tabs` con action `list` para ver si ya hay una pestaña abierta con la app (localhost:5173).
+- Si hay pestaña abierta: hacer `browser_navigate` a la URL actual para recargar y que tome los cambios del backend (auto-reload con uvicorn) y frontend (HMR de Vite).
+- Si no hay pestaña: abrir `http://localhost:5173` con `browser_navigate`.
+- Tomar un `browser_snapshot` y verificar que la nueva máscara aparece en el dropdown de conexionados.
+
+## 6. Validación rápida
+
+- Confirmar que el nombre de la máscara nueva aparece en la lista.
+- Confirmar que la vista previa (preview grid) se renderiza correctamente para la nueva máscara.
+
+## Notas importantes
+
+- La fuente de verdad para `default_config` es `backend/api/routes.py` (la API pisa los defaults del frontend al cargar).
+- El preview grid es dinámico: se adapta al tamaño del conexionado automáticamente.
+- El backend tiene `--reload`, los cambios en `.py` se toman solos. El frontend con Vite HMR también.
+- NO tocar `frontend/src/App.tsx` para agregar máscaras: las masks se cargan dinámicamente desde la API via `get_mask_info()`.
