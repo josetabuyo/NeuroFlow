@@ -318,9 +318,33 @@ test("14. Kohonen Lab — seleccionar máscara", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 15. Inspeccionar muestra mapa de conexiones
+// 15. Re-iniciar experimento durante Play detiene la red
 // ---------------------------------------------------------------------------
-test("15. Inspeccionar muestra mapa de conexiones", async ({ page }) => {
+test("15. Re-iniciar experimento durante Play detiene la red", async ({ page }) => {
+  await startExperiment(page, "kohonen");
+
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect(page.getByText("running")).toBeVisible({ timeout: 3_000 });
+
+  await page.waitForTimeout(400);
+  const stepsBefore = await getStepCount(page);
+  expect(stepsBefore).toBeGreaterThan(0);
+
+  await startExperiment(page, "kohonen");
+
+  await expect(page.getByText("ready")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "Play" })).toBeEnabled();
+
+  const stepsAfterInit = await getStepCount(page);
+  await page.waitForTimeout(600);
+  const stepsAfterWait = await getStepCount(page);
+  expect(stepsAfterWait).toBe(stepsAfterInit);
+});
+
+// ---------------------------------------------------------------------------
+// 16. Inspeccionar muestra mapa de conexiones
+// ---------------------------------------------------------------------------
+test("16. Inspeccionar muestra mapa de conexiones", async ({ page }) => {
   await startExperiment(page, "kohonen_lab");
 
   await page.getByRole("button", { name: "Inspeccionar" }).click();

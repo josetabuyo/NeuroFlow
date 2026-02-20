@@ -71,6 +71,8 @@ class ExperimentSession:
             await self.send({"type": "error", "message": f"Unknown experiment: {experiment_id}"})
             return
 
+        await self._stop_play_loop()
+
         await self.send({"type": "status", "state": "initializing"})
         await asyncio.sleep(0)
 
