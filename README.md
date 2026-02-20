@@ -51,6 +51,18 @@ Este proyecto evoluciona de [RedJavaScript](/Users/josetabuyo/Personal/RedJavaSc
 una implementación 100% en navegador. NeuroFlow separa frontend (visualización)
 de backend (cómputo), permitiendo escalar y desplegar como servicio web.
 
+## Fast Start
+
+Si ya tenés las dependencias instaladas:
+
+```bash
+./start.sh
+```
+
+Levanta backend (`:8501`) y frontend (`:5173`) en paralelo, matando procesos anteriores si los hay.
+
+Abrir **http://localhost:5173** en el navegador.
+
 ## Quick Start
 
 ```bash
