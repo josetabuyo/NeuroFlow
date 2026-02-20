@@ -73,11 +73,20 @@ El frontend proxea `/api` y `/ws` al backend en el puerto 8501 (configurado en `
 ## Desarrollo
 
 ```bash
-# Tests
+# Tests unitarios (backend)
 cd backend && pytest -v
+
+# Tests E2E (frontend + backend, Playwright)
+cd frontend
+npx playwright install        # solo la primera vez
+npm run test:e2e              # headless
+npm run test:e2e:ui           # modo interactivo con UI de Playwright
 
 # Levantar solo frontend (si el backend ya está corriendo)
 cd frontend && npm run dev
 ```
+
+Los tests E2E levantan backend y frontend automáticamente (ver `frontend/playwright.config.ts`).
+Si ya tenés los servers corriendo, Playwright los reutiliza.
 
 Ambos servers tienen hot-reload: cambios en `.py` se toman automáticamente (uvicorn `--reload`) y cambios en el frontend vía Vite HMR.

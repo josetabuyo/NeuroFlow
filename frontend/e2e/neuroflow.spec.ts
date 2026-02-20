@@ -2,9 +2,11 @@ import { test, expect } from "@playwright/test";
 import {
   waitForConnection,
   startExperiment,
+  getStepCount,
   getActiveCount,
-  getGeneration,
   clickCanvasCenter,
+  getBrushPalette,
+  getBrushSizeLabel,
 } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
@@ -16,10 +18,8 @@ test.beforeEach(async ({ page }) => {
 // 1. Carga inicial
 // ---------------------------------------------------------------------------
 test("1. Carga inicial", async ({ page }) => {
-  // Title
   await expect(page.locator("h1")).toHaveText("NeuroFlow");
 
-  // Experiment buttons in the sidebar
   await expect(
     page.getByRole("button", { name: "Kohonen (Competencia Lateral 2D)" })
   ).toBeVisible();
@@ -27,12 +27,10 @@ test("1. Carga inicial", async ({ page }) => {
     page.getByRole("button", { name: "Kohonen Lab" })
   ).toBeVisible();
 
-  // "Iniciar Experimento" button
   await expect(
     page.getByRole("button", { name: "Iniciar Experimento" })
   ).toBeVisible();
 
-  // State shows "ready" (not "disconnected")
   await expect(page.getByText("ready")).toBeVisible();
 });
 
@@ -42,25 +40,25 @@ test("1. Carga inicial", async ({ page }) => {
 test("2. Iniciar Kohonen Lab", async ({ page }) => {
   await startExperiment(page, "kohonen_lab");
 
-  // Canvas is visible
-  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("main canvas")).toBeVisible();
 
-  // Brush palette: size controls + ON toggle
-  await expect(page.getByRole("button", { name: "Aumentar pincel" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reducir pincel" })).toBeVisible();
-  await expect(page.getByTestId("brush-size-label")).toHaveText("1×1");
-  await expect(page.getByRole("button", { name: "ON", exact: true })).toBeVisible();
+  const palette = getBrushPalette(page);
+  await expect(palette).toBeVisible();
+  await expect(
+    palette.getByRole("button", { name: "Aumentar pincel" })
+  ).toBeVisible();
+  await expect(
+    palette.getByRole("button", { name: "Reducir pincel" })
+  ).toBeVisible();
+  await expect(
+    palette.getByRole("button", { name: "ON", exact: true })
+  ).toBeVisible();
 
-  // Controls are enabled
-  await expect(
-    page.getByRole("button", { name: "Play" })
-  ).toBeEnabled();
-  await expect(
-    page.getByRole("button", { name: "Step" })
-  ).toBeEnabled();
-  await expect(
-    page.getByRole("button", { name: "Reset" })
-  ).toBeEnabled();
+  expect(await getBrushSizeLabel(page)).toBe("1×1");
+
+  await expect(page.getByRole("button", { name: "Play" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Step" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Reset" })).toBeEnabled();
 });
 
 // ---------------------------------------------------------------------------
@@ -69,52 +67,38 @@ test("2. Iniciar Kohonen Lab", async ({ page }) => {
 test("3. Iniciar Kohonen", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  // Canvas visible
-  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("main canvas")).toBeVisible();
 
-  // Generation "0/30"
-  const gen = await getGeneration(page);
-  expect(gen).toBe("0/30");
+  const steps = await getStepCount(page);
+  expect(steps).toBe(0);
 
-  // Active cells > 0 (Kohonen starts with random neurons)
   const active = await getActiveCount(page);
   expect(active).toBeGreaterThan(0);
 });
 
 // ---------------------------------------------------------------------------
-// 4. Paleta de pinceles — cambiar tamaño de pincel
+// 4. Paleta de pinceles — ajuste de tamaño
 // ---------------------------------------------------------------------------
-test("4. Paleta de pinceles — cambiar tamaño de pincel", async ({ page }) => {
+test("4. Paleta de pinceles — ajuste de tamaño", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  const sizeLabel = page.getByTestId("brush-size-label");
-  const increaseBtn = page.getByRole("button", { name: "Aumentar pincel" });
-  const decreaseBtn = page.getByRole("button", { name: "Reducir pincel" });
+  const palette = getBrushPalette(page);
+  const increaseBtn = palette.getByRole("button", { name: "Aumentar pincel" });
+  const decreaseBtn = palette.getByRole("button", { name: "Reducir pincel" });
 
-  // Default brush size is 1×1
-  await expect(sizeLabel).toHaveText("1×1");
+  expect(await getBrushSizeLabel(page)).toBe("1×1");
 
-  // Decrease should be disabled at minimum
-  await expect(decreaseBtn).toBeDisabled();
-
-  // Increase → 3×3
   await increaseBtn.click();
-  await expect(sizeLabel).toHaveText("3×3");
+  expect(await getBrushSizeLabel(page)).toBe("3×3");
 
-  // Increase again → 5×5
   await increaseBtn.click();
-  await expect(sizeLabel).toHaveText("5×5");
+  expect(await getBrushSizeLabel(page)).toBe("5×5");
 
-  // Decrease → back to 3×3
   await decreaseBtn.click();
-  await expect(sizeLabel).toHaveText("3×3");
+  expect(await getBrushSizeLabel(page)).toBe("3×3");
 
-  // Decrease → back to 1×1
   await decreaseBtn.click();
-  await expect(sizeLabel).toHaveText("1×1");
-
-  // At minimum again, decrease disabled
-  await expect(decreaseBtn).toBeDisabled();
+  expect(await getBrushSizeLabel(page)).toBe("1×1");
 });
 
 // ---------------------------------------------------------------------------
@@ -123,16 +107,13 @@ test("4. Paleta de pinceles — cambiar tamaño de pincel", async ({ page }) => 
 test("5. Paleta de pinceles — toggle ON/OFF", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  // Toggle shows "ON" by default
   const onBtn = page.getByRole("button", { name: "ON", exact: true });
   await expect(onBtn).toBeVisible();
 
-  // Click → changes to "OFF"
   await onBtn.click();
   const offBtn = page.getByRole("button", { name: "OFF", exact: true });
   await expect(offBtn).toBeVisible();
 
-  // Click again → back to "ON"
   await offBtn.click();
   await expect(
     page.getByRole("button", { name: "ON", exact: true })
@@ -145,7 +126,6 @@ test("5. Paleta de pinceles — toggle ON/OFF", async ({ page }) => {
 test("6. Paint con pincel — verificar vía WebSocket", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  // Get initial active count
   const initialActive = await getActiveCount(page);
   expect(initialActive).toBeGreaterThan(0);
 
@@ -155,17 +135,15 @@ test("6. Paint con pincel — verificar vía WebSocket", async ({ page }) => {
     page.getByRole("button", { name: "OFF", exact: true })
   ).toBeVisible();
 
-  // Increase brush to 5×5 (click + twice: 1→3→5)
-  await page.getByRole("button", { name: "Aumentar pincel" }).click();
-  await page.getByRole("button", { name: "Aumentar pincel" }).click();
+  // Increase brush to 5×5
+  const palette = getBrushPalette(page);
+  const increaseBtn = palette.getByRole("button", { name: "Aumentar pincel" });
+  await increaseBtn.click(); // 3×3
+  await increaseBtn.click(); // 5×5
 
-  // Click center of canvas
   await clickCanvasCenter(page);
-
-  // Wait for the frame to update
   await page.waitForTimeout(500);
 
-  // Active count should have decreased
   const newActive = await getActiveCount(page);
   expect(newActive).toBeLessThan(initialActive);
 });
@@ -176,20 +154,17 @@ test("6. Paint con pincel — verificar vía WebSocket", async ({ page }) => {
 test("7. Step avanza la generación", async ({ page }) => {
   await startExperiment(page, "kohonen_lab");
 
-  // Gen starts at "0/30"
-  expect(await getGeneration(page)).toBe("0/30");
+  expect(await getStepCount(page)).toBe(0);
 
-  // Click Step
   await page.getByRole("button", { name: "Step" }).click();
-  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("1/30", {
-    timeout: 3_000,
-  });
+  await expect(async () => {
+    expect(await getStepCount(page)).toBe(1);
+  }).toPass({ timeout: 3_000 });
 
-  // Click Step again
   await page.getByRole("button", { name: "Step" }).click();
-  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("2/30", {
-    timeout: 3_000,
-  });
+  await expect(async () => {
+    expect(await getStepCount(page)).toBe(2);
+  }).toPass({ timeout: 3_000 });
 });
 
 // ---------------------------------------------------------------------------
@@ -198,31 +173,21 @@ test("7. Step avanza la generación", async ({ page }) => {
 test("8. Play / Pause", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  // Click Play
   await page.getByRole("button", { name: "Play" }).click();
-
-  // State changes to "running"
   await expect(page.getByText("running")).toBeVisible({ timeout: 3_000 });
 
-  // Wait for some generations to pass
   await page.waitForTimeout(600);
 
-  // Generation should be > 0
-  const gen = await getGeneration(page);
-  const genNum = parseInt(gen.split("/")[0], 10);
-  expect(genNum).toBeGreaterThan(0);
+  const steps = await getStepCount(page);
+  expect(steps).toBeGreaterThan(0);
 
-  // Click Pause
   await page.getByRole("button", { name: "Pause" }).click();
-
-  // State changes to "paused"
   await expect(page.getByText("paused")).toBeVisible({ timeout: 3_000 });
 
-  // Save generation and verify it stops
-  const genAfterPause = await getGeneration(page);
+  const stepsAfterPause = await getStepCount(page);
   await page.waitForTimeout(400);
-  const genAfterWait = await getGeneration(page);
-  expect(genAfterWait).toBe(genAfterPause);
+  const stepsAfterWait = await getStepCount(page);
+  expect(stepsAfterWait).toBe(stepsAfterPause);
 });
 
 // ---------------------------------------------------------------------------
@@ -231,31 +196,22 @@ test("8. Play / Pause", async ({ page }) => {
 test("9. Reset vuelve al inicio", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  // Click Step 3 times
   const stepBtn = page.getByRole("button", { name: "Step" });
   await stepBtn.click();
-  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("1/30", {
-    timeout: 3_000,
-  });
+  await expect(async () => {
+    expect(await getStepCount(page)).toBe(1);
+  }).toPass({ timeout: 3_000 });
   await stepBtn.click();
-  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("2/30", {
-    timeout: 3_000,
-  });
-  await stepBtn.click();
-  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("3/30", {
-    timeout: 3_000,
-  });
+  await expect(async () => {
+    expect(await getStepCount(page)).toBe(2);
+  }).toPass({ timeout: 3_000 });
 
-  // Click Reset
   await page.getByRole("button", { name: "Reset" }).click();
 
-  // Gen returns to "0/30"
-  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("0/30", {
-    timeout: 3_000,
-  });
-
-  // State is "ready"
-  await expect(page.getByText("ready")).toBeVisible();
+  await expect(async () => {
+    expect(await getStepCount(page)).toBe(0);
+  }).toPass({ timeout: 5_000 });
+  await expect(page.getByText("ready")).toBeVisible({ timeout: 5_000 });
 });
 
 // ---------------------------------------------------------------------------
@@ -264,22 +220,16 @@ test("9. Reset vuelve al inicio", async ({ page }) => {
 test("10. Inspeccionar desactiva la paleta", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  const palette = page.getByTestId("brush-palette");
-
-  // Palette is enabled (opacity 1)
+  const palette = getBrushPalette(page);
   await expect(palette).toHaveCSS("opacity", "1");
 
-  // Click "Inspeccionar"
   await page.getByRole("button", { name: "Inspeccionar" }).click();
 
-  // Palette is disabled (opacity 0.3)
   await expect(palette).toHaveCSS("opacity", "0.3");
   await expect(palette).toHaveCSS("pointer-events", "none");
 
-  // Click "✕ Inspeccionar" to toggle off
   await page.getByRole("button", { name: /Inspeccionar/ }).click();
 
-  // Palette returns to enabled
   await expect(palette).toHaveCSS("opacity", "1");
   await expect(palette).toHaveCSS("pointer-events", "auto");
 });
@@ -288,25 +238,98 @@ test("10. Inspeccionar desactiva la paleta", async ({ page }) => {
 // 11. Cambiar de experimento
 // ---------------------------------------------------------------------------
 test("11. Cambiar de experimento", async ({ page }) => {
-  // Start Kohonen Lab
   await startExperiment(page, "kohonen_lab");
-  await expect(page.locator("canvas")).toBeVisible();
 
-  // Click Kohonen in the sidebar
-  await page.getByRole("button", { name: "Kohonen (Competencia Lateral 2D)" }).click();
+  // Switch to Kohonen
+  await startExperiment(page, "kohonen");
 
-  // Click "Iniciar Experimento"
-  await page.getByRole("button", { name: "Iniciar Experimento" }).click();
+  expect(await getStepCount(page)).toBe(0);
 
-  // Wait for canvas to appear
-  await expect(page.locator("canvas")).toBeVisible({ timeout: 5_000 });
-
-  // Gen = "0/30" (new experiment)
-  await expect(page.locator("text=Gen:").locator("strong")).toHaveText("0/30", {
-    timeout: 3_000,
-  });
-
-  // Active > 0 (Kohonen has random neurons)
   const active = await getActiveCount(page);
   expect(active).toBeGreaterThan(0);
+});
+
+// ---------------------------------------------------------------------------
+// 12. Steps per tick
+// ---------------------------------------------------------------------------
+test("12. Steps per tick", async ({ page }) => {
+  await startExperiment(page, "kohonen");
+
+  // The steps/tick select is inside <main>, next to the "Steps/tick:" label
+  const select = page.locator("main select");
+  await expect(select).toHaveValue("1");
+
+  await select.selectOption("10");
+  await expect(select).toHaveValue("10");
+
+  await page.getByRole("button", { name: "Step" }).click();
+  await expect(async () => {
+    expect(await getStepCount(page)).toBe(10);
+  }).toPass({ timeout: 3_000 });
+});
+
+// ---------------------------------------------------------------------------
+// 13. Límites del tamaño de pincel
+// ---------------------------------------------------------------------------
+test("13. Límites del tamaño de pincel", async ({ page }) => {
+  await startExperiment(page, "kohonen");
+
+  const palette = getBrushPalette(page);
+  const decreaseBtn = palette.getByRole("button", { name: "Reducir pincel" });
+  const increaseBtn = palette.getByRole("button", { name: "Aumentar pincel" });
+
+  // Min size (1×1): decrease disabled
+  expect(await getBrushSizeLabel(page)).toBe("1×1");
+  await expect(decreaseBtn).toBeDisabled();
+
+  // Increase to max (15×15): 7 clicks (1→3→5→7→9→11→13→15)
+  for (let i = 0; i < 7; i++) {
+    await increaseBtn.click();
+  }
+  expect(await getBrushSizeLabel(page)).toBe("15×15");
+  await expect(increaseBtn).toBeDisabled();
+});
+
+// ---------------------------------------------------------------------------
+// 14. Kohonen Lab — seleccionar máscara de conexionado
+// ---------------------------------------------------------------------------
+test("14. Kohonen Lab — seleccionar máscara", async ({ page }) => {
+  // Kohonen Lab is selected by default; mask selector ("Conexionado") is visible
+  await expect(page.getByText("Conexionado")).toBeVisible();
+
+  // Locate the mask select (first select in the sidebar, under "Conexionado")
+  const maskSelect = page.locator("aside select").first();
+  await expect(maskSelect).toBeVisible();
+
+  // Remember initial value, then change to a different mask
+  const initialValue = await maskSelect.inputValue();
+  const options = maskSelect.locator("option");
+  const optionCount = await options.count();
+  expect(optionCount).toBeGreaterThan(1);
+
+  // Pick a mask that's different from the current one
+  const secondOption = await options.nth(1).getAttribute("value");
+  expect(secondOption).toBeTruthy();
+  await maskSelect.selectOption(secondOption!);
+  expect(await maskSelect.inputValue()).not.toBe(initialValue);
+
+  await page.getByRole("button", { name: "Iniciar Experimento" }).click();
+  await expect(page.locator("main canvas")).toBeVisible({ timeout: 45_000 });
+});
+
+// ---------------------------------------------------------------------------
+// 15. Inspeccionar muestra mapa de conexiones
+// ---------------------------------------------------------------------------
+test("15. Inspeccionar muestra mapa de conexiones", async ({ page }) => {
+  await startExperiment(page, "kohonen_lab");
+
+  await page.getByRole("button", { name: "Inspeccionar" }).click();
+
+  await clickCanvasCenter(page);
+
+  // Legend switches to connection-map colors
+  await expect(page.getByText("Excitatorio (+1)")).toBeVisible({
+    timeout: 3_000,
+  });
+  await expect(page.getByText("Inhibitorio (-1)")).toBeVisible();
 });
