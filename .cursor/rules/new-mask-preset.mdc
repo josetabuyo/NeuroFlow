@@ -8,26 +8,57 @@ alwaysApply: false
 
 Cuando el usuario pida un nuevo conexionado/máscara, seguir estos pasos en orden:
 
+## 0. Interpretar la notación del usuario
+
+El usuario puede pedir una máscara de dos formas:
+
+**Forma explícita:** `E2 G6 I3 DE1 DI1`
+
+**Forma numérica (shorthand):** `2 6 3 1 1`
+
+El orden por defecto siempre es: **E G I DE DI**
+
+| Posición | Parámetro | Significado | Cómo se traduce a código |
+|----------|-----------|-------------|--------------------------|
+| 1ª | **E** | Radio excitatorio Moore | `_moore(E)` |
+| 2ª | **G** | Gap (anillos de silencio) | gap va de r=E+1 a r=E+G |
+| 3ª | **I** | Anillos inhibitorios | `_ring(E+G+1, E+G+I)` |
+| 4ª | **DE** | Densidad excitatoria (1/DE) | DE=1 → completa, DE=3 → `_random_sparse(..., 1/3, seed)` |
+| 5ª | **DI** | Densidad inhibitoria (1/DI) | DI=1 → completa, DI=1.5 → `_random_sparse(..., 2/3, seed)` |
+
+Si el usuario omite DE y DI, asumir DE=1 DI=1 (densidad completa).
+
+**Ejemplo:** `2 6 3 1 1` → E=2, G=6, I=3, DE=1, DI=1
+- Excitación: `_moore(2)` (24 vecinos, completa)
+- Gap: r=3 a r=8 (6 anillos de silencio)
+- Inhibición: `_ring(9, 11)` (3 anillos, completa)
+
+**Ejemplo con densidad:** `3 12 3 3 3` → E=3, G=12, I=3, DE=3, DI=3
+- Excitación: `_random_sparse(_moore(3), 1/3, seed=42)`
+- Inhibición: `_make_inhibitory(_random_sparse(_ring(16, 18), 1/3, seed=43), -1.0, 8)`
+
 ## 1. Definir la máscara en `backend/core/masks.py`
 
-- Agregar la constante `MASK_<NOMBRE>: MaskDef = [...]` junto a las demás.
-- Usar los helpers existentes: `_moore()`, `_ring()`, `_von_neumann()`, `_sparse_ring()`, `_make_inhibitory()`, `_partition()`.
+- Agregar la constante `MASK_DEAMON_E<n>_G<n>_I<n>_DE<n>_DI<n>: MaskDef = [...]` junto a las demás.
+- Usar los helpers existentes: `_moore()`, `_ring()`, `_von_neumann()`, `_sparse_ring()`, `_random_sparse()`, `_make_inhibitory()`, `_partition()`.
 - Respetar la convención: dendritas excitatorias primero (peso > 0), luego inhibitorias (peso < 0).
+- Para densidad: DE=1/DI=1 → no usar `_random_sparse`. Para otros valores → `_random_sparse(offsets, 1/D, seed=N)`.
+- Usar seeds incrementales (42+ para exc, 43+ para inh) para que cada máscara tenga su propio patrón.
 
 ## 2. Registrar en `MASK_PRESETS`
 
 Agregar la entrada en el dict `MASK_PRESETS` del mismo archivo con todos los campos:
 
 ```python
-"mi_mask_id": {
-    "id": "mi_mask_id",
-    "name": "Nombre Visible",
-    "description": "Descripción corta del conexionado.",
-    "center": "Descripción del centro excitatorio",
-    "corona": "Descripción de la corona inhibitoria",
-    "dendrites_inh": 8,  # cantidad de dendritas inhibitorias
+"deamon_e2_g6_i3_de1_di1": {
+    "id": "deamon_e2_g6_i3_de1_di1",
+    "name": "Deamon (E2 G6 I3 DE1 DI1)",
+    "description": "Moore r=2 completa (24 vecinos), gap r=3-8, corona r=9-11 completa.",
+    "center": "Moore r=2 (24 vecinos, densidad completa)",
+    "corona": "r=9-11 completa, gap r=3-8 silencio (x6)",
+    "dendrites_inh": 8,
     "random_weights": True,
-    "mask": MASK_MI_MASK,
+    "mask": MASK_DEAMON_E2_G6_I3_DE1_DI1,
 },
 ```
 

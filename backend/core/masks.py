@@ -306,6 +306,11 @@ MASK_DEAMON_E2_G3_I3_DE1_DI1: MaskDef = [
     *_make_inhibitory(_ring(6, 8), -1.0, 8),
 ]
 
+MASK_DEAMON_E2_G6_I3_DE1_DI1: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(2)},
+    *_make_inhibitory(_ring(9, 11), -1.0, 8),
+]
+
 MASK_BIG_CENTER_SOFT_WIDE_INH: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
     {"peso_dendrita": 0.7, "offsets": _ring(2, 2)},
@@ -580,6 +585,16 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "dendrites_inh": 8,
         "random_weights": True,
         "mask": MASK_DEAMON_E2_G3_I3_DE1_DI1,
+    },
+    "deamon_e2_g6_i3_de1_di1": {
+        "id": "deamon_e2_g6_i3_de1_di1",
+        "name": "Deamon (E2 G6 I3 DE1 DI1)",
+        "description": "Moore r=2 completa (24 vecinos), gap r=3-8, corona r=9-11 completa.",
+        "center": "Moore r=2 (24 vecinos, densidad completa)",
+        "corona": "r=9-11 completa, gap r=3-8 silencio (x6)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E2_G6_I3_DE1_DI1,
     },
     "all_exc": {
         "id": "all_exc",
