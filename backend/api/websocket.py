@@ -161,12 +161,10 @@ class ExperimentSession:
         await self._stop_play_loop()
 
     async def _handle_inspect(self, message: dict[str, Any]) -> None:
-        """Return connection weights for a neuron."""
+        """Return connection weights for a neuron without stopping the simulation."""
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
-
-        await self._stop_play_loop()
 
         x = message.get("x", 0)
         y = message.get("y", 0)

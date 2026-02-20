@@ -81,8 +81,6 @@ export function useExperiment(): UseExperimentReturn {
           setGeneration(msg.generation);
           setStats(msg.stats);
           setPerf(msg.perf ?? null);
-          setConnectionMap(null);
-          setInspectedCell(null);
           break;
         case "connections":
           setConnectionMap(msg.weight_grid);

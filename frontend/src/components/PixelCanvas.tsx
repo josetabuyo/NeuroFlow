@@ -87,25 +87,19 @@ export function PixelCanvas({
 
     const hasConnectionMap = connectionMap != null && connectionMap.length > 0;
 
-    // Draw cells
+    // Always draw the normal grid first
     for (let row = 0; row < Math.min(height, grid.length); row++) {
       for (let col = 0; col < Math.min(width, grid[row].length); col++) {
-        if (hasConnectionMap && connectionMap[row] && connectionMap[row][col] !== undefined) {
-          ctx.fillStyle = weightToColor(connectionMap[row][col]);
-        } else if (!hasConnectionMap) {
-          const active = grid[row][col] > 0;
-          const isInput = inputRow != null && row === inputRow;
-          const isOutput = outputRow != null && row === outputRow;
+        const active = grid[row][col] > 0;
+        const isInput = inputRow != null && row === inputRow;
+        const isOutput = outputRow != null && row === outputRow;
 
-          if (isInput) {
-            ctx.fillStyle = active ? COLORS.inputActive : COLORS.inputInactive;
-          } else if (isOutput) {
-            ctx.fillStyle = active ? COLORS.outputActive : COLORS.outputInactive;
-          } else {
-            ctx.fillStyle = active ? COLORS.active : COLORS.inactive;
-          }
+        if (isInput) {
+          ctx.fillStyle = active ? COLORS.inputActive : COLORS.inputInactive;
+        } else if (isOutput) {
+          ctx.fillStyle = active ? COLORS.outputActive : COLORS.outputInactive;
         } else {
-          ctx.fillStyle = "#111111";
+          ctx.fillStyle = active ? COLORS.active : COLORS.inactive;
         }
 
         ctx.fillRect(
@@ -114,23 +108,37 @@ export function PixelCanvas({
           cellSize - 1,
           cellSize - 1
         );
+      }
+    }
 
-        // Draw yellow border for inspected cell
-        if (
-          hasConnectionMap &&
-          inspectedCell &&
-          col === inspectedCell.x &&
-          row === inspectedCell.y
-        ) {
-          ctx.strokeStyle = "#ffff00";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(
-            col * cellSize + 1,
-            row * cellSize + 1,
-            cellSize - 3,
-            cellSize - 3
-          );
+    // Draw connection map as semi-transparent overlay
+    if (hasConnectionMap) {
+      ctx.globalAlpha = 0.6;
+      for (let row = 0; row < Math.min(height, grid.length); row++) {
+        for (let col = 0; col < Math.min(width, grid[row].length); col++) {
+          if (connectionMap[row] && connectionMap[row][col] !== undefined) {
+            ctx.fillStyle = weightToColor(connectionMap[row][col]);
+            ctx.fillRect(
+              col * cellSize,
+              row * cellSize,
+              cellSize - 1,
+              cellSize - 1
+            );
+          }
         }
+      }
+      ctx.globalAlpha = 1.0;
+
+      // Draw yellow border for inspected cell (fully opaque)
+      if (inspectedCell) {
+        ctx.strokeStyle = "#ffff00";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          inspectedCell.x * cellSize + 1,
+          inspectedCell.y * cellSize + 1,
+          cellSize - 3,
+          cellSize - 3
+        );
       }
     }
   }, [grid, width, height, inputRow, outputRow, connectionMap, inspectedCell, getCellSize]);
