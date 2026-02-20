@@ -15,7 +15,7 @@ export interface MaskPresetInfo {
   center: string;
   corona: string;
   dendrites_inh: number;
-  preview_grid: (number | null)[][];
+  preview_grid?: (number | null)[][];
   mask_stats?: MaskStats;
 }
 

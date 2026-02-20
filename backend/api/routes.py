@@ -39,7 +39,7 @@ EXPERIMENTS = {
         "default_config": {
             "width": 50,
             "height": 50,
-            "mask": "simple",
+            "mask": "deamon_3_en_50",
             "balance": 0.0,
             "balance_mode": "none",
         },

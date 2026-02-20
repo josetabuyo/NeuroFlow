@@ -215,6 +215,11 @@ MASK_XL_CENTER_GAP_WIDE_INH_X2: MaskDef = [
     *_make_inhibitory(_ring(5, 15), -1.0, 8),
 ]
 
+MASK_DEAMON_3_EN_50: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_ring(5, 15), -1.0, 8),
+]
+
 MASK_BIG_CENTER_SOFT_WIDE_INH: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
     {"peso_dendrita": 0.7, "offsets": _ring(2, 2)},
@@ -330,6 +335,16 @@ MASK_RULE_30 = _wolfram_mask(30)
 # ---------------------------------------------------------------------------
 
 MASK_PRESETS: dict[str, dict[str, Any]] = {
+    "deamon_3_en_50": {
+        "id": "deamon_3_en_50",
+        "name": "Deamon 3 en 50",
+        "description": "Moore r=3 (48 vecinos), gap r=4, corona r=5-15 (misma superficie inh que x2).",
+        "center": "Moore r=3 (48 vecinos)",
+        "corona": "r=5-15, gap r=4 silencio",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_3_EN_50,
+    },
     "all_exc": {
         "id": "all_exc",
         "name": "Todo Exc",

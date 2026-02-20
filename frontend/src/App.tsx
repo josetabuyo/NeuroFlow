@@ -36,19 +36,24 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
       { id: "soft_inhibit", name: "Inhibicion Suave", description: "Moore r=1, corona r=2-4, peso inh. -0.5.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, peso -0.5", dendrites_inh: 8 },
       { id: "strong_center", name: "Centro Fuerte", description: "Moore r=1 x2 dendritas exc., corona r=2-4.", center: "Moore r=1 (2 dendritas exc.)", corona: "r=2-4, peso -1", dendrites_inh: 8 },
     ],
-    default_config: { width: 50, height: 50, mask: "simple", balance: 0.0 },
+    default_config: { width: 50, height: 50, balance: 0.0 },
   },
 ];
 
+const DEFAULT_SELECTED = "kohonen_lab";
+
+function resolveConfig(exp: ExperimentInfo): ExperimentConfig {
+  const cfg = { ...exp.default_config };
+  if (!cfg.mask && exp.masks?.length) cfg.mask = exp.masks[0].id;
+  return cfg;
+}
+
 function App() {
   const [experiments, setExperiments] = useState<ExperimentInfo[]>(DEFAULT_EXPERIMENTS);
-  const [selectedExp, setSelectedExp] = useState("kohonen_lab");
-  const [config, setConfig] = useState<ExperimentConfig>({
-    width: 50,
-    height: 50,
-    mask: "simple",
-    balance: 0.0,
-  });
+  const [selectedExp, setSelectedExp] = useState(DEFAULT_SELECTED);
+  const [config, setConfig] = useState<ExperimentConfig>(
+    resolveConfig(DEFAULT_EXPERIMENTS.find((e) => e.id === DEFAULT_SELECTED) ?? DEFAULT_EXPERIMENTS[0])
+  );
   const [stepsPerTick, setStepsPerTick] = useState(1);
 
   const {
@@ -83,7 +88,8 @@ function App() {
       .then((data: ExperimentInfo[]) => {
         if (data.length > 0) {
           setExperiments(data);
-          setConfig(data[0].default_config);
+          const selected = data.find((e) => e.id === DEFAULT_SELECTED) ?? data[0];
+          setConfig(resolveConfig(selected));
         }
       })
       .catch(() => {
@@ -97,7 +103,7 @@ function App() {
     (id: string) => {
       setSelectedExp(id);
       const exp = experiments.find((e) => e.id === id);
-      if (exp) setConfig(exp.default_config);
+      if (exp) setConfig(resolveConfig(exp));
     },
     [experiments]
   );

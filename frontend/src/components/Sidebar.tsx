@@ -174,7 +174,7 @@ export function Sidebar({
     : null;
 
   const balancedGrid = useMemo(() => {
-    if (!activeMask) return null;
+    if (!activeMask?.preview_grid) return null;
     const balance = config.balance ?? 0;
     if (balance === 0 || config.balance_mode === "none") return activeMask.preview_grid;
     return applyBalance(activeMask.preview_grid, balance);
