@@ -237,6 +237,7 @@ class ExperimentSession:
 
         frame = self.experiment.get_frame()
         stats = self.experiment.get_stats()
+        tension_frame = self.experiment.get_tension_frame()
 
         grid = [[round(cell) for cell in row] for row in frame]
 
@@ -246,6 +247,11 @@ class ExperimentSession:
             "grid": grid,
             "stats": stats,
         }
+
+        if tension_frame is not None:
+            msg["tension_grid"] = [
+                [round(v, 3) for v in row] for row in tension_frame
+            ]
 
         if steps is not None and elapsed_s is not None and elapsed_s > 0:
             msg["perf"] = {

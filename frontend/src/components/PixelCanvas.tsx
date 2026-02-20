@@ -4,6 +4,8 @@ import { useRef, useEffect, useCallback, useState } from "react";
 
 interface PixelCanvasProps {
   grid: number[][];
+  tensionGrid?: number[][] | null;
+  tensionMode?: boolean;
   width: number;
   height: number;
   inputRow?: number;
@@ -42,8 +44,25 @@ function weightToColor(weight: number | null): string {
   return "#000000";
 }
 
+function tensionToColor(tension: number): string {
+  const t = Math.max(-1, Math.min(1, tension));
+  if (t > 0) {
+    const r = Math.round(255 * Math.min(1, t * 2));
+    const g = Math.round(140 * Math.min(1, t * 1.5));
+    return `rgb(${r}, ${g}, 0)`;
+  } else if (t < 0) {
+    const abs = Math.abs(t);
+    const b = Math.round(255 * Math.min(1, abs * 2));
+    const r = Math.round(80 * Math.min(1, abs * 1.5));
+    return `rgb(${r}, 0, ${b})`;
+  }
+  return "#0a0a0a";
+}
+
 export function PixelCanvas({
   grid,
+  tensionGrid,
+  tensionMode,
   width,
   height,
   inputRow,
@@ -86,20 +105,25 @@ export function PixelCanvas({
     if (grid.length === 0) return;
 
     const hasConnectionMap = connectionMap != null && connectionMap.length > 0;
+    const showTension = tensionMode && tensionGrid != null && tensionGrid.length > 0;
 
-    // Always draw the normal grid first
+    // Draw main grid: tension heatmap or normal activation
     for (let row = 0; row < Math.min(height, grid.length); row++) {
       for (let col = 0; col < Math.min(width, grid[row].length); col++) {
-        const active = grid[row][col] > 0;
-        const isInput = inputRow != null && row === inputRow;
-        const isOutput = outputRow != null && row === outputRow;
-
-        if (isInput) {
-          ctx.fillStyle = active ? COLORS.inputActive : COLORS.inputInactive;
-        } else if (isOutput) {
-          ctx.fillStyle = active ? COLORS.outputActive : COLORS.outputInactive;
+        if (showTension && tensionGrid[row] && tensionGrid[row][col] !== undefined) {
+          ctx.fillStyle = tensionToColor(tensionGrid[row][col]);
         } else {
-          ctx.fillStyle = active ? COLORS.active : COLORS.inactive;
+          const active = grid[row][col] > 0;
+          const isInput = inputRow != null && row === inputRow;
+          const isOutput = outputRow != null && row === outputRow;
+
+          if (isInput) {
+            ctx.fillStyle = active ? COLORS.inputActive : COLORS.inputInactive;
+          } else if (isOutput) {
+            ctx.fillStyle = active ? COLORS.outputActive : COLORS.outputInactive;
+          } else {
+            ctx.fillStyle = active ? COLORS.active : COLORS.inactive;
+          }
         }
 
         ctx.fillRect(
@@ -141,7 +165,7 @@ export function PixelCanvas({
         );
       }
     }
-  }, [grid, width, height, inputRow, outputRow, connectionMap, inspectedCell, getCellSize]);
+  }, [grid, tensionGrid, tensionMode, width, height, inputRow, outputRow, connectionMap, inspectedCell, getCellSize]);
 
   useEffect(() => {
     draw();

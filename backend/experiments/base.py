@@ -72,6 +72,10 @@ class Experimento(ABC):
             return []
         return self.red.get_grid(self.width, self.height)
 
+    def get_tension_frame(self) -> list[list[float]] | None:
+        """Retorna la grilla de tensiones. None si no está disponible."""
+        return None
+
     def get_stats(self) -> dict[str, Any]:
         """Retorna estadísticas del estado actual."""
         frame = self.get_frame()

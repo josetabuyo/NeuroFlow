@@ -60,6 +60,9 @@ class RedTensor:
         # Pre-compute per-dendrite weights [N, max_dend] and dendrite mask
         self._dend_pesos, self._dendrita_mascara = self._precompute_dendrite_info()
 
+        # Tension values (updated each procesar() call)
+        self.tensiones = torch.zeros(self.N, device=device)
+
     def _precompute_dendrite_info(self) -> tuple[torch.Tensor, torch.BoolTensor]:
         """Pre-compute dendrite weights and validity mask.
 
@@ -128,6 +131,8 @@ class RedTensor:
 
         tension = (max_vals + min_vals).clamp(-1.0, 1.0)  # [NR]
 
+        self.tensiones[:NR] = tension
+
         # 6. Activate: tension > threshold (only real neurons)
         umbrales_real = self.umbrales[:NR]
         mascara_real = self.mascara_entrada[:NR]
@@ -146,6 +151,10 @@ class RedTensor:
     def get_grid(self, width: int, height: int) -> list[list[float]]:
         """Convierte tensor de valores a grilla 2D."""
         return self.valores[:width * height].reshape(height, width).tolist()
+
+    def get_tension_grid(self, width: int, height: int) -> list[list[float]]:
+        """Convierte tensor de tensiones a grilla 2D."""
+        return self.tensiones[:width * height].reshape(height, width).tolist()
 
     def get_valores(self) -> torch.Tensor:
         """Retorna el tensor de valores."""

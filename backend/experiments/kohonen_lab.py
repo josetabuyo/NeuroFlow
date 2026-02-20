@@ -277,6 +277,12 @@ class KohonenLabExperiment(Experimento):
             return self.red_tensor.get_grid(self.width, self.height)
         return super().get_frame()
 
+    def get_tension_frame(self) -> list[list[float]] | None:
+        """Retorna la grilla de tensiones superficiales."""
+        if self.red_tensor:
+            return self.red_tensor.get_tension_grid(self.width, self.height)
+        return None
+
     def get_stats(self) -> dict[str, Any]:
         """Retorna estadísticas con métricas de daemons.
 

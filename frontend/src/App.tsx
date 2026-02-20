@@ -58,6 +58,8 @@ function App() {
 
   const {
     grid,
+    tensionGrid,
+    tensionMode,
     state,
     stats,
     perf,
@@ -77,6 +79,7 @@ function App() {
     reset,
     inspect,
     toggleInspectMode,
+    toggleTensionMode,
     increaseBrushSize,
     decreaseBrushSize,
     toggleBrushMode,
@@ -230,6 +233,8 @@ function App() {
             <>
               <PixelCanvas
                 grid={grid}
+                tensionGrid={tensionGrid}
+                tensionMode={tensionMode}
                 width={config.width}
                 height={config.height}
                 connectionMap={connectionMap}
@@ -241,6 +246,7 @@ function App() {
                 brushSize={brushSize}
                 brushMode={brushMode}
                 inspectMode={inspectMode}
+                tensionMode={tensionMode}
                 canInspect={
                   state === "ready" ||
                   state === "paused" ||
@@ -250,6 +256,7 @@ function App() {
                 onDecrease={decreaseBrushSize}
                 onToggleMode={toggleBrushMode}
                 onToggleInspect={toggleInspectMode}
+                onToggleTension={toggleTensionMode}
               />
               {isInitializing && (
                 <div
@@ -342,6 +349,21 @@ function App() {
               <span>
                 <span style={colorSwatch("#111111", "1px solid #333")} />
                 Sin conexión
+              </span>
+            </>
+          ) : tensionMode ? (
+            <>
+              <span>
+                <span style={colorSwatch("#ff8c00")} />
+                Excitación (+1)
+              </span>
+              <span>
+                <span style={colorSwatch("#0a0a0a", "1px solid #333")} />
+                Neutro (0)
+              </span>
+              <span>
+                <span style={colorSwatch("#5000ff")} />
+                Inhibición (-1)
               </span>
             </>
           ) : (

@@ -18,6 +18,8 @@ function getWsUrl(): string {
 
 interface UseExperimentReturn {
   grid: number[][];
+  tensionGrid: number[][] | null;
+  tensionMode: boolean;
   state: ExperimentState;
   stats: ExperimentStats | null;
   perf: PerfMetrics | null;
@@ -38,6 +40,7 @@ interface UseExperimentReturn {
   reset: () => void;
   inspect: (x: number, y: number) => void;
   toggleInspectMode: () => void;
+  toggleTensionMode: () => void;
   increaseBrushSize: () => void;
   decreaseBrushSize: () => void;
   toggleBrushMode: () => void;
@@ -52,6 +55,8 @@ export function useExperiment(): UseExperimentReturn {
   const [connectionMap, setConnectionMap] = useState<(number | null)[][] | null>(null);
   const [inspectedCell, setInspectedCell] = useState<{ x: number; y: number } | null>(null);
   const [perf, setPerf] = useState<PerfMetrics | null>(null);
+  const [tensionGrid, setTensionGrid] = useState<number[][] | null>(null);
+  const [tensionMode, setTensionMode] = useState(false);
   const [activeExperiment, setActiveExperiment] = useState<string | null>(null);
   const [brushSize, setBrushSize] = useState(1);
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
@@ -81,6 +86,7 @@ export function useExperiment(): UseExperimentReturn {
           setGeneration(msg.generation);
           setStats(msg.stats);
           setPerf(msg.perf ?? null);
+          setTensionGrid(msg.tension_grid ?? null);
           break;
         case "connections":
           setConnectionMap(msg.weight_grid);
@@ -193,8 +199,14 @@ export function useExperiment(): UseExperimentReturn {
     });
   }, []);
 
+  const toggleTensionMode = useCallback(() => {
+    setTensionMode((prev) => !prev);
+  }, []);
+
   return {
     grid,
+    tensionGrid,
+    tensionMode,
     state,
     stats,
     perf,
@@ -215,6 +227,7 @@ export function useExperiment(): UseExperimentReturn {
     reset,
     inspect,
     toggleInspectMode,
+    toggleTensionMode,
     increaseBrushSize,
     decreaseBrushSize,
     toggleBrushMode,

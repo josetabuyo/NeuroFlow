@@ -6,11 +6,13 @@ interface BrushPaletteProps {
   brushSize: number;
   brushMode: "activate" | "deactivate";
   inspectMode: boolean;
+  tensionMode: boolean;
   canInspect: boolean;
   onIncrease: () => void;
   onDecrease: () => void;
   onToggleMode: () => void;
   onToggleInspect: () => void;
+  onToggleTension: () => void;
 }
 
 function renderBrushPreview(size: number): React.ReactNode {
@@ -73,11 +75,13 @@ export function BrushPalette({
   brushSize,
   brushMode,
   inspectMode,
+  tensionMode,
   canInspect,
   onIncrease,
   onDecrease,
   onToggleMode,
   onToggleInspect,
+  onToggleTension,
 }: BrushPaletteProps) {
   const isActivate = brushMode === "activate";
   const pixelCount = brushSize * brushSize;
@@ -104,6 +108,20 @@ export function BrushPalette({
         zIndex: 10,
       }}
     >
+      {/* ── Ver Tensiones ── */}
+      <button
+        onClick={onToggleTension}
+        title={tensionMode ? "Ocultar tensiones" : "Ver tensiones superficiales"}
+        aria-label="Ver tensiones"
+        style={{
+          ...toolBtnStyle(tensionMode, "#ff6b35"),
+          width: "100%",
+          cursor: "pointer",
+        }}
+      >
+        ≋
+      </button>
+
       {/* ── Inspeccionar ── */}
       <button
         onClick={onToggleInspect}

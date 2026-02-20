@@ -55,6 +55,7 @@ export interface FrameMessage {
   grid: number[][];
   stats: ExperimentStats;
   perf?: PerfMetrics;
+  tension_grid?: number[][];
 }
 
 export interface StatusMessage {
