@@ -54,17 +54,21 @@ de backend (cómputo), permitiendo escalar y desplegar como servicio web.
 ## Quick Start
 
 ```bash
-# Backend
+# 1. Backend (puerto 8501)
 cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload
+uvicorn main:app --reload --port 8501
 
-# Frontend
+# 2. Frontend (puerto 5173) — en otra terminal
 cd frontend
 npm install
 npm run dev
 ```
+
+Abrir **http://localhost:5173** en el navegador.
+
+El frontend proxea `/api` y `/ws` al backend en el puerto 8501 (configurado en `frontend/vite.config.ts`).
 
 ## Desarrollo
 
@@ -72,6 +76,8 @@ npm run dev
 # Tests
 cd backend && pytest -v
 
-# Frontend dev
+# Levantar solo frontend (si el backend ya está corriendo)
 cd frontend && npm run dev
 ```
+
+Ambos servers tienen hot-reload: cambios en `.py` se toman automáticamente (uvicorn `--reload`) y cambios en el frontend vía Vite HMR.
