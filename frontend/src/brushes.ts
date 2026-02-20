@@ -1,53 +1,30 @@
-/** Brush shape definitions for the brush palette. */
+/** Dynamic square brush generation for the brush palette. */
 
-import type { BrushShape } from "./types";
+/**
+ * Generate offsets for an NxN square brush centered at (0,0).
+ * `size` must be an odd positive integer (1, 3, 5, 7, …).
+ */
+export function generateSquareBrush(size: number): [number, number][] {
+  const r = Math.floor(size / 2);
+  const offsets: [number, number][] = [];
+  for (let dy = -r; dy <= r; dy++)
+    for (let dx = -r; dx <= r; dx++) offsets.push([dx, dy]);
+  return offsets;
+}
 
-export const BRUSHES: BrushShape[] = [
-  {
-    id: "1x1",
-    name: "Punto",
-    offsets: [[0, 0]],
-  },
-  {
-    id: "3x3",
-    name: "3×3",
-    offsets: [
-      [-1, -1], [0, -1], [1, -1],
-      [-1, 0],  [0, 0],  [1, 0],
-      [-1, 1],  [0, 1],  [1, 1],
-    ],
-  },
-  {
-    id: "5x5",
-    name: "5×5",
-    offsets: (() => {
-      const o: [number, number][] = [];
-      for (let dy = -2; dy <= 2; dy++)
-        for (let dx = -2; dx <= 2; dx++)
-          o.push([dx, dy]);
-      return o;
-    })(),
-  },
-  {
-    id: "cross",
-    name: "Cruz",
-    offsets: [
-      [0, -2],
-      [0, -1],
-      [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0],
-      [0, 1],
-      [0, 2],
-    ],
-  },
-  {
-    id: "diamond",
-    name: "Diamante",
-    offsets: [
-      [0, -2],
-      [-1, -1], [0, -1], [1, -1],
-      [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0],
-      [-1, 1], [0, 1], [1, 1],
-      [0, 2],
-    ],
-  },
-];
+/** Minimum brush side length. */
+export const MIN_BRUSH_SIZE = 1;
+/** Maximum brush side length. */
+export const MAX_BRUSH_SIZE = 15;
+
+/** Step to next valid brush size (always odd). */
+export function nextBrushSize(current: number): number {
+  const next = current + 2;
+  return next <= MAX_BRUSH_SIZE ? next : current;
+}
+
+/** Step to previous valid brush size (always odd). */
+export function prevBrushSize(current: number): number {
+  const prev = current - 2;
+  return prev >= MIN_BRUSH_SIZE ? prev : current;
+}

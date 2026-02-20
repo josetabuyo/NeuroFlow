@@ -1,56 +1,45 @@
-/** Brush palette — floating vertical toolbar for selecting brush shapes. */
+/** Brush palette — floating vertical toolbar with brush size controls. */
 
-import type { BrushShape } from "../types";
+import { generateSquareBrush, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE } from "../brushes";
 
 interface BrushPaletteProps {
-  brushes: BrushShape[];
-  selectedBrush: string;
+  brushSize: number;
   brushMode: "activate" | "deactivate";
   disabled: boolean;
-  onSelectBrush: (id: string) => void;
+  onIncrease: () => void;
+  onDecrease: () => void;
   onToggleMode: () => void;
 }
 
-function renderBrushPreview(offsets: [number, number][]): React.ReactNode {
-  const minX = Math.min(...offsets.map(([dx]) => dx));
-  const maxX = Math.max(...offsets.map(([dx]) => dx));
-  const minY = Math.min(...offsets.map(([, dy]) => dy));
-  const maxY = Math.max(...offsets.map(([, dy]) => dy));
-  const w = maxX - minX + 1;
-  const h = maxY - minY + 1;
-
-  const pixelSize = Math.max(2, Math.floor(28 / Math.max(w, h)));
-
-  const set = new Set(offsets.map(([dx, dy]) => `${dx},${dy}`));
+function renderBrushPreview(size: number): React.ReactNode {
+  const offsets = generateSquareBrush(size);
+  const r = Math.floor(size / 2);
+  const pixelSize = Math.max(2, Math.floor(28 / Math.max(size, 1)));
 
   const pixels: React.ReactNode[] = [];
-  for (let dy = minY; dy <= maxY; dy++) {
-    for (let dx = minX; dx <= maxX; dx++) {
-      if (set.has(`${dx},${dy}`)) {
-        pixels.push(
-          <div
-            key={`${dx},${dy}`}
-            style={{
-              position: "absolute",
-              left: (dx - minX) * pixelSize,
-              top: (dy - minY) * pixelSize,
-              width: pixelSize,
-              height: pixelSize,
-              background: "#e0e0ff",
-              borderRadius: 1,
-            }}
-          />
-        );
-      }
-    }
+  for (const [dx, dy] of offsets) {
+    pixels.push(
+      <div
+        key={`${dx},${dy}`}
+        style={{
+          position: "absolute",
+          left: (dx + r) * pixelSize,
+          top: (dy + r) * pixelSize,
+          width: pixelSize,
+          height: pixelSize,
+          background: "#e0e0ff",
+          borderRadius: 1,
+        }}
+      />
+    );
   }
 
   return (
     <div
       style={{
         position: "relative",
-        width: w * pixelSize,
-        height: h * pixelSize,
+        width: size * pixelSize,
+        height: size * pixelSize,
       }}
     >
       {pixels}
@@ -59,17 +48,21 @@ function renderBrushPreview(offsets: [number, number][]): React.ReactNode {
 }
 
 export function BrushPalette({
-  brushes,
-  selectedBrush,
+  brushSize,
   brushMode,
   disabled,
-  onSelectBrush,
+  onIncrease,
+  onDecrease,
   onToggleMode,
 }: BrushPaletteProps) {
   const isActivate = brushMode === "activate";
+  const pixelCount = brushSize * brushSize;
+  const canIncrease = brushSize < MAX_BRUSH_SIZE;
+  const canDecrease = brushSize > MIN_BRUSH_SIZE;
 
   return (
     <div
+      data-testid="brush-palette"
       style={{
         position: "absolute",
         right: 8,
@@ -77,6 +70,7 @@ export function BrushPalette({
         transform: "translateY(-50%)",
         display: "flex",
         flexDirection: "column",
+        alignItems: "center",
         gap: 4,
         background: "#0d0d14cc",
         border: "1px solid #2a2a3e",
@@ -87,31 +81,88 @@ export function BrushPalette({
         zIndex: 10,
       }}
     >
-      {brushes.map((brush) => (
-        <button
-          key={brush.id}
-          onClick={() => onSelectBrush(brush.id)}
-          title={brush.name}
-          style={{
-            width: 36,
-            height: 36,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "#1a1a2e",
-            border:
-              selectedBrush === brush.id
-                ? "2px solid #4cc9f0"
-                : "1px solid #2a2a3e",
-            borderRadius: 6,
-            cursor: "pointer",
-            padding: 0,
-          }}
-        >
-          {renderBrushPreview(brush.offsets)}
-        </button>
-      ))}
+      {/* Increase size */}
+      <button
+        onClick={onIncrease}
+        disabled={!canIncrease}
+        title="Aumentar tamaño"
+        aria-label="Aumentar pincel"
+        style={{
+          width: 36,
+          height: 24,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#1a1a2e",
+          border: "1px solid #2a2a3e",
+          borderRadius: 6,
+          cursor: canIncrease ? "pointer" : "default",
+          color: canIncrease ? "#e0e0ff" : "#444",
+          fontSize: 16,
+          fontWeight: 700,
+          padding: 0,
+        }}
+      >
+        +
+      </button>
 
+      {/* Brush preview */}
+      <div
+        title={`Pincel ${brushSize}×${brushSize} (${pixelCount} px)`}
+        style={{
+          width: 36,
+          height: 36,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#1a1a2e",
+          border: "2px solid #4cc9f0",
+          borderRadius: 6,
+        }}
+      >
+        {renderBrushPreview(brushSize)}
+      </div>
+
+      {/* Size label */}
+      <span
+        data-testid="brush-size-label"
+        style={{
+          fontSize: 10,
+          color: "#8888aa",
+          textAlign: "center",
+          lineHeight: 1,
+          userSelect: "none",
+        }}
+      >
+        {brushSize}×{brushSize}
+      </span>
+
+      {/* Decrease size */}
+      <button
+        onClick={onDecrease}
+        disabled={!canDecrease}
+        title="Reducir tamaño"
+        aria-label="Reducir pincel"
+        style={{
+          width: 36,
+          height: 24,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#1a1a2e",
+          border: "1px solid #2a2a3e",
+          borderRadius: 6,
+          cursor: canDecrease ? "pointer" : "default",
+          color: canDecrease ? "#e0e0ff" : "#444",
+          fontSize: 16,
+          fontWeight: 700,
+          padding: 0,
+        }}
+      >
+        −
+      </button>
+
+      {/* ON / OFF toggle */}
       <button
         onClick={onToggleMode}
         title={isActivate ? "Activar (ON)" : "Desactivar (OFF)"}

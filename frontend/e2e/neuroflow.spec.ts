@@ -45,12 +45,10 @@ test("2. Iniciar Kohonen Lab", async ({ page }) => {
   // Canvas is visible
   await expect(page.locator("canvas")).toBeVisible();
 
-  // Brush palette: 5 brush buttons + ON toggle
-  await expect(page.getByRole("button", { name: "Punto" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "3×3" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "5×5" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Cruz" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Diamante" })).toBeVisible();
+  // Brush palette: size controls + ON toggle
+  await expect(page.getByRole("button", { name: "Aumentar pincel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reducir pincel" })).toBeVisible();
+  await expect(page.getByTestId("brush-size-label")).toHaveText("1×1");
   await expect(page.getByRole("button", { name: "ON", exact: true })).toBeVisible();
 
   // Controls are enabled
@@ -84,37 +82,39 @@ test("3. Iniciar Kohonen", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Paleta de pinceles — selección de pincel
+// 4. Paleta de pinceles — cambiar tamaño de pincel
 // ---------------------------------------------------------------------------
-test("4. Paleta de pinceles — selección de pincel", async ({ page }) => {
+test("4. Paleta de pinceles — cambiar tamaño de pincel", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  // 5 brush buttons visible
-  const punto = page.getByRole("button", { name: "Punto" });
-  const tres = page.getByRole("button", { name: "3×3" });
-  const cinco = page.getByRole("button", { name: "5×5" });
-  const cruz = page.getByRole("button", { name: "Cruz" });
-  const diamante = page.getByRole("button", { name: "Diamante" });
+  const sizeLabel = page.getByTestId("brush-size-label");
+  const increaseBtn = page.getByRole("button", { name: "Aumentar pincel" });
+  const decreaseBtn = page.getByRole("button", { name: "Reducir pincel" });
 
-  await expect(punto).toBeVisible();
-  await expect(tres).toBeVisible();
-  await expect(cinco).toBeVisible();
-  await expect(cruz).toBeVisible();
-  await expect(diamante).toBeVisible();
+  // Default brush size is 1×1
+  await expect(sizeLabel).toHaveText("1×1");
 
-  // Punto selected by default (cyan border)
-  await expect(punto).toHaveCSS("border", "2px solid rgb(76, 201, 240)");
+  // Decrease should be disabled at minimum
+  await expect(decreaseBtn).toBeDisabled();
 
-  // Click 3×3 → selected
-  await tres.click();
-  await expect(tres).toHaveCSS("border", "2px solid rgb(76, 201, 240)");
-  // Punto deselected
-  await expect(punto).not.toHaveCSS("border", "2px solid rgb(76, 201, 240)");
+  // Increase → 3×3
+  await increaseBtn.click();
+  await expect(sizeLabel).toHaveText("3×3");
 
-  // Click 5×5 → selected
-  await cinco.click();
-  await expect(cinco).toHaveCSS("border", "2px solid rgb(76, 201, 240)");
-  await expect(tres).not.toHaveCSS("border", "2px solid rgb(76, 201, 240)");
+  // Increase again → 5×5
+  await increaseBtn.click();
+  await expect(sizeLabel).toHaveText("5×5");
+
+  // Decrease → back to 3×3
+  await decreaseBtn.click();
+  await expect(sizeLabel).toHaveText("3×3");
+
+  // Decrease → back to 1×1
+  await decreaseBtn.click();
+  await expect(sizeLabel).toHaveText("1×1");
+
+  // At minimum again, decrease disabled
+  await expect(decreaseBtn).toBeDisabled();
 });
 
 // ---------------------------------------------------------------------------
@@ -155,8 +155,9 @@ test("6. Paint con pincel — verificar vía WebSocket", async ({ page }) => {
     page.getByRole("button", { name: "OFF", exact: true })
   ).toBeVisible();
 
-  // Select 5×5 brush (large)
-  await page.getByRole("button", { name: "5×5" }).click();
+  // Increase brush to 5×5 (click + twice: 1→3→5)
+  await page.getByRole("button", { name: "Aumentar pincel" }).click();
+  await page.getByRole("button", { name: "Aumentar pincel" }).click();
 
   // Click center of canvas
   await clickCanvasCenter(page);
@@ -263,11 +264,7 @@ test("9. Reset vuelve al inicio", async ({ page }) => {
 test("10. Inspeccionar desactiva la paleta", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  // The brush palette container — the absolutely-positioned div that wraps all brush buttons
-  // It's the innermost div that directly contains the Punto button and the ON/OFF toggle
-  const palette = page
-    .getByRole("button", { name: "Punto" })
-    .locator("..");
+  const palette = page.getByTestId("brush-palette");
 
   // Palette is enabled (opacity 1)
   await expect(palette).toHaveCSS("opacity", "1");

@@ -49,7 +49,5 @@ export async function clickCanvasCenter(page: Page): Promise<void> {
 
 /** Get the brush palette container element. */
 export function getBrushPalette(page: Page) {
-  return page.locator("canvas").locator("..").locator("div").filter({
-    has: page.getByRole("button", { name: "Punto" }),
-  });
+  return page.getByTestId("brush-palette");
 }

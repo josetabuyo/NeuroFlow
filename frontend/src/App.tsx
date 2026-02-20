@@ -6,7 +6,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Controls } from "./components/Controls";
 import { BrushPalette } from "./components/BrushPalette";
 import { useExperiment } from "./hooks/useExperiment";
-import { BRUSHES } from "./brushes";
+import { generateSquareBrush } from "./brushes";
 import type { ExperimentInfo, ExperimentConfig } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -66,7 +66,7 @@ function App() {
     inspectMode,
     connectionMap,
     inspectedCell,
-    selectedBrush,
+    brushSize,
     brushMode,
     start,
     reconnect,
@@ -77,7 +77,8 @@ function App() {
     reset,
     inspect,
     toggleInspectMode,
-    setSelectedBrush,
+    increaseBrushSize,
+    decreaseBrushSize,
     toggleBrushMode,
   } = useExperiment();
 
@@ -119,10 +120,9 @@ function App() {
   const applyBrush = useCallback(
     (x: number, y: number) => {
       if (inspectMode) return;
-      const brush = BRUSHES.find((b) => b.id === selectedBrush);
-      if (!brush) return;
+      const offsets = generateSquareBrush(brushSize);
       const value = brushMode === "activate" ? 1.0 : 0.0;
-      const cells = brush.offsets
+      const cells = offsets
         .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
         .filter(
           (c) =>
@@ -130,7 +130,7 @@ function App() {
         );
       paint(cells, value);
     },
-    [inspectMode, selectedBrush, brushMode, config, paint]
+    [inspectMode, brushSize, brushMode, config, paint]
   );
 
   const handleCellClick = useCallback(
@@ -238,11 +238,11 @@ function App() {
                 onCellDrag={handleCellDrag}
               />
               <BrushPalette
-                brushes={BRUSHES}
-                selectedBrush={selectedBrush}
+                brushSize={brushSize}
                 brushMode={brushMode}
                 disabled={inspectMode}
-                onSelectBrush={setSelectedBrush}
+                onIncrease={increaseBrushSize}
+                onDecrease={decreaseBrushSize}
                 onToggleMode={toggleBrushMode}
               />
               {isInitializing && (

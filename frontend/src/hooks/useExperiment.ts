@@ -8,6 +8,7 @@ import type {
   PerfMetrics,
   ServerMessage,
 } from "../types";
+import { nextBrushSize, prevBrushSize } from "../brushes";
 
 function getWsUrl(): string {
   if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
@@ -25,7 +26,7 @@ interface UseExperimentReturn {
   inspectMode: boolean;
   connectionMap: (number | null)[][] | null;
   inspectedCell: { x: number; y: number } | null;
-  selectedBrush: string;
+  brushSize: number;
   brushMode: "activate" | "deactivate";
   start: (experiment: string, config: ExperimentConfig) => void;
   reconnect: (config: ExperimentConfig) => void;
@@ -37,7 +38,8 @@ interface UseExperimentReturn {
   reset: () => void;
   inspect: (x: number, y: number) => void;
   toggleInspectMode: () => void;
-  setSelectedBrush: (id: string) => void;
+  increaseBrushSize: () => void;
+  decreaseBrushSize: () => void;
   toggleBrushMode: () => void;
 }
 
@@ -51,7 +53,7 @@ export function useExperiment(): UseExperimentReturn {
   const [inspectedCell, setInspectedCell] = useState<{ x: number; y: number } | null>(null);
   const [perf, setPerf] = useState<PerfMetrics | null>(null);
   const [activeExperiment, setActiveExperiment] = useState<string | null>(null);
-  const [selectedBrush, setSelectedBrush] = useState("1x1");
+  const [brushSize, setBrushSize] = useState(1);
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -171,6 +173,14 @@ export function useExperiment(): UseExperimentReturn {
     [send]
   );
 
+  const increaseBrushSize = useCallback(() => {
+    setBrushSize((s) => nextBrushSize(s));
+  }, []);
+
+  const decreaseBrushSize = useCallback(() => {
+    setBrushSize((s) => prevBrushSize(s));
+  }, []);
+
   const toggleBrushMode = useCallback(() => {
     setBrushMode((prev) => (prev === "activate" ? "deactivate" : "activate"));
   }, []);
@@ -195,7 +205,7 @@ export function useExperiment(): UseExperimentReturn {
     inspectMode,
     connectionMap,
     inspectedCell,
-    selectedBrush,
+    brushSize,
     brushMode,
     start,
     reconnect,
@@ -207,7 +217,8 @@ export function useExperiment(): UseExperimentReturn {
     reset,
     inspect,
     toggleInspectMode,
-    setSelectedBrush,
+    increaseBrushSize,
+    decreaseBrushSize,
     toggleBrushMode,
   };
 }
