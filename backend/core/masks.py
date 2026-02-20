@@ -10,6 +10,7 @@ Positive dx = right, positive dy = down.
 from __future__ import annotations
 
 import math
+import random as _random_mod
 from typing import Any
 
 
@@ -77,6 +78,16 @@ def _sparse_ring(r_inner: int, r_outer: int, step: int = 2) -> list[tuple[int, i
         if r_inner <= max(abs(dx), abs(dy)) <= r_outer
         and (dx + dy) % step == 0
     ]
+
+
+def _random_sparse(
+    offsets: list[tuple[int, int]],
+    density: float,
+    seed: int = 0,
+) -> list[tuple[int, int]]:
+    """Randomly subsample offsets keeping ~density fraction (deterministic via seed)."""
+    rng = _random_mod.Random(seed)
+    return [o for o in offsets if rng.random() < density]
 
 
 def _make_inhibitory(
@@ -220,6 +231,81 @@ MASK_DEAMON_3_EN_50: MaskDef = [
     *_make_inhibitory(_ring(5, 15), -1.0, 8),
 ]
 
+MASK_DEAMON_1_EN_50: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_sparse_ring(5, 35, step=2), -1.0, 8),
+]
+
+MASK_DEAMON_1_5_EN_50: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_ring(7, 17), -1.0, 8),
+]
+
+MASK_DEAMON_1_5_EN_50_G6: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_ring(10, 20), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G12_I11: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_ring(16, 26), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G12_I5: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_ring(16, 20), -1.0, 8),
+]
+
+MASK_DEAMON_E1_G12_I1: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(1)},
+    *_make_inhibitory(_ring(14, 14), -1.0, 8),
+]
+
+MASK_DEAMON_E2_G12_I1: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(2)},
+    *_make_inhibitory(_ring(15, 15), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G12_I1: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_ring(16, 16), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G12_I3: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_ring(16, 18), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G12_I3_DE3_DI3: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _random_sparse(_moore(3), 1 / 3, seed=42)},
+    *_make_inhibitory(_random_sparse(_ring(16, 18), 1 / 3, seed=43), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G12_I3_DE1_DI3: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_random_sparse(_ring(16, 18), 1 / 3, seed=43), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G12_I3_DE3_DI1: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _random_sparse(_moore(3), 1 / 3, seed=42)},
+    *_make_inhibitory(_ring(16, 18), -1.0, 8),
+]
+
+MASK_DEAMON_E2_G3_I3_DE1_5_DI1_5: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _random_sparse(_moore(2), 2 / 3, seed=44)},
+    *_make_inhibitory(_random_sparse(_ring(6, 8), 2 / 3, seed=45), -1.0, 8),
+]
+
+MASK_DEAMON_E2_G3_I3_DE1_DI1_5: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(2)},
+    *_make_inhibitory(_random_sparse(_ring(6, 8), 2 / 3, seed=45), -1.0, 8),
+]
+
+MASK_DEAMON_E2_G3_I3_DE1_DI1: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(2)},
+    *_make_inhibitory(_ring(6, 8), -1.0, 8),
+]
+
 MASK_BIG_CENTER_SOFT_WIDE_INH: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
     {"peso_dendrita": 0.7, "offsets": _ring(2, 2)},
@@ -344,6 +430,156 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "dendrites_inh": 8,
         "random_weights": True,
         "mask": MASK_DEAMON_3_EN_50,
+    },
+    "deamon_1_en_50": {
+        "id": "deamon_1_en_50",
+        "name": "Deamon 1 en 50",
+        "description": "Moore r=3 (48 vecinos), gap r=4, corona sparse r=5-35 (inhibición masiva, ~1 deamon en 50x50).",
+        "center": "Moore r=3 (48 vecinos)",
+        "corona": "r=5-35 sparse step=2, gap r=4 silencio",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_1_EN_50,
+    },
+    "deamon_1_5_en_50": {
+        "id": "deamon_1_5_en_50",
+        "name": "Deamon 1,5 en 50 (E3 G3 I11)",
+        "description": "Moore r=3 (48 vecinos), gap x3 r=4-6, corona r=7-17. ~1,5 deamons en 50x50.",
+        "center": "Moore r=3 (48 vecinos)",
+        "corona": "r=7-17, gap r=4-6 silencio (x3)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_1_5_EN_50,
+    },
+    "deamon_1_5_en_50_g6": {
+        "id": "deamon_1_5_en_50_g6",
+        "name": "Deamon 1,5 en 50 (E3 G6 I11)",
+        "description": "Moore r=3 (48 vecinos), gap x6 r=4-9, corona r=10-20. ~1,5 deamons en 50x50.",
+        "center": "Moore r=3 (48 vecinos)",
+        "corona": "r=10-20, gap r=4-9 silencio (x6)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_1_5_EN_50_G6,
+    },
+    "deamon_e3_g12_i11": {
+        "id": "deamon_e3_g12_i11",
+        "name": "Deamon (E3 G12 I11)",
+        "description": "Moore r=3 (48 vecinos), gap x12 r=4-15, corona r=16-26.",
+        "center": "Moore r=3 (48 vecinos)",
+        "corona": "r=16-26, gap r=4-15 silencio (x12)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G12_I11,
+    },
+    "deamon_e3_g12_i5": {
+        "id": "deamon_e3_g12_i5",
+        "name": "Deamon (E3 G12 I5)",
+        "description": "Moore r=3 (48 vecinos), gap x12 r=4-15, corona r=16-20 (mitad de I11).",
+        "center": "Moore r=3 (48 vecinos)",
+        "corona": "r=16-20, gap r=4-15 silencio (x12)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G12_I5,
+    },
+    "deamon_e1_g12_i1": {
+        "id": "deamon_e1_g12_i1",
+        "name": "Deamon (E1 G12 I1)",
+        "description": "Moore r=1 (8 vecinos), gap x12 r=2-13, corona r=14 (1 anillo).",
+        "center": "Moore r=1 (8 vecinos)",
+        "corona": "r=14, gap r=2-13 silencio (x12)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E1_G12_I1,
+    },
+    "deamon_e2_g12_i1": {
+        "id": "deamon_e2_g12_i1",
+        "name": "Deamon (E2 G12 I1)",
+        "description": "Moore r=2 (24 vecinos), gap x12 r=3-14, corona r=15 (1 anillo).",
+        "center": "Moore r=2 (24 vecinos)",
+        "corona": "r=15, gap r=3-14 silencio (x12)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E2_G12_I1,
+    },
+    "deamon_e3_g12_i1": {
+        "id": "deamon_e3_g12_i1",
+        "name": "Deamon (E3 G12 I1)",
+        "description": "Moore r=3 (48 vecinos), gap x12 r=4-15, corona r=16 (1 anillo).",
+        "center": "Moore r=3 (48 vecinos)",
+        "corona": "r=16, gap r=4-15 silencio (x12)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G12_I1,
+    },
+    "deamon_e3_g12_i3": {
+        "id": "deamon_e3_g12_i3",
+        "name": "Deamon (E3 G12 I3)",
+        "description": "Moore r=3 (48 vecinos), gap x12 r=4-15, corona r=16-18 (3 anillos).",
+        "center": "Moore r=3 (48 vecinos)",
+        "corona": "r=16-18, gap r=4-15 silencio (x12)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G12_I3,
+    },
+    "deamon_e3_g12_i3_de3_di3": {
+        "id": "deamon_e3_g12_i3_de3_di3",
+        "name": "Deamon (E3 G12 I3 DE3 DI3)",
+        "description": "E3 G12 I3 con densidad 1/3 en exc. e inh.: ~33% de sinapsis al azar en ambas zonas.",
+        "center": "Moore r=3 sparse ~33% (~16 vecinos)",
+        "corona": "r=16-18 sparse ~33%, gap r=4-15 silencio (x12)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G12_I3_DE3_DI3,
+    },
+    "deamon_e3_g12_i3_de1_di3": {
+        "id": "deamon_e3_g12_i3_de1_di3",
+        "name": "Deamon (E3 G12 I3 DE1 DI3)",
+        "description": "E3 G12 I3 con exc. completa (48 vecinos) e inh. sparse ~33%.",
+        "center": "Moore r=3 (48 vecinos, densidad completa)",
+        "corona": "r=16-18 sparse ~33%, gap r=4-15 silencio (x12)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G12_I3_DE1_DI3,
+    },
+    "deamon_e3_g12_i3_de3_di1": {
+        "id": "deamon_e3_g12_i3_de3_di1",
+        "name": "Deamon (E3 G12 I3 DE3 DI1)",
+        "description": "E3 G12 I3 con exc. sparse ~33% e inh. completa (3 anillos).",
+        "center": "Moore r=3 sparse ~33% (~16 vecinos)",
+        "corona": "r=16-18 completa, gap r=4-15 silencio (x12)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G12_I3_DE3_DI1,
+    },
+    "deamon_e2_g3_i3_de1_5_di1_5": {
+        "id": "deamon_e2_g3_i3_de1_5_di1_5",
+        "name": "Deamon (E2 G3 I3 DE1.5 DI1.5)",
+        "description": "Moore r=2 sparse ~67%, gap r=3-5, corona r=6-8 sparse ~67%.",
+        "center": "Moore r=2 sparse ~67% (~16 vecinos)",
+        "corona": "r=6-8 sparse ~67%, gap r=3-5 silencio (x3)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E2_G3_I3_DE1_5_DI1_5,
+    },
+    "deamon_e2_g3_i3_de1_di1_5": {
+        "id": "deamon_e2_g3_i3_de1_di1_5",
+        "name": "Deamon (E2 G3 I3 DE1 DI1.5)",
+        "description": "Moore r=2 completa (24 vecinos), gap r=3-5, corona r=6-8 sparse ~67%.",
+        "center": "Moore r=2 (24 vecinos, densidad completa)",
+        "corona": "r=6-8 sparse ~67%, gap r=3-5 silencio (x3)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E2_G3_I3_DE1_DI1_5,
+    },
+    "deamon_e2_g3_i3_de1_di1": {
+        "id": "deamon_e2_g3_i3_de1_di1",
+        "name": "Deamon (E2 G3 I3 DE1 DI1)",
+        "description": "Moore r=2 completa (24 vecinos), gap r=3-5, corona r=6-8 completa.",
+        "center": "Moore r=2 (24 vecinos, densidad completa)",
+        "corona": "r=6-8 completa, gap r=3-5 silencio (x3)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E2_G3_I3_DE1_DI1,
     },
     "all_exc": {
         "id": "all_exc",

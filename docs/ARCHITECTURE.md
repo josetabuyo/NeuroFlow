@@ -382,6 +382,53 @@ Training loop                →   Experimento
   Orquesta todo                    Orquesta todo
 ```
 
+### 3.6 Máscaras de Conexionado (masks.py)
+
+Las máscaras definen la topología de conexión de cada neurona: qué vecinos son
+excitatorios y cuáles inhibitorios. Se configuran como presets en `backend/core/masks.py`
+y se cargan dinámicamente desde la API.
+
+```
+         Excitación (E)          Gap (G)           Inhibición (I)
+        ┌───────────┐      ┌──────────────┐      ┌───────────────┐
+        │  Moore r=n │      │  sin conexión │      │  anillo/corona │
+        │  (vecinos  │      │  (silencio)   │      │  8 dendritas   │
+        │  cercanos) │      │              │      │  sectorizada   │
+        └───────────┘      └──────────────┘      └───────────────┘
+```
+
+#### Nomenclatura Deamon
+
+Las máscaras tipo Deamon usan la convención `E G I [DE DI]`:
+
+```
+E<n>   Radio excitatorio: Moore r=n
+G<n>   Gap: n anillos de silencio entre excitación e inhibición
+I<n>   Radio inhibitorio: n anillos de corona
+DE<n>  Densidad excitatoria: fracción 1/n de sinapsis (random, seed fija)
+DI<n>  Densidad inhibitoria: fracción 1/n de sinapsis (random, seed fija)
+```
+
+Ejemplo: `E2 G3 I3 DE1 DI1.5` → Moore r=2 completa, 3 anillos de gap,
+3 anillos inhibitorios con ~67% de densidad.
+
+DE/DI omitidos implican densidad 1 (completa). La densidad usa `_random_sparse()`
+con seed fija para que la máscara sea determinista entre ejecuciones pero con
+distribución espacial aleatoria (a diferencia de `_sparse_ring` que usa patrones
+tipo checkerboard).
+
+#### Helpers de Generación
+
+| Helper | Descripción |
+|--------|-------------|
+| `_moore(r)` | Vecindad Moore: Chebyshev dist ≤ r |
+| `_ring(r_in, r_out)` | Anillo: Chebyshev dist ∈ [r_in, r_out] |
+| `_von_neumann(r)` | Vecindad Von Neumann: Manhattan dist ≤ r |
+| `_sparse_ring(r_in, r_out, step)` | Anillo sparse determinista (checkerboard) |
+| `_random_sparse(offsets, density, seed)` | Submuestreo aleatorio con seed fija |
+| `_make_inhibitory(offsets, peso, n)` | Particiona offsets en n sectores inhibitorios |
+| `_partition(offsets, n)` | Divide offsets en n sectores angulares |
+
 ---
 
 ## 4. Experimento 0: Autómata Elemental (Von Neumann)

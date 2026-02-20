@@ -36,6 +36,27 @@ distribuida) y neurociencias (células de lugar/grilla).
 | 2 | **Aprendizaje** | Entrenamiento Hebbiano + poda sináptica | Planificado |
 | 3 | **Kohonen** | Mapas auto-organizados | Planificado |
 
+## Nomenclatura de Máscaras (Deamon)
+
+Las máscaras tipo Deamon siguen la convención `E G I [DE DI]`:
+
+| Parámetro | Significado | Ejemplo |
+|-----------|-------------|---------|
+| **E***n* | Radio excitatorio (Moore r=*n*) | E3 = Moore r=3 (48 vecinos) |
+| **G***n* | Gap: anillos de silencio entre excitación e inhibición | G12 = 12 anillos sin conexión |
+| **I***n* | Radio inhibitorio (anillos de corona) | I3 = 3 anillos inhibitorios |
+| **DE***n* | Densidad excitatoria: fracción 1/*n* de sinapsis al azar | DE1 = completa, DE3 = ~33% |
+| **DI***n* | Densidad inhibitoria: fracción 1/*n* de sinapsis al azar | DI1 = completa, DI1.5 = ~67% |
+
+**Cálculo de radios:** E*n* cubre r=1..*n*, el gap empieza en r=*n*+1 y cubre G anillos, la inhibición empieza justo después del gap y cubre I anillos.
+
+**Ejemplo:** `E2 G3 I3 DE1 DI1.5`
+- Excitación: Moore r=2 completa (24 vecinos)
+- Gap: r=3-5 (3 anillos de silencio)
+- Inhibición: r=6-8 con densidad 1/1.5 ≈ 67%
+
+Cuando DE y DI se omiten, la densidad es 1 (completa) por defecto.
+
 ## Arquitectura
 
 Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para diagramas y diseño completo.
