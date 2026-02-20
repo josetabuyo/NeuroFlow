@@ -240,10 +240,16 @@ function App() {
               <BrushPalette
                 brushSize={brushSize}
                 brushMode={brushMode}
-                disabled={inspectMode}
+                inspectMode={inspectMode}
+                canInspect={
+                  state === "ready" ||
+                  state === "paused" ||
+                  state === "running"
+                }
                 onIncrease={increaseBrushSize}
                 onDecrease={decreaseBrushSize}
                 onToggleMode={toggleBrushMode}
+                onToggleInspect={toggleInspectMode}
               />
               {isInitializing && (
                 <div
@@ -301,13 +307,11 @@ function App() {
           stats={stats}
           perf={perf}
           generation={generation}
-          inspectMode={inspectMode}
           stepsPerTick={stepsPerTick}
           onPlay={handlePlay}
           onPause={pause}
           onStep={handleStep}
           onReset={reset}
-          onToggleInspect={toggleInspectMode}
           onStepsPerTickChange={setStepsPerTick}
         />
 

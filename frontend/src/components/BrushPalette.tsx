@@ -1,14 +1,16 @@
-/** Brush palette — floating vertical toolbar with brush size controls. */
+/** Toolbar — floating vertical toolbar with tool selection + brush controls. */
 
 import { generateSquareBrush, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE } from "../brushes";
 
 interface BrushPaletteProps {
   brushSize: number;
   brushMode: "activate" | "deactivate";
-  disabled: boolean;
+  inspectMode: boolean;
+  canInspect: boolean;
   onIncrease: () => void;
   onDecrease: () => void;
   onToggleMode: () => void;
+  onToggleInspect: () => void;
 }
 
 function renderBrushPreview(size: number): React.ReactNode {
@@ -47,18 +49,41 @@ function renderBrushPreview(size: number): React.ReactNode {
   );
 }
 
+const toolBtnStyle = (
+  active: boolean,
+  color: string,
+): React.CSSProperties => ({
+  width: 36,
+  height: 30,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: active ? color : "#1a1a2e",
+  color: active ? "#0a0a0f" : "#666",
+  border: active ? `2px solid ${color}` : "1px solid #2a2a3e",
+  borderRadius: 6,
+  cursor: "pointer",
+  fontSize: 15,
+  fontWeight: 700,
+  padding: 0,
+  transition: "all 0.15s",
+});
+
 export function BrushPalette({
   brushSize,
   brushMode,
-  disabled,
+  inspectMode,
+  canInspect,
   onIncrease,
   onDecrease,
   onToggleMode,
+  onToggleInspect,
 }: BrushPaletteProps) {
   const isActivate = brushMode === "activate";
   const pixelCount = brushSize * brushSize;
-  const canIncrease = brushSize < MAX_BRUSH_SIZE;
-  const canDecrease = brushSize > MIN_BRUSH_SIZE;
+  const canIncrease = !inspectMode && brushSize < MAX_BRUSH_SIZE;
+  const canDecrease = !inspectMode && brushSize > MIN_BRUSH_SIZE;
+  const brushActive = !inspectMode;
 
   return (
     <div
@@ -76,115 +101,145 @@ export function BrushPalette({
         border: "1px solid #2a2a3e",
         borderRadius: 8,
         padding: 6,
-        opacity: disabled ? 0.3 : 1,
-        pointerEvents: disabled ? "none" : "auto",
         zIndex: 10,
       }}
     >
-      {/* Increase size */}
+      {/* ── Inspeccionar ── */}
       <button
-        onClick={onIncrease}
-        disabled={!canIncrease}
-        title="Aumentar tamaño"
-        aria-label="Aumentar pincel"
+        onClick={onToggleInspect}
+        disabled={!canInspect && !inspectMode}
+        title="Inspeccionar conexiones"
+        aria-label="Herramienta inspeccionar"
         style={{
-          width: 36,
-          height: 24,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#1a1a2e",
-          border: "1px solid #2a2a3e",
-          borderRadius: 6,
-          cursor: canIncrease ? "pointer" : "default",
-          color: canIncrease ? "#e0e0ff" : "#444",
-          fontSize: 16,
-          fontWeight: 700,
-          padding: 0,
+          ...toolBtnStyle(inspectMode, "#ffff00"),
+          width: "100%",
+          cursor: canInspect || inspectMode ? "pointer" : "not-allowed",
         }}
       >
-        +
+        ⊙
       </button>
 
-      {/* Brush preview */}
       <div
-        title={`Pincel ${brushSize}×${brushSize} (${pixelCount} px)`}
         style={{
-          width: 36,
-          height: 36,
+          width: "100%",
+          height: 1,
+          background: "#2a2a3e",
+        }}
+      />
+
+      {/* ── Brush controls ── */}
+      <div
+        data-testid="brush-controls"
+        style={{
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          background: "#1a1a2e",
-          border: "2px solid #4cc9f0",
-          borderRadius: 6,
+          gap: 4,
+          opacity: inspectMode ? 0.3 : 1,
+          pointerEvents: inspectMode ? "none" : "auto",
+          transition: "opacity 0.15s",
         }}
       >
-        {renderBrushPreview(brushSize)}
+        <button
+          onClick={onIncrease}
+          disabled={!canIncrease}
+          title="Aumentar tamaño"
+          aria-label="Aumentar pincel"
+          style={{
+            width: 36,
+            height: 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#1a1a2e",
+            border: "1px solid #2a2a3e",
+            borderRadius: 6,
+            cursor: canIncrease ? "pointer" : "default",
+            color: canIncrease ? "#e0e0ff" : "#444",
+            fontSize: 16,
+            fontWeight: 700,
+            padding: 0,
+          }}
+        >
+          +
+        </button>
+
+        <div
+          title={`Pincel ${brushSize}×${brushSize} (${pixelCount} px)`}
+          style={{
+            width: 36,
+            height: 36,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#1a1a2e",
+            border: "2px solid #4cc9f0",
+            borderRadius: 6,
+          }}
+        >
+          {renderBrushPreview(brushSize)}
+        </div>
+
+        <span
+          data-testid="brush-size-label"
+          style={{
+            fontSize: 10,
+            color: "#8888aa",
+            textAlign: "center",
+            lineHeight: 1,
+            userSelect: "none",
+          }}
+        >
+          {brushSize}×{brushSize}
+        </span>
+
+        <button
+          onClick={onDecrease}
+          disabled={!canDecrease}
+          title="Reducir tamaño"
+          aria-label="Reducir pincel"
+          style={{
+            width: 36,
+            height: 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#1a1a2e",
+            border: "1px solid #2a2a3e",
+            borderRadius: 6,
+            cursor: canDecrease ? "pointer" : "default",
+            color: canDecrease ? "#e0e0ff" : "#444",
+            fontSize: 16,
+            fontWeight: 700,
+            padding: 0,
+          }}
+        >
+          −
+        </button>
+
+        <button
+          onClick={onToggleMode}
+          title={isActivate ? "Activar (ON)" : "Desactivar (OFF)"}
+          style={{
+            width: 36,
+            height: 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: isActivate ? "#4cc9f0" : "#f72585",
+            color: isActivate ? "#000" : "#fff",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
+            fontSize: 11,
+            fontWeight: 700,
+            padding: 0,
+            marginTop: 2,
+          }}
+        >
+          {isActivate ? "ON" : "OFF"}
+        </button>
       </div>
-
-      {/* Size label */}
-      <span
-        data-testid="brush-size-label"
-        style={{
-          fontSize: 10,
-          color: "#8888aa",
-          textAlign: "center",
-          lineHeight: 1,
-          userSelect: "none",
-        }}
-      >
-        {brushSize}×{brushSize}
-      </span>
-
-      {/* Decrease size */}
-      <button
-        onClick={onDecrease}
-        disabled={!canDecrease}
-        title="Reducir tamaño"
-        aria-label="Reducir pincel"
-        style={{
-          width: 36,
-          height: 24,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#1a1a2e",
-          border: "1px solid #2a2a3e",
-          borderRadius: 6,
-          cursor: canDecrease ? "pointer" : "default",
-          color: canDecrease ? "#e0e0ff" : "#444",
-          fontSize: 16,
-          fontWeight: 700,
-          padding: 0,
-        }}
-      >
-        −
-      </button>
-
-      {/* ON / OFF toggle */}
-      <button
-        onClick={onToggleMode}
-        title={isActivate ? "Activar (ON)" : "Desactivar (OFF)"}
-        style={{
-          width: 36,
-          height: 24,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: isActivate ? "#4cc9f0" : "#f72585",
-          color: isActivate ? "#000" : "#fff",
-          border: "none",
-          borderRadius: 6,
-          cursor: "pointer",
-          fontSize: 11,
-          fontWeight: 700,
-          padding: 0,
-          marginTop: 2,
-        }}
-      >
-        {isActivate ? "ON" : "OFF"}
-      </button>
     </div>
   );
 }

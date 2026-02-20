@@ -215,23 +215,23 @@ test("9. Reset vuelve al inicio", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 10. Inspeccionar desactiva la paleta
+// 10. Inspeccionar desactiva los controles de pincel
 // ---------------------------------------------------------------------------
-test("10. Inspeccionar desactiva la paleta", async ({ page }) => {
+test("10. Inspeccionar desactiva los controles de pincel", async ({ page }) => {
   await startExperiment(page, "kohonen");
 
-  const palette = getBrushPalette(page);
-  await expect(palette).toHaveCSS("opacity", "1");
+  const brushControls = page.getByTestId("brush-controls");
+  await expect(brushControls).toHaveCSS("opacity", "1");
 
-  await page.getByRole("button", { name: "Inspeccionar" }).click();
+  await page.getByRole("button", { name: "Herramienta inspeccionar" }).click();
 
-  await expect(palette).toHaveCSS("opacity", "0.3");
-  await expect(palette).toHaveCSS("pointer-events", "none");
+  await expect(brushControls).toHaveCSS("opacity", "0.3");
+  await expect(brushControls).toHaveCSS("pointer-events", "none");
 
-  await page.getByRole("button", { name: /Inspeccionar/ }).click();
+  await page.getByRole("button", { name: "Herramienta pincel" }).click();
 
-  await expect(palette).toHaveCSS("opacity", "1");
-  await expect(palette).toHaveCSS("pointer-events", "auto");
+  await expect(brushControls).toHaveCSS("opacity", "1");
+  await expect(brushControls).toHaveCSS("pointer-events", "auto");
 });
 
 // ---------------------------------------------------------------------------
@@ -347,7 +347,7 @@ test("15. Re-iniciar experimento durante Play detiene la red", async ({ page }) 
 test("16. Inspeccionar muestra mapa de conexiones", async ({ page }) => {
   await startExperiment(page, "kohonen_lab");
 
-  await page.getByRole("button", { name: "Inspeccionar" }).click();
+  await page.getByRole("button", { name: "Herramienta inspeccionar" }).click();
 
   await clickCanvasCenter(page);
 

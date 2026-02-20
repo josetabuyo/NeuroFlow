@@ -1,4 +1,4 @@
-/** Controls — Play/Pause/Step/Reset/Inspect + stats display + steps per tick. */
+/** Controls — Play/Pause/Step/Reset + stats display + steps per tick. */
 
 import type { ExperimentState, ExperimentStats, PerfMetrics } from "../types";
 
@@ -7,13 +7,11 @@ interface ControlsProps {
   stats: ExperimentStats | null;
   perf: PerfMetrics | null;
   generation: number;
-  inspectMode: boolean;
   stepsPerTick: number;
   onPlay: () => void;
   onPause: () => void;
   onStep: () => void;
   onReset: () => void;
-  onToggleInspect: () => void;
   onStepsPerTickChange: (value: number) => void;
 }
 
@@ -43,13 +41,11 @@ export function Controls({
   stats,
   perf,
   generation,
-  inspectMode,
   stepsPerTick,
   onPlay,
   onPause,
   onStep,
   onReset,
-  onToggleInspect,
   onStepsPerTickChange,
 }: ControlsProps) {
   const hasExperiment = state !== "disconnected";
@@ -58,7 +54,6 @@ export function Controls({
   const isRunning = state === "running";
   const canStep = canInteract || isRunning;
   const canReset = hasExperiment && !isInitializing;
-  const canInspect = canInteract || isRunning;
 
   return (
     <div
@@ -98,13 +93,6 @@ export function Controls({
           disabled={!canReset}
         >
           Reset
-        </button>
-        <button
-          style={btnStyle(canInspect || inspectMode, "#ffff00")}
-          onClick={onToggleInspect}
-          disabled={!canInspect}
-        >
-          {inspectMode ? "\u2715 Inspeccionar" : "Inspeccionar"}
         </button>
 
         <div
