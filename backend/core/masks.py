@@ -102,6 +102,11 @@ def _make_inhibitory(
     return [{"peso_dendrita": peso, "offsets": sector} for sector in sectors]
 
 
+def _shift(offsets: list[tuple[int, int]], sdx: int, sdy: int) -> list[tuple[int, int]]:
+    """Translate every offset by (sdx, sdy)."""
+    return [(dx + sdx, dy + sdy) for dx, dy in offsets]
+
+
 # ---------------------------------------------------------------------------
 # Mask presets
 # ---------------------------------------------------------------------------
@@ -229,6 +234,26 @@ MASK_XL_CENTER_GAP_WIDE_INH_X2: MaskDef = [
 MASK_DEAMON_3_EN_50: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
     *_make_inhibitory(_ring(5, 15), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_UP: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _shift(_moore(3), 0, 1)},
+    *_make_inhibitory(_shift(_ring(5, 15), 0, 1), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_DOWN: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _shift(_moore(3), 0, -1)},
+    *_make_inhibitory(_shift(_ring(5, 15), 0, -1), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_LEFT: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _shift(_moore(3), 1, 0)},
+    *_make_inhibitory(_shift(_ring(5, 15), 1, 0), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_RIGHT: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _shift(_moore(3), -1, 0)},
+    *_make_inhibitory(_shift(_ring(5, 15), -1, 0), -1.0, 8),
 ]
 
 MASK_DEAMON_1_EN_50: MaskDef = [
@@ -440,6 +465,46 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "dendrites_inh": 8,
         "random_weights": True,
         "mask": MASK_DEAMON_3_EN_50,
+    },
+    "deamon_e3_g1_i11_de1_di1_move_up": {
+        "id": "deamon_e3_g1_i11_de1_di1_move_up",
+        "name": "Deamon (E3 G1 I11 DE1 DI1) Move Up",
+        "description": "Moore r=3 (48 vecinos) desplazado +1 dy, gap r=4, corona r=5-15 desplazada +1 dy.",
+        "center": "Moore r=3 (48 vecinos, desplazado 1px abajo)",
+        "corona": "r=5-15 desplazada 1px abajo, gap r=4 silencio",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_UP,
+    },
+    "deamon_e3_g1_i11_de1_di1_move_down": {
+        "id": "deamon_e3_g1_i11_de1_di1_move_down",
+        "name": "Deamon (E3 G1 I11 DE1 DI1) Move Down",
+        "description": "Moore r=3 (48 vecinos) desplazado -1 dy, gap r=4, corona r=5-15 desplazada -1 dy.",
+        "center": "Moore r=3 (48 vecinos, desplazado 1px arriba)",
+        "corona": "r=5-15 desplazada 1px arriba, gap r=4 silencio",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_DOWN,
+    },
+    "deamon_e3_g1_i11_de1_di1_move_left": {
+        "id": "deamon_e3_g1_i11_de1_di1_move_left",
+        "name": "Deamon (E3 G1 I11 DE1 DI1) Move Left",
+        "description": "Moore r=3 (48 vecinos) desplazado +1 dx, gap r=4, corona r=5-15 desplazada +1 dx.",
+        "center": "Moore r=3 (48 vecinos, desplazado 1px a la derecha)",
+        "corona": "r=5-15 desplazada 1px a la derecha, gap r=4 silencio",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_LEFT,
+    },
+    "deamon_e3_g1_i11_de1_di1_move_right": {
+        "id": "deamon_e3_g1_i11_de1_di1_move_right",
+        "name": "Deamon (E3 G1 I11 DE1 DI1) Move Right",
+        "description": "Moore r=3 (48 vecinos) desplazado -1 dx, gap r=4, corona r=5-15 desplazada -1 dx.",
+        "center": "Moore r=3 (48 vecinos, desplazado 1px a la izquierda)",
+        "corona": "r=5-15 desplazada 1px a la izquierda, gap r=4 silencio",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_RIGHT,
     },
     "deamon_1_en_50": {
         "id": "deamon_1_en_50",
