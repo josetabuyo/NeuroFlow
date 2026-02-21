@@ -1,10 +1,9 @@
-"""Tests para Kohonen Lab ? laboratorio de conexionados con m?scara configurable.
+"""Tests para Deamons Lab — laboratorio de conexionados con máscara configurable.
 
 Valida:
-- Todos los presets de m?scara se aplican correctamente
-- Equivalencia con KohonenExperiment cuando mask="simple"
-- Reconexi?n preserva valores
-- Funcionalidad est?ndar (step, click, reset, get_frame)
+- Todos los presets de máscara se aplican correctamente
+- Reconexión preserva valores
+- Funcionalidad estándar (step, click, reset, get_frame)
 """
 
 import random
@@ -21,12 +20,11 @@ from core.masks import (
     _ring,
     _partition,
 )
-from experiments.kohonen import KOHONEN_SIMPLE_MASK
-from experiments.kohonen_lab import KohonenLabExperiment
+from experiments.deamons_lab import DeamonsLabExperiment
 
 
 class TestMaskHelpers:
-    """Tests para las funciones helper de generaci?n de offsets."""
+    """Tests para las funciones helper de generación de offsets."""
 
     def test_moore_radius_1_gives_8_neighbors(self) -> None:
         offsets = _moore(1)
@@ -60,7 +58,7 @@ class TestMaskHelpers:
 
 
 class TestMaskPresets:
-    """Tests para cada preset de m?scara."""
+    """Tests para cada preset de máscara."""
 
     def test_all_presets_exist(self) -> None:
         expected = [
@@ -83,15 +81,11 @@ class TestMaskPresets:
 
     def test_get_mask_info_excludes_mask_data(self) -> None:
         info = get_mask_info()
-        assert len(info) == 41
+        assert len(info) == 42
         for entry in info:
             assert "mask" not in entry
             assert "id" in entry
             assert "name" in entry
-
-    def test_simple_mask_matches_kohonen(self) -> None:
-        """MASK_SIMPLE in masks.py is identical to KOHONEN_SIMPLE_MASK."""
-        assert MASK_SIMPLE == KOHONEN_SIMPLE_MASK
 
     @pytest.mark.parametrize("preset_id", list(MASK_PRESETS.keys()))
     def test_preset_has_at_least_one_excitatory(self, preset_id: str) -> None:
@@ -138,27 +132,27 @@ class TestMaskPresets:
         assert len(neurona.dendritas) >= 1
 
 
-class TestKohonenLabSetup:
-    """Setup del experimento Kohonen Lab."""
+class TestDeamonsLabSetup:
+    """Setup del experimento Deamons Lab."""
 
     def test_setup_default_mask(self) -> None:
         """Setup con mask por defecto (simple) crea red correcta."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
         assert len(exp.red.neuronas) == 100
         neurona = exp.red.get_neurona("x5y5")
         assert len(neurona.dendritas) == 9
 
     def test_setup_wide_hat(self) -> None:
-        """Setup con wide_hat produce m?s dendritas inhibitorias."""
-        exp = KohonenLabExperiment()
+        """Setup con wide_hat produce más dendritas inhibitorias."""
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "wide_hat"})
         neurona = exp.red.get_neurona("x7y7")
         assert len(neurona.dendritas) >= 9
 
     def test_setup_cross_center(self) -> None:
         """Setup con cross_center usa Von Neumann + 4 dendritas."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "cross_center"})
         neurona = exp.red.get_neurona("x7y7")
         exc = [d for d in neurona.dendritas if d.peso > 0]
@@ -166,7 +160,7 @@ class TestKohonenLabSetup:
 
     def test_setup_one_dendrite(self) -> None:
         """Setup con one_dendrite: 1 exc + 1 inh."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "one_dendrite"})
         neurona = exp.red.get_neurona("x5y5")
         assert len(neurona.dendritas) == 2
@@ -174,11 +168,11 @@ class TestKohonenLabSetup:
     def test_setup_with_balance_positive(self) -> None:
         """Setup con balance>0 reduce sinapsis inhibitorias."""
         random.seed(42)
-        exp_no = KohonenLabExperiment()
+        exp_no = DeamonsLabExperiment()
         exp_no.setup({"width": 10, "height": 10, "mask": "simple"})
 
         random.seed(42)
-        exp_bal = KohonenLabExperiment()
+        exp_bal = DeamonsLabExperiment()
         exp_bal.setup({"width": 10, "height": 10, "mask": "simple", "balance": 0.5, "balance_mode": "weight"})
 
         n_no = exp_no.red.get_neurona("x5y5")
@@ -192,11 +186,11 @@ class TestKohonenLabSetup:
     def test_setup_with_balance_zero_no_change(self) -> None:
         """Setup con balance=0.0 no modifica pesos (retorno inmediato)."""
         random.seed(42)
-        exp_no = KohonenLabExperiment()
+        exp_no = DeamonsLabExperiment()
         exp_no.setup({"width": 10, "height": 10, "mask": "simple"})
 
         random.seed(42)
-        exp_bal = KohonenLabExperiment()
+        exp_bal = DeamonsLabExperiment()
         exp_bal.setup({"width": 10, "height": 10, "mask": "simple", "balance": 0.0})
 
         n_no = exp_no.red.get_neurona("x5y5")
@@ -208,36 +202,36 @@ class TestKohonenLabSetup:
 
     def test_setup_without_balance_no_balancing(self) -> None:
         """Setup sin balance key no aplica balanceo."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         assert exp.red_tensor is not None
         assert exp._config.get("balance") is None
 
 
-class TestKohonenLabInit:
-    """Tests para la inicializacion aleatoria."""
+class TestDeamonsLabInit:
+    """Tests para la inicialización aleatoria."""
 
     def test_init_random(self) -> None:
         """Setup siempre usa random (valores entre 0 y 1)."""
         random.seed(42)
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         frame = exp.get_frame()
         values = [v for row in frame for v in row]
         assert any(0 < v < 1 for v in values)
 
 
-class TestKohonenLabBalanceMode:
-    """Tests para balance_mode en Kohonen Lab."""
+class TestDeamonsLabBalanceMode:
+    """Tests para balance_mode en Deamons Lab."""
 
     def test_balance_mode_none_no_modifica(self) -> None:
         """balance_mode='none' no modifica pesos ni sinapsis."""
         random.seed(42)
-        exp_ref = KohonenLabExperiment()
+        exp_ref = DeamonsLabExperiment()
         exp_ref.setup({"width": 10, "height": 10, "mask": "simple"})
 
         random.seed(42)
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({
             "width": 10, "height": 10, "mask": "simple",
             "balance": 0.5, "balance_mode": "none",
@@ -254,11 +248,11 @@ class TestKohonenLabBalanceMode:
     def test_balance_mode_weight_scales_weights(self) -> None:
         """balance_mode='weight' escala pesos inhibitorios (comportamiento existente)."""
         random.seed(42)
-        exp_ref = KohonenLabExperiment()
+        exp_ref = DeamonsLabExperiment()
         exp_ref.setup({"width": 10, "height": 10, "mask": "simple"})
 
         random.seed(42)
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({
             "width": 10, "height": 10, "mask": "simple",
             "balance": 0.5, "balance_mode": "weight",
@@ -276,11 +270,11 @@ class TestKohonenLabBalanceMode:
     def test_balance_mode_synapse_count_reduces_synapses(self) -> None:
         """balance_mode='synapse_count' reduce cantidad de sinapsis inhibitorias."""
         random.seed(42)
-        exp_ref = KohonenLabExperiment()
+        exp_ref = DeamonsLabExperiment()
         exp_ref.setup({"width": 10, "height": 10, "mask": "simple"})
 
         random.seed(42)
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({
             "width": 10, "height": 10, "mask": "simple",
             "balance": 0.5, "balance_mode": "synapse_count",
@@ -297,7 +291,7 @@ class TestKohonenLabBalanceMode:
 
     def test_reconnect_with_balance_mode_synapse_count(self) -> None:
         """Reconnect con balance_mode='synapse_count' reduce sinapsis."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
 
         exp.reconnect({
@@ -312,48 +306,12 @@ class TestKohonenLabBalanceMode:
                 assert len(d.sinapsis) < 9  # simple mask has 9 inh per dendrita
 
 
-class TestKohonenLabEquivalence:
-    """Equivalencia con KohonenExperiment cuando mask=simple."""
-
-    def test_same_mask_same_dendritas(self) -> None:
-        """KohonenLab(simple) produce misma estructura que Kohonen."""
-        from experiments.kohonen import KohonenExperiment
-
-        random.seed(42)
-        exp_lab = KohonenLabExperiment()
-        exp_lab.setup({"width": 10, "height": 10, "mask": "simple"})
-
-        random.seed(42)
-        exp_orig = KohonenExperiment()
-        exp_orig.setup({"width": 10, "height": 10})
-
-        n_lab = exp_lab.red.get_neurona("x5y5")
-        n_orig = exp_orig.red.get_neurona("x5y5")
-        assert len(n_lab.dendritas) == len(n_orig.dendritas)
-
-    def test_same_seed_same_frame(self) -> None:
-        """Con misma seed, KohonenLab(simple) da el mismo frame inicial."""
-        from experiments.kohonen import KohonenExperiment
-
-        random.seed(42)
-        exp_lab = KohonenLabExperiment()
-        exp_lab.setup({"width": 10, "height": 10, "mask": "simple"})
-
-        random.seed(42)
-        exp_orig = KohonenExperiment()
-        exp_orig.setup({"width": 10, "height": 10})
-
-        frame_lab = exp_lab.get_frame()
-        frame_orig = exp_orig.get_frame()
-        assert frame_lab == frame_orig
-
-
-class TestKohonenLabReconnect:
-    """Reconexi?n: cambiar m?scara preservando valores."""
+class TestDeamonsLabReconnect:
+    """Reconexión: cambiar máscara preservando valores."""
 
     def test_reconnect_preserves_values(self) -> None:
         """Reconnect mantiene los valores de las neuronas."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
 
         frame_before = exp.get_frame()
@@ -365,7 +323,7 @@ class TestKohonenLabReconnect:
 
     def test_reconnect_changes_connectivity(self) -> None:
         """Reconnect cambia la estructura de dendritas."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "simple"})
 
         n_before = len(exp.red.get_neurona("x7y7").dendritas)
@@ -377,7 +335,7 @@ class TestKohonenLabReconnect:
 
     def test_reconnect_updates_config(self) -> None:
         """Reconnect actualiza _config con los nuevos valores."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple", "balance": 0.0})
 
         exp.reconnect({"mask": "narrow_hat", "balance": 0.3})
@@ -387,10 +345,9 @@ class TestKohonenLabReconnect:
 
     def test_reconnect_with_balance(self) -> None:
         """Reconnect con balance>0 reduce sinapsis inhibitorias vs balance=0."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
 
-        # Reconnect without balance (seed controls grid creation)
         random.seed(99)
         exp.reconnect({"mask": "simple", "balance": 0.0, "balance_mode": "weight"})
         n_no = exp.red.get_neurona("x5y5")
@@ -399,7 +356,6 @@ class TestKohonenLabReconnect:
             if d.peso < 0:
                 inh_weights_no.extend(s.peso for s in d.sinapsis)
 
-        # Reconnect again with same seed but balance=0.5
         random.seed(99)
         exp.reconnect({"mask": "simple", "balance": 0.5, "balance_mode": "weight"})
         n_bal = exp.red.get_neurona("x5y5")
@@ -408,30 +364,29 @@ class TestKohonenLabReconnect:
             if d.peso < 0:
                 inh_weights_bal.extend(s.peso for s in d.sinapsis)
 
-        # Same seed = same base weights; balance=0.5 scales inh by 0.5
         assert len(inh_weights_no) == len(inh_weights_bal)
         for w_no, w_bal in zip(inh_weights_no, inh_weights_bal):
             assert w_bal == pytest.approx(w_no * 0.5, abs=1e-9)
 
 
-class TestKohonenLabFunctionality:
-    """Funcionalidad est?ndar del experimento."""
+class TestDeamonsLabFunctionality:
+    """Funcionalidad estándar del experimento."""
 
     def test_step_avanza_generacion(self) -> None:
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         result = exp.step()
         assert result["type"] == "frame"
         assert result["generation"] == 1
 
     def test_step_n(self) -> None:
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         result = exp.step_n(5)
         assert result["generation"] == 5
 
     def test_click_toggle(self) -> None:
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         idx = 5 * 10 + 5
         exp.red_tensor.set_valor(idx, 0.0)
@@ -441,7 +396,7 @@ class TestKohonenLabFunctionality:
         assert exp.red_tensor.valores[idx].item() == 0.0
 
     def test_reset_reinicializa(self) -> None:
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         exp.step()
         exp.step()
@@ -450,7 +405,7 @@ class TestKohonenLabFunctionality:
         assert exp.generation == 0
 
     def test_is_complete_siempre_false(self) -> None:
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 5, "height": 5, "mask": "simple"})
         assert exp.is_complete() is False
         for _ in range(10):
@@ -458,7 +413,7 @@ class TestKohonenLabFunctionality:
         assert exp.is_complete() is False
 
     def test_get_frame_dimensions(self) -> None:
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         frame = exp.get_frame()
         assert len(frame) == 10
@@ -468,7 +423,7 @@ class TestKohonenLabFunctionality:
     def test_all_presets_run_10_steps(self, mask_id: str) -> None:
         """Every preset can run 10 steps without errors."""
         random.seed(42)
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": mask_id})
         for _ in range(10):
             result = exp.step()
@@ -482,7 +437,7 @@ class TestToroidalTopology:
         k for k, v in MASK_PRESETS.items() if v.get("mask_type") != "wolfram"
     ])
     def test_border_same_dendrites_as_center(self, preset_id: str) -> None:
-        """Every Kohonen preset: corner neuron has same dendrite count as center."""
+        """Every preset: corner neuron has same dendrite count as center."""
         random.seed(42)
         mask = get_mask(preset_id)
         constructor = Constructor()
@@ -511,10 +466,10 @@ class TestToroidalTopology:
         """Wolfram Rule 110: rightmost cell reads from leftmost via wrap-around.
 
         Input on bottom row: only x0 active.
-        Cell (4,1) sees neighbors (x3y2=0, x4y2=0, x0y2=1) via wrap ? pattern 001.
-        Rule 110 bit 1 = 1 ? cell (4,1) fires.
+        Cell (4,1) sees neighbors (x3y2=0, x4y2=0, x0y2=1) via wrap → pattern 001.
+        Rule 110 bit 1 = 1 → cell (4,1) fires.
         """
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 5, "height": 3, "mask": "rule_110"})
 
         for i in range(exp.red_tensor.n_real):
@@ -531,11 +486,11 @@ class TestToroidalTopology:
 
 
 class TestDaemonMetrics:
-    """Tests para las metricas de daemons en Kohonen Lab."""
+    """Tests para las métricas de daemons en Deamons Lab."""
 
     def test_stats_include_daemon_fields(self) -> None:
         """get_stats() retorna daemon_count, avg_daemon_size, noise_cells, stability y exclusion."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         exp.step()
         stats = exp.get_stats()
@@ -550,7 +505,7 @@ class TestDaemonMetrics:
 
     def test_daemon_count_zero_for_empty_grid(self) -> None:
         """All-zero grid has zero daemons and zero noise."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 5, "height": 5, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
@@ -561,7 +516,7 @@ class TestDaemonMetrics:
 
     def test_daemon_count_one_cluster(self) -> None:
         """A 3x3 contiguous active region counts as one daemon."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
@@ -577,11 +532,10 @@ class TestDaemonMetrics:
 
     def test_isolated_pixels_are_noise_not_daemons(self) -> None:
         """Single isolated pixels count as noise, not daemons (min_size=3)."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
-        # Two isolated pixels far apart
         exp.red_tensor.set_valor(0, 1.0)
         exp.red_tensor.set_valor(9 * 10 + 9, 1.0)
         stats = exp.get_stats()
@@ -591,7 +545,7 @@ class TestDaemonMetrics:
 
     def test_pair_is_noise_not_daemon(self) -> None:
         """A pair of adjacent neurons is noise (below min_size=3)."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
@@ -603,15 +557,13 @@ class TestDaemonMetrics:
 
     def test_two_real_clusters(self) -> None:
         """Two 3-neuron clusters count as two daemons."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
-        # Cluster 1: 3 cells at top-left
         exp.red_tensor.set_valor(0, 1.0)
         exp.red_tensor.set_valor(1, 1.0)
         exp.red_tensor.set_valor(10, 1.0)
-        # Cluster 2: 3 cells at bottom-right
         exp.red_tensor.set_valor(98, 1.0)
         exp.red_tensor.set_valor(99, 1.0)
         exp.red_tensor.set_valor(89, 1.0)
@@ -622,15 +574,13 @@ class TestDaemonMetrics:
 
     def test_mixed_daemons_and_noise(self) -> None:
         """A grid with one real cluster and one isolated pixel."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
-        # One 3x3 daemon
         for dy in range(3):
             for dx in range(3):
                 exp.red_tensor.set_valor((dy) * 10 + dx, 1.0)
-        # One isolated pixel far away
         exp.red_tensor.set_valor(99, 1.0)
         stats = exp.get_stats()
         assert stats["daemon_count"] == 1
@@ -639,11 +589,10 @@ class TestDaemonMetrics:
 
     def test_exclusion_with_daemon_and_noise(self) -> None:
         """Exclusion only considers daemon clusters, noise is 'outside'."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
-        # 3 adjacent cells = 1 daemon
         exp.red_tensor.set_valor(0, 1.0)
         exp.red_tensor.set_valor(1, 1.0)
         exp.red_tensor.set_valor(10, 1.0)
@@ -652,7 +601,7 @@ class TestDaemonMetrics:
 
     def test_exclusion_zero_for_empty_grid(self) -> None:
         """Empty grid has exclusion=0."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 5, "height": 5, "mask": "simple"})
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
@@ -662,7 +611,7 @@ class TestDaemonMetrics:
     def test_stability_increases_with_consistency(self) -> None:
         """Stability > 0 after several steps with consistent daemon count."""
         random.seed(42)
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for _ in range(10):
             exp.step()
@@ -671,7 +620,7 @@ class TestDaemonMetrics:
 
     def test_stability_zero_on_first_step(self) -> None:
         """Stability is 0 after only one sample."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         exp.step()
         stats = exp.get_stats()
@@ -679,7 +628,7 @@ class TestDaemonMetrics:
 
     def test_daemon_history_resets_on_reconnect(self) -> None:
         """Reconnect clears the daemon history."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         for _ in range(5):
             exp.step()
@@ -689,7 +638,7 @@ class TestDaemonMetrics:
 
     def test_no_duplicate_history_on_double_get_stats(self) -> None:
         """Calling get_stats() twice for the same generation doesn't duplicate history."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         exp.step()
         exp.get_stats()
@@ -731,17 +680,17 @@ class TestMaskStatsInInfo:
         assert ms["excitation_radius"] == 1
 
 
-class TestWolframMasksInKohonenLab:
-    """Tests para Wolfram elementary CA rules ejecutados como m?scaras en Kohonen Lab."""
+class TestWolframMasksInDeamonsLab:
+    """Tests para Wolfram elementary CA rules ejecutados como máscaras en Deamons Lab."""
 
-    def _get_row(self, exp: KohonenLabExperiment, row: int) -> list[int]:
+    def _get_row(self, exp: DeamonsLabExperiment, row: int) -> list[int]:
         """Extract a row from the frame as binary ints."""
         frame = exp.get_frame()
         return [int(round(v)) for v in frame[row]]
 
     def test_rule_110_setup_initializes_correctly(self) -> None:
         """Wolfram mask sets bottom row input + single center cell."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 9, "height": 5, "mask": "rule_110"})
         frame = exp.get_frame()
         bottom = [int(round(v)) for v in frame[4]]
@@ -750,26 +699,26 @@ class TestWolframMasksInKohonenLab:
             assert all(v == 0.0 for v in frame[row])
 
     def test_rule_110_one_step(self) -> None:
-        """Rule 110: single center cell ? correct first generation.
+        """Rule 110: single center cell → correct first generation.
 
-        Rule 110 = 01101110: 000?0, 001?1, 010?1, 011?1, 100?0, 101?1, 110?1, 111?0
+        Rule 110 = 01101110: 000→0, 001→1, 010→1, 011→1, 100→0, 101→1, 110→1, 111→0
         Input:  [0, 0, 0, 0, 1, 0, 0, 0, 0]
-        Gen 1:  [0, 0, 0, 1, 1, 0, 0, 0, 0]  (cell 3 sees 0,1,0?1; cell 4 sees 1,0,0?0; etc.)
+        Gen 1:  [0, 0, 0, 1, 1, 0, 0, 0, 0]  (cell 3 sees 0,1,0→1; cell 4 sees 1,0,0→0; etc.)
         """
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 9, "height": 5, "mask": "rule_110"})
         exp.step()
         row3 = self._get_row(exp, 3)
         assert row3 == [0, 0, 0, 1, 1, 0, 0, 0, 0]
 
     def test_rule_30_one_step(self) -> None:
-        """Rule 30: single center cell ? correct first generation.
+        """Rule 30: single center cell → correct first generation.
 
-        Rule 30 = 00011110: 000?0, 001?1, 010?1, 011?1, 100?1, 101?0, 110?0, 111?0
+        Rule 30 = 00011110: 000→0, 001→1, 010→1, 011→1, 100→1, 101→0, 110→0, 111→0
         Input:  [0, 0, 0, 0, 1, 0, 0, 0, 0]
         Gen 1:  [0, 0, 0, 1, 1, 1, 0, 0, 0]
         """
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 9, "height": 5, "mask": "rule_30"})
         exp.step()
         row3 = self._get_row(exp, 3)
@@ -777,7 +726,7 @@ class TestWolframMasksInKohonenLab:
 
     def test_wolfram_reset_reinitializes(self) -> None:
         """Reset of a Wolfram mask re-creates the single center cell."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 9, "height": 5, "mask": "rule_110"})
         for _ in range(3):
             exp.step()
@@ -788,7 +737,7 @@ class TestWolframMasksInKohonenLab:
 
     def test_reconnect_wolfram_to_kohonen_does_full_reset(self) -> None:
         """Switching from wolfram to kohonen mask type does a full reset."""
-        exp = KohonenLabExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "rule_110"})
         exp.step()
         exp.reconnect({"mask": "simple"})

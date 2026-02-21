@@ -9,25 +9,13 @@ from core.masks import get_mask_info
 router = APIRouter(prefix="/api")
 
 EXPERIMENTS = {
-    "kohonen": {
-        "id": "kohonen",
-        "name": "Kohonen (Competencia Lateral 2D)",
+    "deamons_lab": {
+        "id": "deamons_lab",
+        "name": "Deamons Lab",
         "description": (
-            "Mapa autoorganizado de Kohonen con excitación local e inhibición "
-            "lateral. Perfil 'Mexican hat': las neuronas excitan a sus vecinas "
-            "cercanas e inhiben a las lejanas, formando clusters que compiten."
-        ),
-        "default_config": {
-            "width": 50,
-            "height": 50,
-        },
-    },
-    "kohonen_lab": {
-        "id": "kohonen_lab",
-        "name": "Kohonen Lab",
-        "description": (
-            "Laboratorio de conexionados Kohonen. Elige entre múltiples presets "
-            "de sombrero mexicano y ajusta el balance excitación/inhibición. "
+            "Laboratorio de conexionados con máscara configurable. "
+            "Elige entre múltiples presets de sombrero mexicano y ajusta "
+            "el balance excitación/inhibición. "
             "Soporta reconexión en caliente sin perder estado."
         ),
         "masks": get_mask_info(),

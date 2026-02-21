@@ -8,18 +8,12 @@ export async function waitForConnection(page: Page): Promise<void> {
 /** Start an experiment and wait for canvas + controls to be ready. */
 export async function startExperiment(
   page: Page,
-  experiment: "kohonen" | "kohonen_lab"
+  experiment: "deamons_lab"
 ): Promise<void> {
-  if (experiment === "kohonen") {
-    await page
-      .getByRole("button", { name: "Kohonen (Competencia Lateral 2D)" })
-      .click();
-  } else {
-    await page.getByRole("button", { name: "Kohonen Lab" }).click();
-  }
+  await page.getByRole("button", { name: "Deamons Lab" }).click();
   await page.getByRole("button", { name: "Iniciar Experimento" }).click();
   // Use "main canvas" to avoid matching the MaskPreview canvas in the sidebar.
-  // kohonen_lab with large masks can take 30+ seconds to build on the backend.
+  // deamons_lab with large masks can take 30+ seconds to build on the backend.
   await expect(page.locator("main canvas")).toBeVisible({ timeout: 45_000 });
   await expect(
     page.getByRole("button", { name: "Step" })

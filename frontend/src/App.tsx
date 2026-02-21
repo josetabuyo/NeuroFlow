@@ -13,15 +13,8 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 
 const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
   {
-    id: "kohonen",
-    name: "Kohonen (Competencia Lateral 2D)",
-    description:
-      "Mapa autoorganizado con excitación local e inhibición lateral",
-    default_config: { width: 50, height: 50 },
-  },
-  {
-    id: "kohonen_lab",
-    name: "Kohonen Lab",
+    id: "deamons_lab",
+    name: "Deamons Lab",
     description:
       "Laboratorio de conexionados con máscara y balance configurables",
     masks: [
@@ -40,7 +33,7 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
   },
 ];
 
-const DEFAULT_SELECTED = "kohonen_lab";
+const DEFAULT_SELECTED = "deamons_lab";
 
 function resolveConfig(exp: ExperimentInfo): ExperimentConfig {
   const cfg = { ...exp.default_config };

@@ -1,4 +1,4 @@
-"""Experimento Kohonen Lab — laboratorio de conexionados con máscara configurable.
+"""Experimento Deamons Lab — laboratorio de conexionados con máscara configurable.
 
 Permite elegir entre múltiples presets de conexionado (sombrero mexicano)
 y ajustar el balance excitación/inhibición. Soporta reconexión en caliente:
@@ -96,8 +96,8 @@ def _detect_daemons(
     )
 
 
-class KohonenLabExperiment(Experimento):
-    """Laboratorio de conexionados Kohonen con máscara configurable."""
+class DeamonsLabExperiment(Experimento):
+    """Laboratorio de conexionados con máscara configurable."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -306,9 +306,6 @@ class KohonenLabExperiment(Experimento):
         active = int((vals > _DAEMON_THRESHOLD).sum().item())
         avg_size = round(sum(result.sizes) / len(result.sizes), 1) if result.sizes else 0.0
 
-        # Exclusion: mean activation inside daemons vs outside.
-        # "Outside" includes both dead zones and noise — a good mask has
-        # high contrast between organized daemon clusters and everything else.
         if result.daemon_indices:
             daemon_mask = torch.zeros(n, dtype=torch.bool)
             daemon_mask[list(result.daemon_indices)] = True
@@ -319,7 +316,6 @@ class KohonenLabExperiment(Experimento):
         else:
             exclusion = 0.0
 
-        # Stability: 1 - coefficient_of_variation over sliding window.
         if self.generation != self._last_history_gen:
             self._daemon_history.append(result.count)
             self._last_history_gen = self.generation
@@ -351,5 +347,5 @@ class KohonenLabExperiment(Experimento):
         self.setup(self._config)
 
     def is_complete(self) -> bool:
-        """Kohonen Lab nunca termina."""
+        """Deamons Lab nunca termina."""
         return False

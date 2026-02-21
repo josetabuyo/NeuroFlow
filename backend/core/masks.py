@@ -1,4 +1,4 @@
-"""Mask presets for Kohonen-type experiments.
+"""Mask presets for Deamons Lab experiments.
 
 Each mask is a list of dendrite definitions:
     [{"peso_dendrita": float, "offsets": [(dx, dy), ...]}, ...]
@@ -115,7 +115,7 @@ MASK_ALL_INH: MaskDef = [
     {"peso_dendrita": -1.0, "offsets": _moore(1)},
 ]
 
-# simple — exact copy of the original KOHONEN_SIMPLE_MASK
+# simple — original Mexican hat mask (Moore r=1 exc, 8 inhibitory blocks r=2-4)
 MASK_SIMPLE: MaskDef = [
     {
         "peso_dendrita": 1.0,
@@ -309,6 +309,11 @@ MASK_DEAMON_E2_G3_I3_DE1_DI1: MaskDef = [
 MASK_DEAMON_E2_G6_I3_DE1_DI1: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(2)},
     *_make_inhibitory(_ring(9, 11), -1.0, 8),
+]
+
+MASK_DEAMON_E3_G8_I3_DE1_DI1_1: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_random_sparse(_ring(12, 14), 1 / 1.1, seed=43), -1.0, 8),
 ]
 
 MASK_BIG_CENTER_SOFT_WIDE_INH: MaskDef = [
@@ -595,6 +600,16 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "dendrites_inh": 8,
         "random_weights": True,
         "mask": MASK_DEAMON_E2_G6_I3_DE1_DI1,
+    },
+    "deamon_e3_g8_i3_de1_di1_1": {
+        "id": "deamon_e3_g8_i3_de1_di1_1",
+        "name": "Deamon (E3 G8 I3 DE1 DI1.1)",
+        "description": "Moore r=3 completa (48 vecinos), gap r=4-11, corona r=12-14 sparse ~91%.",
+        "center": "Moore r=3 (48 vecinos, densidad completa)",
+        "corona": "r=12-14 sparse ~91%, gap r=4-11 silencio (x8)",
+        "dendrites_inh": 8,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G8_I3_DE1_DI1_1,
     },
     "all_exc": {
         "id": "all_exc",

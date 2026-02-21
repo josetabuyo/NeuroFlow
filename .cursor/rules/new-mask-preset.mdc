@@ -64,7 +64,7 @@ Agregar la entrada en el dict `MASK_PRESETS` del mismo archivo con todos los cam
 
 ## 3. Actualizar test de conteo
 
-En `backend/tests/test_kohonen_lab.py`, buscar `assert len(info) == N` dentro de `test_get_mask_info_excludes_mask_data` e incrementar N en 1 por cada máscara nueva.
+En `backend/tests/test_deamons_lab.py`, buscar `assert len(info) == N` dentro de `test_get_mask_info_excludes_mask_data` e incrementar N en 1 por cada máscara nueva.
 
 ## 4. Correr tests
 

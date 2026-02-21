@@ -11,16 +11,14 @@ from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from experiments.base import Experimento
-from experiments.kohonen import KohonenExperiment
-from experiments.kohonen_lab import KohonenLabExperiment
+from experiments.deamons_lab import DeamonsLabExperiment
 
 logger = logging.getLogger(__name__)
 
 ws_router = APIRouter()
 
 EXPERIMENT_CLASSES: dict[str, type[Experimento]] = {
-    "kohonen": KohonenExperiment,
-    "kohonen_lab": KohonenLabExperiment,
+    "deamons_lab": DeamonsLabExperiment,
 }
 
 
@@ -63,7 +61,7 @@ class ExperimentSession:
 
     async def _handle_start(self, message: dict[str, Any]) -> None:
         """Initialize an experiment."""
-        experiment_id = message.get("experiment", "kohonen_lab")
+        experiment_id = message.get("experiment", "deamons_lab")
         config = message.get("config", {})
 
         exp_class = EXPERIMENT_CLASSES.get(experiment_id)

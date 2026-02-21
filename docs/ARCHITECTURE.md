@@ -67,8 +67,7 @@ NeuroFlow/
 │   ├── experiments/               # Experimentos (plug-in)
 │   │   ├── __init__.py
 │   │   ├── base.py                # Clase base Experiment
-│   │   ├── kohonen.py             # Kohonen (competencia lateral 2D)
-│   │   └── kohonen_lab.py         # Kohonen Lab (laboratorio de conexionados)
+│   │   └── deamons_lab.py         # Deamons Lab (laboratorio de conexionados)
 │   ├── api/
 │   │   ├── __init__.py
 │   │   ├── websocket.py           # Handler WebSocket
@@ -81,8 +80,7 @@ NeuroFlow/
 │       ├── test_red.py             # Red NO sabe de regiones
 │       ├── test_region.py          # Region es solo agrupación
 │       ├── test_constructor.py     # Constructor arma Red + Regiones
-│       ├── test_kohonen.py
-│       ├── test_kohonen_lab.py
+│       ├── test_deamons_lab.py
 │       └── test_red_tensor.py
 │
 ├── frontend/
@@ -527,7 +525,7 @@ El modelo neuronal (Sinapsis, Dendrita, Neurona, Red) no cambia.
 
 ```
 GET  /api/experiments
-     → [{ id: "kohonen_lab", name: "Kohonen Lab", masks: [...] }]
+     → [{ id: "deamons_lab", name: "Deamons Lab", masks: [...] }]
 
 GET  /api/experiments/:id
      → { id, name, description, default_config: { width: 30, height: 30, mask: "simple" } }
@@ -544,7 +542,7 @@ Conexión: ws://host/ws/experiment
 ─── Cliente → Servidor ───────────────────────────────────
 
 { "action": "start",
-  "experiment": "kohonen_lab",
+  "experiment": "deamons_lab",
   "config": { "width": 30, "height": 30, "mask": "simple" } }
 
 { "action": "click", "x": 25, "y": 49 }    // Activar neurona
@@ -698,10 +696,10 @@ app.add_middleware(
 ```
 1. [Tests]  → test_sinapsis.py, test_dendrita.py, test_neurona.py, test_red.py
 2. [Core]   → sinapsis.py, dendrita.py, neurona.py, red.py, constructor.py
-3. [Tests]  → test_kohonen.py, test_kohonen_lab.py, test_red_tensor.py
+3. [Tests]  → test_deamons_lab.py, test_red_tensor.py
 4. [API]    → main.py con WebSocket + endpoint de experimentos
 5. [UI]     → React app con Canvas, sidebar, controles
-6. [Exp]    → Kohonen Lab (todos los conexionados + Wolfram) end-to-end
+6. [Exp]    → Deamons Lab (todos los conexionados + Wolfram) end-to-end
 7. [Deploy] → Backend en Render, Frontend en Vercel
 ```
 
@@ -721,7 +719,7 @@ app.add_middleware(
 13. Visualización de pesos en tiempo real
 ```
 
-### Fase 3: Kohonen + HTM
+### Fase 3: Deamons + HTM
 
 ```
 14. Mapas auto-organizados

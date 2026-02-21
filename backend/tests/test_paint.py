@@ -9,7 +9,7 @@ Valida:
 """
 
 import pytest
-from experiments.kohonen import KohonenExperiment
+from experiments.deamons_lab import DeamonsLabExperiment
 
 
 class TestPaint:
@@ -17,7 +17,7 @@ class TestPaint:
 
     def test_paint_una_celda_activa(self) -> None:
         """Paint con una celda y valor 1.0 activa la neurona."""
-        exp = KohonenExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
         idx = 5 * 10 + 5  # y=5, x=5
@@ -29,7 +29,7 @@ class TestPaint:
 
     def test_paint_una_celda_desactiva(self) -> None:
         """Paint con una celda y valor 0.0 desactiva la neurona."""
-        exp = KohonenExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
         idx = 5 * 10 + 5
@@ -41,7 +41,7 @@ class TestPaint:
 
     def test_paint_multiples_celdas_activa_todas(self) -> None:
         """Paint con múltiples celdas activa todas las neuronas."""
-        exp = KohonenExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
         celdas = [(3, 3), (4, 3), (5, 3), (3, 4), (4, 4), (5, 4)]
@@ -60,7 +60,7 @@ class TestPaint:
 
     def test_paint_celdas_fuera_del_grid_no_falla(self) -> None:
         """Paint con celdas fuera del grid ignora sin fallar."""
-        exp = KohonenExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
         celdas = [
@@ -77,23 +77,20 @@ class TestPaint:
             if 0 <= idx < exp.red_tensor.n_real and 0 <= x < 10 and 0 <= y < 10:
                 exp.red_tensor.set_valor(idx, 1.0)
 
-        # La celda válida se activó
         idx_valid = 5 * 10 + 5
         assert exp.red_tensor.valores[idx_valid].item() == 1.0
 
     def test_paint_actualiza_frame(self) -> None:
         """Paint modifica el frame: el grid refleja los cambios."""
-        exp = KohonenExperiment()
+        exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
-        # Desactivar toda la grilla via tensor
         for i in range(exp.red_tensor.n_real):
             exp.red_tensor.set_valor(i, 0.0)
 
         frame_antes = exp.get_frame()
         assert all(cell == 0.0 for row in frame_antes for cell in row)
 
-        # Paint: activar un bloque 3x3 centrado en (5,5)
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
                 x, y = 5 + dx, 5 + dy
@@ -105,4 +102,3 @@ class TestPaint:
             for dy in [-1, 0, 1]:
                 assert frame_despues[5 + dy][5 + dx] == 1.0, \
                     f"Celda ({5+dx},{5+dy}) debería estar activa en el frame"
-

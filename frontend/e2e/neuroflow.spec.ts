@@ -21,10 +21,7 @@ test("1. Carga inicial", async ({ page }) => {
   await expect(page.locator("h1")).toHaveText("NeuroFlow");
 
   await expect(
-    page.getByRole("button", { name: "Kohonen (Competencia Lateral 2D)" })
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Kohonen Lab" })
+    page.getByRole("button", { name: "Deamons Lab" })
   ).toBeVisible();
 
   await expect(
@@ -35,10 +32,10 @@ test("1. Carga inicial", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Iniciar Kohonen Lab
+// 2. Iniciar Deamons Lab
 // ---------------------------------------------------------------------------
-test("2. Iniciar Kohonen Lab", async ({ page }) => {
-  await startExperiment(page, "kohonen_lab");
+test("2. Iniciar Deamons Lab", async ({ page }) => {
+  await startExperiment(page, "deamons_lab");
 
   await expect(page.locator("main canvas")).toBeVisible();
 
@@ -62,10 +59,10 @@ test("2. Iniciar Kohonen Lab", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Iniciar Kohonen
+// 3. Iniciar y verificar estado inicial
 // ---------------------------------------------------------------------------
-test("3. Iniciar Kohonen", async ({ page }) => {
-  await startExperiment(page, "kohonen");
+test("3. Iniciar y verificar estado inicial", async ({ page }) => {
+  await startExperiment(page, "deamons_lab");
 
   await expect(page.locator("main canvas")).toBeVisible();
 
@@ -80,7 +77,7 @@ test("3. Iniciar Kohonen", async ({ page }) => {
 // 4. Paleta de pinceles — ajuste de tamaño
 // ---------------------------------------------------------------------------
 test("4. Paleta de pinceles — ajuste de tamaño", async ({ page }) => {
-  await startExperiment(page, "kohonen");
+  await startExperiment(page, "deamons_lab");
 
   const palette = getBrushPalette(page);
   const increaseBtn = palette.getByRole("button", { name: "Aumentar pincel" });
@@ -105,7 +102,7 @@ test("4. Paleta de pinceles — ajuste de tamaño", async ({ page }) => {
 // 5. Paleta de pinceles — toggle ON/OFF
 // ---------------------------------------------------------------------------
 test("5. Paleta de pinceles — toggle ON/OFF", async ({ page }) => {
-  await startExperiment(page, "kohonen");
+  await startExperiment(page, "deamons_lab");
 
   const onBtn = page.getByRole("button", { name: "ON", exact: true });
   await expect(onBtn).toBeVisible();
@@ -124,7 +121,7 @@ test("5. Paleta de pinceles — toggle ON/OFF", async ({ page }) => {
 // 6. Paint con pincel — verificar vía WebSocket
 // ---------------------------------------------------------------------------
 test("6. Paint con pincel — verificar vía WebSocket", async ({ page }) => {
-  await startExperiment(page, "kohonen");
+  await startExperiment(page, "deamons_lab");
 
   const initialActive = await getActiveCount(page);
   expect(initialActive).toBeGreaterThan(0);
@@ -152,7 +149,7 @@ test("6. Paint con pincel — verificar vía WebSocket", async ({ page }) => {
 // 7. Step avanza la generación
 // ---------------------------------------------------------------------------
 test("7. Step avanza la generación", async ({ page }) => {
-  await startExperiment(page, "kohonen_lab");
+  await startExperiment(page, "deamons_lab");
 
   expect(await getStepCount(page)).toBe(0);
 
@@ -171,7 +168,7 @@ test("7. Step avanza la generación", async ({ page }) => {
 // 8. Play / Pause
 // ---------------------------------------------------------------------------
 test("8. Play / Pause", async ({ page }) => {
-  await startExperiment(page, "kohonen");
+  await startExperiment(page, "deamons_lab");
 
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.getByText("running")).toBeVisible({ timeout: 3_000 });
@@ -194,7 +191,7 @@ test("8. Play / Pause", async ({ page }) => {
 // 9. Reset vuelve al inicio
 // ---------------------------------------------------------------------------
 test("9. Reset vuelve al inicio", async ({ page }) => {
-  await startExperiment(page, "kohonen");
+  await startExperiment(page, "deamons_lab");
 
   const stepBtn = page.getByRole("button", { name: "Step" });
   await stepBtn.click();
@@ -218,7 +215,7 @@ test("9. Reset vuelve al inicio", async ({ page }) => {
 // 10. Inspeccionar desactiva los controles de pincel
 // ---------------------------------------------------------------------------
 test("10. Inspeccionar desactiva los controles de pincel", async ({ page }) => {
-  await startExperiment(page, "kohonen");
+  await startExperiment(page, "deamons_lab");
 
   const brushControls = page.getByTestId("brush-controls");
   await expect(brushControls).toHaveCSS("opacity", "1");
@@ -235,27 +232,11 @@ test("10. Inspeccionar desactiva los controles de pincel", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 11. Cambiar de experimento
+// 11. Steps per tick
 // ---------------------------------------------------------------------------
-test("11. Cambiar de experimento", async ({ page }) => {
-  await startExperiment(page, "kohonen_lab");
+test("11. Steps per tick", async ({ page }) => {
+  await startExperiment(page, "deamons_lab");
 
-  // Switch to Kohonen
-  await startExperiment(page, "kohonen");
-
-  expect(await getStepCount(page)).toBe(0);
-
-  const active = await getActiveCount(page);
-  expect(active).toBeGreaterThan(0);
-});
-
-// ---------------------------------------------------------------------------
-// 12. Steps per tick
-// ---------------------------------------------------------------------------
-test("12. Steps per tick", async ({ page }) => {
-  await startExperiment(page, "kohonen");
-
-  // The steps/tick select is inside <main>, next to the "Steps/tick:" label
   const select = page.locator("main select");
   await expect(select).toHaveValue("1");
 
@@ -269,10 +250,10 @@ test("12. Steps per tick", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 13. Límites del tamaño de pincel
+// 12. Límites del tamaño de pincel
 // ---------------------------------------------------------------------------
-test("13. Límites del tamaño de pincel", async ({ page }) => {
-  await startExperiment(page, "kohonen");
+test("12. Límites del tamaño de pincel", async ({ page }) => {
+  await startExperiment(page, "deamons_lab");
 
   const palette = getBrushPalette(page);
   const decreaseBtn = palette.getByRole("button", { name: "Reducir pincel" });
@@ -291,23 +272,20 @@ test("13. Límites del tamaño de pincel", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 14. Kohonen Lab — seleccionar máscara de conexionado
+// 13. Deamons Lab — seleccionar máscara de conexionado
 // ---------------------------------------------------------------------------
-test("14. Kohonen Lab — seleccionar máscara", async ({ page }) => {
-  // Kohonen Lab is selected by default; mask selector ("Conexionado") is visible
+test("13. Deamons Lab — seleccionar máscara", async ({ page }) => {
+  // Deamons Lab is selected by default; mask selector ("Conexionado") is visible
   await expect(page.getByText("Conexionado")).toBeVisible();
 
-  // Locate the mask select (first select in the sidebar, under "Conexionado")
   const maskSelect = page.locator("aside select").first();
   await expect(maskSelect).toBeVisible();
 
-  // Remember initial value, then change to a different mask
   const initialValue = await maskSelect.inputValue();
   const options = maskSelect.locator("option");
   const optionCount = await options.count();
   expect(optionCount).toBeGreaterThan(1);
 
-  // Pick a mask that's different from the current one
   const secondOption = await options.nth(1).getAttribute("value");
   expect(secondOption).toBeTruthy();
   await maskSelect.selectOption(secondOption!);
@@ -318,10 +296,10 @@ test("14. Kohonen Lab — seleccionar máscara", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 15. Re-iniciar experimento durante Play detiene la red
+// 14. Re-iniciar experimento durante Play detiene la red
 // ---------------------------------------------------------------------------
-test("15. Re-iniciar experimento durante Play detiene la red", async ({ page }) => {
-  await startExperiment(page, "kohonen");
+test("14. Re-iniciar experimento durante Play detiene la red", async ({ page }) => {
+  await startExperiment(page, "deamons_lab");
 
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.getByText("running")).toBeVisible({ timeout: 3_000 });
@@ -330,7 +308,7 @@ test("15. Re-iniciar experimento durante Play detiene la red", async ({ page }) 
   const stepsBefore = await getStepCount(page);
   expect(stepsBefore).toBeGreaterThan(0);
 
-  await startExperiment(page, "kohonen");
+  await startExperiment(page, "deamons_lab");
 
   await expect(page.getByText("ready")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("button", { name: "Play" })).toBeEnabled();
@@ -342,10 +320,10 @@ test("15. Re-iniciar experimento durante Play detiene la red", async ({ page }) 
 });
 
 // ---------------------------------------------------------------------------
-// 16. Inspeccionar muestra mapa de conexiones
+// 15. Inspeccionar muestra mapa de conexiones
 // ---------------------------------------------------------------------------
-test("16. Inspeccionar muestra mapa de conexiones", async ({ page }) => {
-  await startExperiment(page, "kohonen_lab");
+test("15. Inspeccionar muestra mapa de conexiones", async ({ page }) => {
+  await startExperiment(page, "deamons_lab");
 
   await page.getByRole("button", { name: "Herramienta inspeccionar" }).click();
 
