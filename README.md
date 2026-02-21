@@ -1,24 +1,61 @@
 # NeuroFlow
 
-Framework de autómatas neuronales conexionistas.
+**Un modelo conexionista de la mente — más allá del lenguaje.**
 
-Una grilla de neuronas conectadas por dendritas y sinapsis que reproduce
-comportamientos conocidos (autómatas celulares) y luego los trasciende
-con aprendizaje emergente.
+Red de neuronas artificiales que busca el *daemon*: la unidad mínima de
+procesamiento distribuido que emerge sin observador central, inspirada en la
+neurociencia, los autómatas celulares y la filosofía de la consciencia.
 
-## Concepto
+---
 
-Cada pixel de la pantalla es una **neurona**. Las neuronas se conectan entre sí
-mediante **dendritas** (ramas de entrada) y **sinapsis** (conexiones pesadas).
-El comportamiento emerge de reglas locales simples, no de un controlador central.
+## En una línea
+
+> Tejido 2D de neuronas conectadas por sinapsis y dendritas donde daemons
+> compiten, se estabilizan y auto-organizan — un camino conexionista hacia
+> la emulación de la mente.
+
+---
+
+## ¿Qué es NeuroFlow?
+
+NeuroFlow es un framework de autómatas neuronales conexionistas. Cada pixel de
+la pantalla es una neurona. Las neuronas se conectan entre sí mediante dendritas
+y sinapsis. El comportamiento emerge de reglas locales simples, sin controlador
+central.
 
 ```
 Sinapsis (peso ≥ 0)  →  Dendrita (peso ∈ [-1,1])  →  Neurona (activa/inactiva)
    reconoce patrón         AND fuzzy + inhibición         OR fuzzy competitivo
 ```
 
-Inspirado en teorías de Kohonen (SOMs), Hawkins (HTM), Dennett (daemons,
-consciencia distribuida) y neurociencias (células de lugar/grilla).
+El proyecto no busca replicar lo que los LLMs ya resuelven (lenguaje), sino
+atacar las áreas menos exploradas: **movimiento**, **percepción visual** y la
+**profundidad del razonamiento** — lo que informalmente podríamos llamar
+*intuición*.
+
+---
+
+## Documentación
+
+La documentación está organizada en niveles de profundidad. Empezá por donde
+te interese:
+
+| Documento | Qué encontrás |
+|-----------|---------------|
+| **[Visión y Filosofía](docs/VISION.md)** | Qué es un daemon, por qué sin observador central, inspiraciones teóricas |
+| **[Hoja de Ruta](docs/STAGES.md)** | Las 5 etapas del proyecto: Daemons → SOM → Motor/Nociceptor → Tuning → Agentes |
+| **[Arquitectura Técnica](docs/ARCHITECTURE.md)** | Stack, diseño de clases, API, protocolo WebSocket, hosting |
+| **[Referencias](docs/REFERENCES.md)** | Bibliografía completa con citas: Dennett, Hawkins, Kohonen, Kandel y más |
+| **[Sobre el Autor](docs/AUTHOR.md)** | José Miguel Tabuyo — trayectoria, motivación y dedicatoria |
+
+### Documentación cercana al código
+
+| Documento | Qué encontrás |
+|-----------|---------------|
+| **[Modelo Neuronal](backend/core/README.md)** | Cómo funcionan Sinapsis, Dendrita, Neurona y Red en el código |
+| **[Experimentos](backend/experiments/README.md)** | Qué hace cada experimento, cómo se configura, qué se observa |
+
+---
 
 ## Stack
 
@@ -27,99 +64,60 @@ consciencia distribuida) y neurociencias (células de lugar/grilla).
 | Backend | Python 3.11+ / FastAPI / WebSocket / NumPy | Render.com (free) |
 | Frontend | Vite / React 19 / TypeScript / HTML5 Canvas | Vercel (free) |
 
-## Experimentos
-
-| # | Nombre | Descripción | Estado |
-|---|--------|-------------|--------|
-| 0 | **Von Neumann** | Autómata elemental 1D (Wolfram Rules 111, 30, 90, 110) implementado con sinapsis/dendritas/neuronas | Próximo |
-| 1 | **Conway** | Game of Life con vecindad Moore (8 vecinos) | Planificado |
-| 2 | **Aprendizaje** | Entrenamiento Hebbiano + poda sináptica | Planificado |
-| 3 | **Deamons** | Mapas auto-organizados con daemons | Planificado |
-
-## Nomenclatura de Máscaras (Deamon)
-
-Las máscaras tipo Deamon siguen la convención `E G I [DE DI]`:
-
-| Parámetro | Significado | Ejemplo |
-|-----------|-------------|---------|
-| **E***n* | Radio excitatorio (Moore r=*n*) | E3 = Moore r=3 (48 vecinos) |
-| **G***n* | Gap: anillos de silencio entre excitación e inhibición | G12 = 12 anillos sin conexión |
-| **I***n* | Radio inhibitorio (anillos de corona) | I3 = 3 anillos inhibitorios |
-| **DE***n* | Densidad excitatoria: fracción 1/*n* de sinapsis al azar | DE1 = completa, DE3 = ~33% |
-| **DI***n* | Densidad inhibitoria: fracción 1/*n* de sinapsis al azar | DI1 = completa, DI1.5 = ~67% |
-
-**Cálculo de radios:** E*n* cubre r=1..*n*, el gap empieza en r=*n*+1 y cubre G anillos, la inhibición empieza justo después del gap y cubre I anillos.
-
-**Ejemplo:** `E2 G3 I3 DE1 DI1.5`
-- Excitación: Moore r=2 completa (24 vecinos)
-- Gap: r=3-5 (3 anillos de silencio)
-- Inhibición: r=6-8 con densidad 1/1.5 ≈ 67%
-
-Cuando DE y DI se omiten, la densidad es 1 (completa) por defecto.
-
-## Arquitectura
-
-Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para diagramas y diseño completo.
-
 ```
 Frontend (React + Canvas)  ←WebSocket→  Backend (FastAPI)
          UI                                Red → Neurona → Dendrita → Sinapsis
 ```
 
-## Origen
-
-Este proyecto evoluciona de [RedJavaScript](/Users/josetabuyo/Personal/RedJavaScript),
-una implementación 100% en navegador. NeuroFlow separa frontend (visualización)
-de backend (cómputo), permitiendo escalar y desplegar como servicio web.
+---
 
 ## Fast Start
-
-Si ya tenés las dependencias instaladas:
 
 ```bash
 ./start.sh
 ```
 
-Levanta backend (`:8501`) y frontend (`:5173`) en paralelo, matando procesos anteriores si los hay.
-
+Levanta backend (`:8501`) y frontend (`:5173`) en paralelo.
 Abrir **http://localhost:5173** en el navegador.
 
-## Quick Start
+### Desde cero
 
 ```bash
-# 1. Backend (puerto 8501)
+# Backend (puerto 8501)
 cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8501
 
-# 2. Frontend (puerto 5173) — en otra terminal
+# Frontend (puerto 5173) — en otra terminal
 cd frontend
 npm install
 npm run dev
 ```
 
-Abrir **http://localhost:5173** en el navegador.
-
-El frontend proxea `/api` y `/ws` al backend en el puerto 8501 (configurado en `frontend/vite.config.ts`).
-
-## Desarrollo
+### Tests
 
 ```bash
-# Tests unitarios (backend)
+# Unitarios (backend)
 cd backend && pytest -v
 
-# Tests E2E (frontend + backend, Playwright)
+# E2E (frontend + backend, Playwright)
 cd frontend
 npx playwright install        # solo la primera vez
 npm run test:e2e              # headless
-npm run test:e2e:ui           # modo interactivo con UI de Playwright
-
-# Levantar solo frontend (si el backend ya está corriendo)
-cd frontend && npm run dev
+npm run test:e2e:ui           # modo interactivo
 ```
 
-Los tests E2E levantan backend y frontend automáticamente (ver `frontend/playwright.config.ts`).
-Si ya tenés los servers corriendo, Playwright los reutiliza.
+---
 
-Ambos servers tienen hot-reload: cambios en `.py` se toman automáticamente (uvicorn `--reload`) y cambios en el frontend vía Vite HMR.
+## Origen
+
+Este proyecto evoluciona de [RedJavaScript](https://github.com/), una
+implementación 100% en navegador. NeuroFlow separa frontend (visualización)
+de backend (cómputo), permitiendo escalar y desplegar como servicio web.
+
+---
+
+## Licencia
+
+*Por definir.*

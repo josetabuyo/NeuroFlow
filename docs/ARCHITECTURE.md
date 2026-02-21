@@ -1,15 +1,10 @@
-# NeuroFlow - Arquitectura
+# Arquitectura Técnica
 
-## Vision
+Diseño técnico del sistema: stack, clases, API, protocolo y hosting.
 
-NeuroFlow es un framework de autómatas neuronales conexionistas.
-Una web muestra una matriz de pixels donde cada pixel es una neurona.
-Los experimentos configuran las sinapsis, dendritas y neuronas para reproducir
-comportamientos conocidos (autómatas celulares) y luego emergentes (aprendizaje).
-
-El proyecto original fue [RedJavaScript](../), implementado 100% en el navegador.
-Esta versión separa frontend (visualización) de backend (procesamiento),
-permitiendo escalar el cómputo y mantener la UI responsive.
+Para la visión y filosofía del proyecto, ver [Visión](VISION.md).
+Para la hoja de ruta, ver [Etapas](STAGES.md).
+Para el modelo neuronal cercano al código, ver [Modelo Neuronal](../backend/core/README.md).
 
 ---
 
@@ -102,10 +97,12 @@ NeuroFlow/
 │
 ├── docs/
 │   ├── ARCHITECTURE.md            # Este documento
-│   └── MODELO_NEURONAL.md         # Teoría del modelo conexionista
+│   ├── VISION.md                  # Filosofía, daemons, modelo de la mente
+│   ├── STAGES.md                  # Hoja de ruta (5 etapas)
+│   ├── REFERENCES.md              # Bibliografía completa
+│   └── AUTHOR.md                  # Sobre el autor y dedicatoria
 │
-├── README.md
-├── NEXT_PROMPT.md                 # Instrucciones para continuar
+├── README.md                      # Punto de entrada, navegación
 └── .gitignore
 ```
 
@@ -765,3 +762,7 @@ app.add_middleware(
 - Para 50×50 = 2500 neuronas, es instantáneo
 - Escala bien hasta ~1000×1000 sin GPU
 - Familiar para científicos e ingenieros
+
+---
+
+← Volver al [README](../README.md)
