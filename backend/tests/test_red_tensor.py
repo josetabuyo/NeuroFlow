@@ -1,6 +1,6 @@
-"""Tests para RedTensor — procesamiento paralelo vectorizado.
+"""Tests for RedTensor — vectorized parallel processing.
 
-Verifica compilación, procesamiento, set_valor, máscaras de entrada y get_grid.
+Verifies compilation, processing, set_valor, input masks, and get_grid.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from core.masks import MASK_SIMPLE
 
 
 def _crear_red_mexican_hat(width: int = 10, height: int = 10, seed: int = 42) -> Red:
-    """Helper: crea una Red con máscara Mexican hat y valores aleatorios reproducibles."""
+    """Helper: creates a Red with Mexican hat mask and reproducible random values."""
     random.seed(seed)
     constructor = Constructor()
     red, _regiones = constructor.crear_grilla(
@@ -33,7 +33,7 @@ def _crear_red_mexican_hat(width: int = 10, height: int = 10, seed: int = 42) ->
 
 
 def _crear_red_von_neumann(width: int = 10, height: int = 10, regla: int = 110, seed: int = 42) -> Red:
-    """Helper: crea una Red Von Neumann."""
+    """Helper: creates a Von Neumann Red."""
     random.seed(seed)
     constructor = Constructor()
     fila_entrada = height - 1
@@ -57,10 +57,10 @@ def _crear_red_von_neumann(width: int = 10, height: int = 10, regla: int = 110, 
 
 
 class TestRedTensorCompilacion:
-    """ConstructorTensor.compilar preserva datos correctamente."""
+    """ConstructorTensor.compilar preserves data correctly."""
 
     def test_compilar_preserva_valores(self):
-        """compilar preserva los valores iniciales de las neuronas."""
+        """compilar preserves the initial neuron values."""
         red = _crear_red_mexican_hat(10, 10)
         valores_antes = [n.valor for n in red.neuronas]
 
@@ -74,7 +74,7 @@ class TestRedTensorCompilacion:
             )
 
     def test_procesar_n_equivale_a_n_steps(self):
-        """procesar_n(5) da lo mismo que 5 llamadas a procesar()."""
+        """procesar_n(5) gives the same result as 5 calls to procesar()."""
         red_a = _crear_red_mexican_hat(8, 8, seed=77)
         red_b = _crear_red_mexican_hat(8, 8, seed=77)
         tensor_a = ConstructorTensor.compilar(red_a)
@@ -94,10 +94,10 @@ class TestRedTensorCompilacion:
 
 
 class TestRedTensorSetValor:
-    """set_valor modifica el tensor correctamente."""
+    """set_valor modifies the tensor correctly."""
 
     def test_set_valor_modifica_neurona(self):
-        """set_valor cambia el valor de la neurona indicada."""
+        """set_valor changes the value of the specified neuron."""
         red = _crear_red_mexican_hat(5, 5, seed=1)
         red_tensor = ConstructorTensor.compilar(red)
 
@@ -108,7 +108,7 @@ class TestRedTensorSetValor:
         assert red_tensor.valores[0].item() == 0.0
 
     def test_set_valor_no_afecta_otras_neuronas(self):
-        """set_valor solo modifica la neurona indicada."""
+        """set_valor only modifies the specified neuron."""
         red = _crear_red_mexican_hat(5, 5, seed=1)
         red_tensor = ConstructorTensor.compilar(red)
 
@@ -124,10 +124,10 @@ class TestRedTensorSetValor:
 
 
 class TestRedTensorMascaraEntrada:
-    """NeuronaEntrada no se modifica durante procesar()."""
+    """NeuronaEntrada is not modified during procesar()."""
 
     def test_mascara_entrada_preserva_valores(self):
-        """Las NeuronaEntrada mantienen su valor después de procesar()."""
+        """NeuronaEntrada neurons maintain their value after procesar()."""
         red = _crear_red_von_neumann(10, 10, seed=42)
         red_tensor = ConstructorTensor.compilar(red)
 
@@ -148,16 +148,16 @@ class TestRedTensorMascaraEntrada:
         # Verify they haven't changed
         for i in entrada_indices:
             assert red_tensor.valores[i].item() == valores_entrada_antes[i], (
-                f"NeuronaEntrada {i} cambió de {valores_entrada_antes[i]} "
-                f"a {red_tensor.valores[i].item()}"
+                f"NeuronaEntrada {i} changed from {valores_entrada_antes[i]} "
+                f"to {red_tensor.valores[i].item()}"
             )
 
 
 class TestRedTensorGetGrid:
-    """get_grid retorna la grilla con las dimensiones correctas."""
+    """get_grid returns the grid with correct dimensions."""
 
     def test_get_grid_dimensiones(self):
-        """get_grid retorna height filas × width columnas."""
+        """get_grid returns height rows × width columns."""
         red = _crear_red_mexican_hat(8, 6, seed=1)
         red_tensor = ConstructorTensor.compilar(red)
 
@@ -167,7 +167,7 @@ class TestRedTensorGetGrid:
             assert len(row) == 8
 
     def test_get_grid_valores_correctos(self):
-        """get_grid retorna los mismos valores que Red.get_grid."""
+        """get_grid returns the same values as Red.get_grid."""
         red = _crear_red_mexican_hat(8, 6, seed=99)
         red2 = _crear_red_mexican_hat(8, 6, seed=99)
         red_tensor = ConstructorTensor.compilar(red2)
@@ -183,10 +183,10 @@ class TestRedTensorGetGrid:
 
 
 class TestRedTensorBalanceado:
-    """RedTensor con pesos balanceados funciona correctamente."""
+    """RedTensor with balanced weights works correctly."""
 
     def test_balanceado_procesa(self):
-        """Red con balanceo produce valores binarios después de un step."""
+        """Red with balancing produces binary values after one step."""
         random.seed(55)
         constructor = Constructor()
         red, _ = constructor.crear_grilla(

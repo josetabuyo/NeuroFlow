@@ -1,8 +1,8 @@
-"""Region — agrupación de neuronas por referencia.
+"""Region — neuron grouping by reference.
 
-Grupo nombrado de neuronas. Solo referencias, no dueña.
-La Red no sabe que existen regiones.
-Útil para el Constructor y el Experimento.
+Named group of neurons. References only, not owner.
+The Network does not know regions exist.
+Useful for the Constructor and the Experiment.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from .neurona import Neurona
 
 
 class Region:
-    """Grupo nombrado de referencias a neuronas."""
+    """Named group of neuron references."""
 
     __slots__ = ("nombre", "neuronas")
 
@@ -20,19 +20,19 @@ class Region:
         self.neuronas: dict[str, Neurona] = {}
 
     def agregar(self, neurona: Neurona) -> None:
-        """Agrega una neurona a la región (por referencia)."""
+        """Add a neuron to the region (by reference)."""
         self.neuronas[neurona.id] = neurona
 
     def ids(self) -> list[str]:
-        """Retorna la lista de IDs de neuronas en la región."""
+        """Return the list of neuron IDs in the region."""
         return list(self.neuronas.keys())
 
     def valores(self) -> list[float]:
-        """Retorna la lista de valores de neuronas en la región."""
+        """Return the list of neuron values in the region."""
         return [n.valor for n in self.neuronas.values()]
 
     def get_neurona(self, id: str) -> Neurona:
-        """Retorna una neurona por su ID."""
+        """Return a neuron by its ID."""
         return self.neuronas[id]
 
     def __len__(self) -> int:

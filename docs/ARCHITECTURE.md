@@ -1,80 +1,80 @@
-# Arquitectura Técnica
+# Technical Architecture
 
-Diseño técnico del sistema: stack, clases, API, protocolo y hosting.
+Technical design of the system: stack, classes, API, protocol, and hosting.
 
-Para la visión y filosofía del proyecto, ver [Visión](VISION.md).
-Para la hoja de ruta, ver [Etapas](STAGES.md).
-Para el modelo neuronal cercano al código, ver [Modelo Neuronal](../backend/core/README.md).
+For project vision and philosophy, see [Vision](VISION.md).
+For the roadmap, see [Stages](STAGES.md).
+For the neural model close to the code, see [Neural Model](../backend/core/README.md).
 
 ---
 
-## 1. Stack Tecnológico
+## 1. Technology Stack
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      FRONTEND                           │
 │   Vite + React + TypeScript + HTML5 Canvas              │
-│   Deploy: Vercel (gratis)                               │
+│   Deploy: Vercel (free)                                 │
 └──────────────────────┬──────────────────────────────────┘
                        │ WebSocket (ws://)
-                       │ frames en tiempo real
+                       │ real-time frames
 ┌──────────────────────┴──────────────────────────────────┐
 │                      BACKEND                            │
 │   Python 3.11+ / FastAPI / uvicorn                      │
-│   NumPy para operaciones matriciales                    │
-│   Deploy: Render.com (gratis, 750h/mes)                 │
+│   NumPy for matrix operations                           │
+│   Deploy: Render.com (free, 750h/month)                  │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Justificación
+### Rationale
 
-| Componente | Elección | Por qué |
-|------------|----------|---------|
-| Backend framework | **FastAPI** | Async nativo, WebSocket, tipado, el más popular en Python 2025-2026 |
-| Backend runtime | **uvicorn** | ASGI server estándar para FastAPI |
-| Cómputo | **NumPy** | Operaciones matriciales vectorizadas, libera GIL |
-| Frontend bundler | **Vite** | Build instantáneo, HMR, estándar actual |
-| Frontend framework | **React 19 + TypeScript** | El más adoptado, componentes reutilizables |
-| Renderizado | **HTML5 Canvas** | Directo, rápido, perfecto para grids de pixels |
-| Comunicación | **WebSocket** | Bidireccional, baja latencia, ideal para streaming de frames |
-| Hosting backend | **Render.com** | Único con free tier real para Python (750h/mes) |
-| Hosting frontend | **Vercel** | Free tier generoso, deploy automático desde Git, óptimo para React |
-| Tests backend | **pytest** | Estándar en Python, simple, potente |
-| Tests frontend | **Vitest** | Nativo de Vite, compatible con Jest API |
+| Component | Choice | Why |
+|-----------|--------|-----|
+| Backend framework | **FastAPI** | Native async, WebSocket, typing, most popular in Python 2025-2026 |
+| Backend runtime | **uvicorn** | Standard ASGI server for FastAPI |
+| Compute | **NumPy** | Vectorized matrix operations, releases GIL |
+| Frontend bundler | **Vite** | Instant build, HMR, current standard |
+| Frontend framework | **React 19 + TypeScript** | Most adopted, reusable components |
+| Rendering | **HTML5 Canvas** | Direct, fast, perfect for pixel grids |
+| Communication | **WebSocket** | Bidirectional, low latency, ideal for frame streaming |
+| Backend hosting | **Render.com** | Only one with real free tier for Python (750h/month) |
+| Frontend hosting | **Vercel** | Generous free tier, auto-deploy from Git, optimal for React |
+| Backend tests | **pytest** | Python standard, simple, powerful |
+| Frontend tests | **Vitest** | Native to Vite, Jest API compatible |
 
 ---
 
-## 2. Estructura del Proyecto
+## 2. Project Structure
 
 ```
 NeuroFlow/
 ├── backend/
-│   ├── main.py                    # Entry point FastAPI
-│   ├── requirements.txt           # Dependencias Python
-│   ├── core/                      # Modelo neuronal (port de RedJavaScript)
+│   ├── main.py                    # FastAPI entry point
+│   ├── requirements.txt           # Python dependencies
+│   ├── core/                      # Neural model (port from RedJavaScript)
 │   │   ├── __init__.py
-│   │   ├── sinapsis.py            # Conexión sináptica
-│   │   ├── dendrita.py            # Rama dendrítica
-│   │   ├── neurona.py             # Neurona + NeuronaEntrada
-│   │   ├── red.py                 # Red neuronal (contenedor tonto)
-│   │   ├── region.py              # Agrupación de neuronas (organización)
-│   │   └── constructor.py         # Factory/builder de redes y regiones
-│   ├── experiments/               # Experimentos (plug-in)
+│   │   ├── sinapsis.py            # Synaptic connection
+│   │   ├── dendrita.py            # Dendritic branch
+│   │   ├── neurona.py             # Neuron + NeuronaEntrada
+│   │   ├── red.py                 # Neural network (dumb container)
+│   │   ├── region.py              # Neuron grouping (organization)
+│   │   └── constructor.py        # Factory/builder for networks and regions
+│   ├── experiments/               # Experiments (plug-in)
 │   │   ├── __init__.py
-│   │   ├── base.py                # Clase base Experiment
-│   │   └── deamons_lab.py         # Deamons Lab (laboratorio de conexionados)
+│   │   ├── base.py                # Base Experiment class
+│   │   └── deamons_lab.py         # Deamons Lab (wiring laboratory)
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── websocket.py           # Handler WebSocket
-│   │   └── routes.py              # Endpoints REST
+│   │   ├── websocket.py           # WebSocket handler
+│   │   └── routes.py              # REST endpoints
 │   └── tests/
 │       ├── conftest.py
 │       ├── test_sinapsis.py
 │       ├── test_dendrita.py
 │       ├── test_neurona.py
-│       ├── test_red.py             # Red NO sabe de regiones
-│       ├── test_region.py          # Region es solo agrupación
-│       ├── test_constructor.py     # Constructor arma Red + Regiones
+│       ├── test_red.py             # Red does NOT know about regions
+│       ├── test_region.py          # Region is just grouping
+│       ├── test_constructor.py     # Constructor assembles Red + Regions
 │       ├── test_deamons_lab.py
 │       └── test_red_tensor.py
 │
@@ -84,79 +84,80 @@ NeuroFlow/
 │   ├── vite.config.ts
 │   ├── index.html
 │   └── src/
-│       ├── main.tsx               # Entry point React
-│       ├── App.tsx                 # Layout principal
+│       ├── main.tsx               # React entry point
+│       ├── App.tsx                # Main layout
 │       ├── components/
-│       │   ├── PixelCanvas.tsx     # Renderizado de la grilla
-│       │   ├── Sidebar.tsx         # Panel de experimentos
-│       │   └── Controls.tsx        # Play/Pause/Step/Reset
+│       │   ├── PixelCanvas.tsx    # Grid rendering
+│       │   ├── Sidebar.tsx        # Experiments panel
+│       │   └── Controls.tsx       # Play/Pause/Step/Reset
 │       ├── hooks/
-│       │   └── useExperiment.ts    # WebSocket + estado del experimento
+│       │   └── useExperiment.ts   # WebSocket + experiment state
 │       └── types/
-│           └── index.ts           # Tipos compartidos
+│           └── index.ts           # Shared types
 │
 ├── docs/
-│   ├── ARCHITECTURE.md            # Este documento
-│   ├── VISION.md                  # Filosofía, daemons, modelo de la mente
-│   ├── STAGES.md                  # Hoja de ruta (5 etapas)
-│   ├── REFERENCES.md              # Bibliografía completa
-│   └── AUTHOR.md                  # Sobre el autor y dedicatoria
+│   ├── ARCHITECTURE.md            # This document
+│   ├── VISION.md                  # Philosophy, daemons, mind model
+│   ├── STAGES.md                  # Roadmap (5 stages)
+│   ├── REFERENCES.md              # Complete bibliography
+│   └── AUTHOR.md                  # About the author and dedication
 │
-├── README.md                      # Punto de entrada, navegación
+├── README.md                      # Entry point, navigation
 └── .gitignore
 ```
 
 ---
 
-## 3. Modelo Neuronal (Core)
+## 3. Neural Model (Core)
 
-Port del modelo de RedJavaScript a Python, con una mejora arquitectónica clave:
-**separación de responsabilidades entre procesamiento y organización**.
+Port of the RedJavaScript model to Python, with a key architectural improvement:
+**separation of responsibilities between processing and organization**.
 
-### 3.0 Principio de Diseño: Separación de Responsabilidades
+### 3.0 Design Principle: Separation of Responsibilities
 
-En el proyecto original (RedJavaScript), la clase `Red` conocía las regiones
-(ENTRADA, SALIDA, INTERNA) y decidía qué neuronas procesar. Esto acopla
-organización con procesamiento.
+In the original project (RedJavaScript), the `Red` class knew about regions
+(INPUT, OUTPUT, INTERNAL) and decided which neurons to process. This couples
+organization with processing.
 
-En NeuroFlow separamos estas responsabilidades:
+In NeuroFlow we separate these responsibilities:
 
 ```
-PROCESAMIENTO (no sabe de organización)     ORGANIZACIÓN (no sabe de procesamiento)
-┌──────────────────────────────┐            ┌──────────────────────────────┐
-│  Red                         │            │  Region                      │
-│  Solo contiene neuronas.     │            │  Grupo nombrado de neuronas. │
-│  Solo las procesa a todas.   │            │  Solo referencias, no dueña. │
-│  No sabe qué es input/output.│            │  Útil para conectar, activar │
-│                              │            │  y leer subconjuntos.        │
-│  Sinapsis → Dendrita →       │            │                              │
-│  Neurona                     │            │  Constructor                 │
-│  (cada una sabe procesarse)  │            │  Crea neuronas, regiones,    │
-│                              │            │  conectividad. Sabe de       │
-└──────────────────────────────┘            │  topología y reglas.         │
-                                            │                              │
-                                            │  Experimento                 │
-                                            │  Orquesta: qué es entrada,  │
-                                            │  qué es salida, cómo se     │
-                                            │  alimenta, cómo se lee.     │
-                                            └──────────────────────────────┘
+PROCESSING (does not know about organization)     ORGANIZATION (does not know about processing)
+┌──────────────────────────────┐                  ┌──────────────────────────────┐
+│  Red                         │                  │  Region                      │
+│  Only contains neurons.      │                  │  Named group of neurons.    │
+│  Only processes all of them.│                  │  References only, not owner.│
+│  Does not know input/output. │                  │  Useful for connecting,     │
+│                              │                  │  activating and reading     │
+│  Sinapsis → Dendrita →       │                  │  subsets.                   │
+│  Neurona                     │                  │                              │
+│  (each knows how to process) │                  │  Constructor                │
+│                              │                  │  Creates neurons, regions,  │
+└──────────────────────────────┘                  │  connectivity. Knows about  │
+                                                  │  topology and rules.       │
+                                                  │                              │
+                                                  │  Experiment                 │
+                                                  │  Orchestrates: what is      │
+                                                  │  input, what is output,     │
+                                                  │  how to feed, how to read.  │
+                                                  └──────────────────────────────┘
 ```
 
-**¿Por qué?** (respaldado por la literatura)
-- **Modular Deep Learning** (arXiv 2023): Separar computación de routing/organización
-  permite módulos autónomos, transferencia positiva y generalización sistemática.
-- **PyTorch nn.Module**: El contenedor es tonto, solo hace `forward()`.
-  No sabe si es "capa de entrada" o "capa de salida". Eso lo decide quien compone.
-- **Martin Fowler (Domain Model + Factory/Builder)**: Factory para crear elementos
-  livianos (neuronas), Builder para configuraciones complejas (regiones + conectividad).
-- **Single Responsibility Principle**: La Red procesa. El Constructor organiza.
-  El Experimento orquesta.
+**Why?** (supported by the literature)
+- **Modular Deep Learning** (arXiv 2023): Separating computation from routing/organization
+  enables autonomous modules, positive transfer, and systematic generalization.
+- **PyTorch nn.Module**: The container is dumb, it only does `forward()`.
+  It does not know if it is "input layer" or "output layer". That is decided by whoever composes.
+- **Martin Fowler (Domain Model + Factory/Builder)**: Factory for creating lightweight
+  elements (neurons), Builder for complex configurations (regions + connectivity).
+- **Single Responsibility Principle**: Red processes. Constructor organizes.
+  Experiment orchestrates.
 
-### 3.1 Diagrama de Clases
+### 3.1 Class Diagram
 
 ```
 ═══════════════════════════════════════════════════════════════════
-  CAPA DE PROCESAMIENTO (core/) — No sabe de organización
+  PROCESSING LAYER (core/) — Does not know about organization
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────────────────────────────────────────────┐
@@ -164,15 +165,15 @@ PROCESAMIENTO (no sabe de organización)     ORGANIZACIÓN (no sabe de procesami
 │─────────────────────────────────────────────────────│
 │  neuronas: dict[str, Neurona]                       │
 │─────────────────────────────────────────────────────│
-│  procesar()     → procesa TODAS las neuronas        │
-│  get_grid(w, h) → retorna matriz de valores         │
-│  get_neurona(id) → retorna neurona por id           │
+│  procesar()     → processes ALL neurons             │
+│  get_grid(w, h) → returns value matrix              │
+│  get_neurona(id) → returns neuron by id             │
 │─────────────────────────────────────────────────────│
-│  NO tiene regiones.                                 │
-│  NO sabe qué es input ni output.                    │
-│  Solo itera y procesa lo que le dieron.             │
+│  Does NOT have regions.                             │
+│  Does NOT know what is input or output.             │
+│  Only iterates and processes what it was given.     │
 └────────────┬────────────────────────────────────────┘
-             │ contiene N
+             │ contains N
              ▼
 ┌─────────────────────────────────────────────────────┐
 │                     Neurona                         │
@@ -183,340 +184,340 @@ PROCESAMIENTO (no sabe de organización)     ORGANIZACIÓN (no sabe de procesami
 │  dendritas: list[Dendrita]                          │
 │  umbral: float                                      │
 │─────────────────────────────────────────────────────│
-│  procesar()   → fuzzy OR de dendritas               │
-│  activar()    → umbral sobre tensión                │
-│  entrenar()   → propaga entrenamiento               │
+│  procesar()   → fuzzy OR of dendritas               │
+│  activar()    → threshold over tension              │
+│  entrenar()   → propagates training                 │
 │─────────────────────────────────────────────────────│
 │                                                     │
 │  ┌────────────────────────────────────────────┐     │
-│  │         NeuronaEntrada (hereda)            │     │
-│  │  Sin dendritas.                            │     │
+│  │         NeuronaEntrada (inherits)           │     │
+│  │  No dendritas.                             │     │
 │  │  procesar() → no-op                        │     │
 │  │  activar()  → no-op                        │     │
-│  │  activar_external(valor) → setea valor     │     │
+│  │  activar_external(valor) → sets value      │     │
 │  │                                            │     │
-│  │  La Red la procesa igual que las demás,    │     │
-│  │  pero ella internamente no hace nada.      │     │
-│  │  La Red NO necesita saber que es especial. │     │
+│  │  Red processes it the same as others,      │     │
+│  │  but internally it does nothing.           │     │
+│  │  Red does NOT need to know it is special.  │     │
 │  └────────────────────────────────────────────┘     │
 └────────────┬────────────────────────────────────────┘
-             │ contiene M
+             │ contains M
              ▼
 ┌─────────────────────────────────────────────────────┐
-│                    Dendrita                          │
+│                    Dendrita                         │
 │─────────────────────────────────────────────────────│
-│  peso: float [-1, 1]    ← PUEDE SER NEGATIVO       │
+│  peso: float [-1, 1]    ← CAN BE NEGATIVE           │
 │  valor: float                                       │
 │  sinapsis: list[Sinapsis]                           │
 │─────────────────────────────────────────────────────│
 │  procesar()   → avg(sinapsis) * peso  (fuzzy AND)   │
-│  entrenar()   → propaga a sinapsis                  │
+│  entrenar()   → propagates to sinapsis              │
 │─────────────────────────────────────────────────────│
-│  Nota: puede tener UNA sola sinapsis si se requiere │
+│  Note: can have a SINGLE sinapsis if required       │
 └────────────┬────────────────────────────────────────┘
-             │ contiene K
+             │ contains K
              ▼
 ┌─────────────────────────────────────────────────────┐
 │                    Sinapsis                          │
 │─────────────────────────────────────────────────────│
-│  peso: float [0, 1]     ← SIEMPRE POSITIVO         │
+│  peso: float [0, 1]     ← ALWAYS POSITIVE           │
 │  valor: float                                       │
-│  neurona_entrante: Neurona (referencia al axón)     │
+│  neurona_entrante: Neurona (reference to axon)      │
 │─────────────────────────────────────────────────────│
-│  procesar()   → 1 - |peso - entrada|               │
-│  entrenar()   → Hebbian: peso += (entrada - peso)*η│
+│  procesar()   → 1 - |peso - entrada|                │
+│  entrenar()   → Hebbian: peso += (entrada - peso)*η │
 └─────────────────────────────────────────────────────┘
 
 
 ═══════════════════════════════════════════════════════════════════
-  CAPA DE ORGANIZACIÓN (core/) — No sabe de procesamiento
+  ORGANIZATION LAYER (core/) — Does not know about processing
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────────────────────────────────────────────┐
 │                    Region                           │
 │─────────────────────────────────────────────────────│
 │  nombre: str                                        │
-│  neuronas: dict[str, Neurona]  ← referencias        │
+│  neuronas: dict[str, Neurona]  ← references        │
 │─────────────────────────────────────────────────────│
 │  agregar(neurona)                                   │
-│  ids() → lista de ids                               │
-│  valores() → lista de valores                       │
+│  ids() → list of ids                                │
+│  valores() → list of values                         │
 │─────────────────────────────────────────────────────│
-│  NO es dueña de las neuronas (solo referencia).     │
-│  La Red no sabe que existen regiones.               │
-│  Es una herramienta para el Constructor y el        │
-│  Experimento, no para la Red.                       │
+│  Does NOT own the neurons (reference only).         │
+│  Red does not know regions exist.                   │
+│  It is a tool for Constructor and Experiment,      │
+│  not for Red.                                       │
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐
 │                  Constructor                        │
 │─────────────────────────────────────────────────────│
-│  Crea neuronas, las agrupa en regiones,             │
-│  construye la conectividad (dendritas, sinapsis).   │
+│  Creates neurons, groups them in regions,           │
+│  builds connectivity (dendritas, sinapsis).         │
 │─────────────────────────────────────────────────────│
-│  crear_grilla(w, h)  → Red + dict de regiones       │
+│  crear_grilla(w, h)  → Red + dict of regions        │
 │  crear_region(nombre, neuronas) → Region            │
 │  conectar(origen, destino, mascara_relativa)        │
 │  aplicar_regla_wolfram(regla, neuronas, vecinos)    │
 │─────────────────────────────────────────────────────│
-│  Conoce de topología y patrones de conexión.        │
-│  Es el ÚNICO que sabe cómo cablear la red.          │
-│  Una vez construida, la Red funciona sola.          │
+│  Knows about topology and connection patterns.      │
+│  It is the ONLY one that knows how to wire the net. │
+│  Once built, Red works on its own.                  │
 └─────────────────────────────────────────────────────┘
 
 
 ═══════════════════════════════════════════════════════════════════
-  CAPA DE ORQUESTACIÓN (experiments/) — Usa todo lo anterior
+  ORCHESTRATION LAYER (experiments/) — Uses everything above
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────────────────────────────────────────────┐
-│              Experimento (base)                     │
+│              Experiment (base)                      │
 │─────────────────────────────────────────────────────│
 │  red: Red                                           │
-│  regiones: dict[str, Region]                        │
+│  regiones: dict[str, Region]                         │
 │─────────────────────────────────────────────────────│
-│  setup(config)  → usa Constructor para armar todo   │
-│  step()         → red.procesar() + retorna frame    │
-│  click(x, y)    → busca neurona en región entrada   │
-│  reset()        → reinicia                          │
-│  get_frame()    → red.get_grid()                    │
+│  setup(config)  → uses Constructor to build all     │
+│  step()         → red.procesar() + returns frame    │
+│  click(x, y)    → finds neuron in input region       │
+│  reset()        → restarts                           │
+│  get_frame()    → red.get_grid()                     │
 │─────────────────────────────────────────────────────│
-│  SABE qué región es entrada y cuál es salida.       │
-│  SABE cómo alimentar la red y leer resultados.      │
-│  La Red no sabe nada de esto.                       │
+│  KNOWS which region is input and which is output.   │
+│  KNOWS how to feed the network and read results.    │
+│  Red knows nothing about this.                      │
 └─────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Flujo de Responsabilidades
+### 3.2 Responsibility Flow
 
 ```
-Experimento (orquesta)
+Experiment (orchestrates)
   │
-  │  1. setup: pide al Constructor que arme la red
-  │
-  ▼
-Constructor (organiza)
-  │
-  │  2. Crea neuronas (Neurona y NeuronaEntrada)
-  │  3. Las agrupa en regiones
-  │  4. Conecta dendritas y sinapsis según la regla
-  │  5. Entrega: Red + dict de Regiones
+  │  1. setup: asks Constructor to build the network
   │
   ▼
-Red (procesa) ◄── Regiones (referencias)
+Constructor (organizes)
   │
-  │  6. Experimento llama red.procesar()
-  │  7. Red itera TODAS las neuronas:
-  │     - NeuronaEntrada.procesar() → no-op (ella ya tiene su valor)
-  │     - Neurona.procesar() → evalúa dendritas → sinapsis
-  │  8. Red itera TODAS las neuronas:
+  │  2. Creates neurons (Neurona and NeuronaEntrada)
+  │  3. Groups them in regions
+  │  4. Connects dendritas and sinapsis according to the rule
+  │  5. Delivers: Red + dict of Regions
+  │
+  ▼
+Red (processes) ◄── Regions (references)
+  │
+  │  6. Experiment calls red.procesar()
+  │  7. Red iterates ALL neurons:
+  │     - NeuronaEntrada.procesar() → no-op (it already has its value)
+  │     - Neurona.procesar() → evaluates dendritas → sinapsis
+  │  8. Red iterates ALL neurons:
   │     - NeuronaEntrada.activar() → no-op
-  │     - Neurona.activar() → umbral sobre tensión
+  │     - Neurona.activar() → threshold over tension
   │
   ▼
-Experimento lee red.get_grid() → frame → WebSocket → Frontend
+Experiment reads red.get_grid() → frame → WebSocket → Frontend
 ```
 
-### 3.3 Lógica de Procesamiento
+### 3.3 Processing Logic
 
 ```
 SINAPSIS:   valor = 1 - |peso - neurona_entrante.valor|
-            Si peso=1 y entrada=1 → 1 (match perfecto)
-            Si peso=0 y entrada=0 → 1 (match perfecto)
-            Si peso=1 y entrada=0 → 0 (no match)
-            Si peso=0 y entrada=1 → 0 (no match)
+            If peso=1 and entrada=1 → 1 (perfect match)
+            If peso=0 and entrada=0 → 1 (perfect match)
+            If peso=1 and entrada=0 → 0 (no match)
+            If peso=0 and entrada=1 → 0 (no match)
 
-DENDRITA:   valor = promedio(sinapsis.procesar()) × peso_dendrita
-            Fuzzy AND: todas las sinapsis deben matchear
-            peso_dendrita puede ser negativo → inhibición
+DENDRITA:   valor = average(sinapsis.procesar()) × peso_dendrita
+            Fuzzy AND: all sinapsis must match
+            peso_dendrita can be negative → inhibition
 
 NEURONA:    max_dendrita = max(dendritas.valor)
-            min_dendrita = min(dendritas.valor)   (negativas)
-            tension = max + min                   (competencia)
-            Si tension > umbral → valor = 1
-            Si no → valor = 0
-            Fuzzy OR: cualquier dendrita positiva puede activar
-            Pero dendritas negativas pueden inhibir
+            min_dendrita = min(dendritas.valor)   (negatives)
+            tension = max + min                   (competition)
+            If tension > umbral → valor = 1
+            Else → valor = 0
+            Fuzzy OR: any positive dendrita can activate
+            But negative dendritas can inhibit
 
 NEURONA_ENTRADA:
-            procesar() → no-op (no tiene dendritas)
-            activar()  → no-op (su valor ya fue seteado)
-            Solo cambia vía activar_external(valor) desde el Experimento
+            procesar() → no-op (no dendritas)
+            activar()  → no-op (its value was already set)
+            Only changes via activar_external(valor) from Experiment
 ```
 
-### 3.4 Reglas de Peso
+### 3.4 Weight Rules
 
 ```
-SINAPSIS.peso ∈ [0, 1]     ← Siempre positivo o cero
-                               Representa "reconocimiento de patrón"
-                               peso≈1 reconoce entrada=1
-                               peso≈0 reconoce entrada=0
+SINAPSIS.peso ∈ [0, 1]     ← Always positive or zero
+                               Represents "pattern recognition"
+                               peso≈1 recognizes entrada=1
+                               peso≈0 recognizes entrada=0
 
-DENDRITA.peso ∈ [-1, 1]    ← Puede ser negativo
-                               peso > 0: dendrita excitatoria
-                               peso < 0: dendrita inhibitoria
-                               Permite implementar NOT/inhibición
+DENDRITA.peso ∈ [-1, 1]    ← Can be negative
+                               peso > 0: excitatory dendrita
+                               peso < 0: inhibitory dendrita
+                               Allows implementing NOT/inhibition
 ```
 
-### 3.5 Analogía con PyTorch
+### 3.5 PyTorch Analogy
 
 ```
 PyTorch                          NeuroFlow
 ─────────────────────────────    ─────────────────────────────
 nn.Module (forward)          →   Red (procesar)
-  No sabe si es input/output       No sabe de regiones
-  Solo computa                     Solo itera neuronas
+  Does not know if input/output    Does not know about regions
+  Only computes                    Only iterates neurons
 
 nn.Sequential / Model        →   Constructor
-  Compone módulos en orden         Arma la Red con regiones
-  Define la topología              Define conectividad
+  Composes modules in order        Builds Red with regions
+  Defines topology                 Defines connectivity
 
-Training loop                →   Experimento
-  Alimenta datos                   Alimenta entradas
-  Lee salidas                      Lee la grilla
-  Orquesta todo                    Orquesta todo
+Training loop                →   Experiment
+  Feeds data                       Feeds inputs
+  Reads outputs                    Reads the grid
+  Orchestrates everything          Orchestrates everything
 ```
 
-### 3.6 Máscaras de Conexionado (masks.py)
+### 3.6 Wiring Masks (masks.py)
 
-Las máscaras definen la topología de conexión de cada neurona: qué vecinos son
-excitatorios y cuáles inhibitorios. Se configuran como presets en `backend/core/masks.py`
-y se cargan dinámicamente desde la API.
+Masks define each neuron's connection topology: which neighbors are
+excitatory and which are inhibitory. They are configured as presets in `backend/core/masks.py`
+and loaded dynamically from the API.
 
 ```
-         Excitación (E)          Gap (G)           Inhibición (I)
+         Excitation (E)          Gap (G)           Inhibition (I)
         ┌───────────┐      ┌──────────────┐      ┌───────────────┐
-        │  Moore r=n │      │  sin conexión │      │  anillo/corona │
-        │  (vecinos  │      │  (silencio)   │      │  8 dendritas   │
-        │  cercanos) │      │              │      │  sectorizada   │
+        │  Moore r=n │      │  no connection │      │  ring/crown   │
+        │  (close    │      │  (silence)     │      │  8 dendritas  │
+        │  neighbors)│      │                │      │  sectorized   │
         └───────────┘      └──────────────┘      └───────────────┘
 ```
 
-#### Nomenclatura Deamon
+#### Daemon Nomenclature
 
-Las máscaras tipo Deamon usan la convención `E G I [DE DI]`:
+Daemon-type masks use the convention `E G I [DE DI]`:
 
 ```
-E<n>   Radio excitatorio: Moore r=n
-G<n>   Gap: n anillos de silencio entre excitación e inhibición
-I<n>   Radio inhibitorio: n anillos de corona
-DE<n>  Densidad excitatoria: fracción 1/n de sinapsis (random, seed fija)
-DI<n>  Densidad inhibitoria: fracción 1/n de sinapsis (random, seed fija)
+E<n>   Excitatory radius: Moore r=n
+G<n>   Gap: n rings of silence between excitation and inhibition
+I<n>   Inhibitory radius: n crown rings
+DE<n>  Excitatory density: fraction 1/n of sinapsis (random, fixed seed)
+DI<n>  Inhibitory density: fraction 1/n of sinapsis (random, fixed seed)
 ```
 
-Ejemplo: `E2 G3 I3 DE1 DI1.5` → Moore r=2 completa, 3 anillos de gap,
-3 anillos inhibitorios con ~67% de densidad.
+Example: `E2 G3 I3 DE1 DI1.5` → full Moore r=2, 3 gap rings,
+3 inhibitory rings with ~67% density.
 
-DE/DI omitidos implican densidad 1 (completa). La densidad usa `_random_sparse()`
-con seed fija para que la máscara sea determinista entre ejecuciones pero con
-distribución espacial aleatoria (a diferencia de `_sparse_ring` que usa patrones
-tipo checkerboard).
+DE/DI omitted implies density 1 (full). Density uses `_random_sparse()`
+with fixed seed so the mask is deterministic across runs but with
+random spatial distribution (unlike `_sparse_ring` which uses
+checkerboard-like patterns).
 
-#### Helpers de Generación
+#### Generation Helpers
 
-| Helper | Descripción |
+| Helper | Description |
 |--------|-------------|
-| `_moore(r)` | Vecindad Moore: Chebyshev dist ≤ r |
-| `_ring(r_in, r_out)` | Anillo: Chebyshev dist ∈ [r_in, r_out] |
-| `_von_neumann(r)` | Vecindad Von Neumann: Manhattan dist ≤ r |
-| `_sparse_ring(r_in, r_out, step)` | Anillo sparse determinista (checkerboard) |
-| `_random_sparse(offsets, density, seed)` | Submuestreo aleatorio con seed fija |
-| `_make_inhibitory(offsets, peso, n)` | Particiona offsets en n sectores inhibitorios |
-| `_partition(offsets, n)` | Divide offsets en n sectores angulares |
+| `_moore(r)` | Moore neighborhood: Chebyshev dist ≤ r |
+| `_ring(r_in, r_out)` | Ring: Chebyshev dist ∈ [r_in, r_out] |
+| `_von_neumann(r)` | Von Neumann neighborhood: Manhattan dist ≤ r |
+| `_sparse_ring(r_in, r_out, step)` | Deterministic sparse ring (checkerboard) |
+| `_random_sparse(offsets, density, seed)` | Random subsampling with fixed seed |
+| `_make_inhibitory(offsets, peso, n)` | Partitions offsets into n inhibitory sectors |
+| `_partition(offsets, n)` | Divides offsets into n angular sectors |
 
 ---
 
-## 4. Experimento 0: Autómata Elemental (Von Neumann)
+## 4. Experiment 0: Elementary Automaton (Von Neumann)
 
-### 4.1 Concepto
+### 4.1 Concept
 
-Un autómata celular elemental (1D, reglas de Wolfram) implementado
-íntegramente con el modelo neuronal. La grilla 2D muestra el diagrama
-espacio-temporal: cada fila es una generación del autómata.
+An elementary cellular automaton (1D, Wolfram rules) implemented
+entirely with the neural model. The 2D grid shows the space-time
+diagram: each row is one generation of the automaton.
 
 ```
-      Columnas (espacio, 50 celdas)
+      Columns (space, 50 cells)
       ←─────────────────────────────→
 
-  ↑   ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐   Fila 0: SALIDA (última generación)
+  ↑   ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐   Row 0: OUTPUT (last generation)
   │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   Filas internas: INTERNA
-  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   (procesadas bottom-up)
+  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   Internal rows: INTERNAL
+  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   (processed bottom-up)
   │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
   │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-Flujo ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
+Flow ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
   │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-  │   └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘   Fila 49: ENTRADA (condición inicial)
-                                        ← El usuario hace click aquí
+  │   └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘   Row 49: INPUT (initial condition)
+                                        ← User clicks here
 ```
 
-### 4.2 Conexionado Neural para Rule 111
+### 4.2 Neural Wiring for Rule 111
 
-Rule 111 en binario: `01101111`
+Rule 111 in binary: `01101111`
 
-| Patrón (izq, centro, der) | Decimal | Resultado |
-|---------------------------|---------|-----------|
-| 1, 1, 1                  | 7       | **0**     |
-| 1, 1, 0                  | 6       | **1**     |
-| 1, 0, 1                  | 5       | **1**     |
-| 1, 0, 0                  | 4       | **0**     |
-| 0, 1, 1                  | 3       | **1**     |
-| 0, 1, 0                  | 2       | **1**     |
-| 0, 0, 1                  | 1       | **1**     |
-| 0, 0, 0                  | 0       | **1**     |
+| Pattern (left, center, right) | Decimal | Result |
+|------------------------------|---------|--------|
+| 1, 1, 1                      | 7       | **0**  |
+| 1, 1, 0                      | 6       | **1**  |
+| 1, 0, 1                      | 5       | **1**  |
+| 1, 0, 0                      | 4       | **0**  |
+| 0, 1, 1                      | 3       | **1**  |
+| 0, 1, 0                      | 2       | **1**  |
+| 0, 0, 1                      | 1       | **1**  |
+| 0, 0, 0                      | 0       | **1**  |
 
-Cada neurona interna en posición (x, y) se conecta con las 3 neuronas
-de la fila de abajo: (x-1, y+1), (x, y+1), (x+1, y+1).
+Each internal neuron at position (x, y) connects to the 3 neurons
+in the row below: (x-1, y+1), (x, y+1), (x+1, y+1).
 
 ```
-Fila y:     [  ?  ]  ← neurona a calcular
+Row y:     [  ?  ]  ← neuron to compute
               / | \
-Fila y+1: [izq][cen][der]  ← 3 entradas
+Row y+1: [left][cen][right]  ← 3 inputs
 ```
 
-**Implementación con 6 dendritas** (una por cada patrón que produce 1):
+**Implementation with 6 dendritas** (one per pattern that produces 1):
 
 ```
-Dendrita 1 → patrón 110: sinapsis pesos [1, 1, 0] → peso_dendrita = +1
-Dendrita 2 → patrón 101: sinapsis pesos [1, 0, 1] → peso_dendrita = +1
-Dendrita 3 → patrón 011: sinapsis pesos [0, 1, 1] → peso_dendrita = +1
-Dendrita 4 → patrón 010: sinapsis pesos [0, 1, 0] → peso_dendrita = +1
-Dendrita 5 → patrón 001: sinapsis pesos [0, 0, 1] → peso_dendrita = +1
-Dendrita 6 → patrón 000: sinapsis pesos [0, 0, 0] → peso_dendrita = +1
+Dendrita 1 → pattern 110: sinapsis weights [1, 1, 0] → peso_dendrita = +1
+Dendrita 2 → pattern 101: sinapsis weights [1, 0, 1] → peso_dendrita = +1
+Dendrita 3 → pattern 011: sinapsis weights [0, 1, 1] → peso_dendrita = +1
+Dendrita 4 → pattern 010: sinapsis weights [0, 1, 0] → peso_dendrita = +1
+Dendrita 5 → pattern 001: sinapsis weights [0, 0, 1] → peso_dendrita = +1
+Dendrita 6 → pattern 000: sinapsis weights [0, 0, 0] → peso_dendrita = +1
 ```
 
-Cuando el patrón de entrada es, por ejemplo, `1 1 0`:
+When the input pattern is, for example, `1 1 0`:
 - Dendrita 1 (110): sinapsis → [1-|1-1|, 1-|1-1|, 1-|0-0|] = [1, 1, 1] → avg=1.0 ✓
 - Dendrita 2 (101): sinapsis → [1-|1-1|, 1-|0-1|, 1-|1-0|] = [1, 0, 0] → avg=0.33 ✗
-- ...solo la dendrita 1 da valor alto → neurona se activa → **1** ✓
+- ...only dendrita 1 gives high value → neuron activates → **1** ✓
 
-### 4.3 Procesamiento por Frames
+### 4.3 Frame-by-Frame Processing
 
 ```
-Frame 0:  Solo fila 49 visible (ENTRADA, click del usuario)
-Frame 1:  Se procesa fila 48 (lee fila 49)
-Frame 2:  Se procesa fila 47 (lee fila 48)
+Frame 0:  Only row 49 visible (INPUT, user click)
+Frame 1:  Row 48 processed (reads row 49)
+Frame 2:  Row 47 processed (reads row 48)
 ...
-Frame 49: Se procesa fila 0 (SALIDA)
+Frame 49: Row 0 processed (OUTPUT)
 
-Total: 49 frames para llenar toda la grilla
+Total: 49 frames to fill the entire grid
 ```
 
-### 4.4 Reglas Adicionales Planificadas
+### 4.4 Additional Rules Planned
 
-| Regla | Tipo | Descripción |
-|-------|------|-------------|
-| Rule 111 | Determinista | Primer test, muchos 1s |
-| Rule 30 | Caótica | Triángulos de Sierpinski, caos |
-| Rule 90 | Fractal | Triángulo de Sierpinski perfecto |
-| Rule 110 | Turing-completa | La más interesante teóricamente |
+| Rule | Type | Description |
+|------|------|-------------|
+| Rule 111 | Deterministic | First test, many 1s |
+| Rule 30 | Chaotic | Sierpinski triangles, chaos |
+| Rule 90 | Fractal | Perfect Sierpinski triangle |
+| Rule 110 | Turing-complete | Theoretically most interesting |
 
-Cada regla solo requiere reconfigurar qué dendritas tiene cada neurona.
-El modelo neuronal (Sinapsis, Dendrita, Neurona, Red) no cambia.
+Each rule only requires reconfiguring which dendritas each neuron has.
+The neural model (Sinapsis, Dendrita, Neurona, Red) does not change.
 
 ---
 
-## 5. API y Comunicación
+## 5. API and Communication
 
 ### 5.1 REST Endpoints
 
@@ -534,26 +535,26 @@ GET  /api/health
 ### 5.2 WebSocket Protocol
 
 ```
-Conexión: ws://host/ws/experiment
+Connection: ws://host/ws/experiment
 
-─── Cliente → Servidor ───────────────────────────────────
+─── Client → Server ───────────────────────────────────
 
 { "action": "start",
   "experiment": "deamons_lab",
   "config": { "width": 30, "height": 30, "mask": "simple" } }
 
-{ "action": "click", "x": 25, "y": 49 }    // Activar neurona
+{ "action": "click", "x": 25, "y": 49 }    // Activate neuron
 
-{ "action": "step" }                         // Avanzar 1 frame
-{ "action": "play" }                         // Animación continua
-{ "action": "pause" }                        // Pausar
-{ "action": "reset" }                        // Reiniciar
+{ "action": "step" }                         // Advance 1 frame
+{ "action": "play" }                         // Continuous animation
+{ "action": "pause" }                        // Pause
+{ "action": "reset" }                        // Restart
 
-─── Servidor → Cliente ───────────────────────────────────
+─── Server → Client ───────────────────────────────────
 
 { "type": "frame",
   "generation": 5,
-  "grid": [[0,1,0,...], [1,1,0,...], ...],   // Matriz 50x50
+  "grid": [[0,1,0,...], [1,1,0,...], ...],   // 50x50 matrix
   "stats": {
     "active_cells": 123,
     "processed_rows": 5,
@@ -568,18 +569,18 @@ Conexión: ws://host/ws/experiment
   "message": "..." }
 ```
 
-### 5.3 Flujo de Datos
+### 5.3 Data Flow
 
 ```
 ┌──────────────────────┐          ┌──────────────────────────────────┐
 │      FRONTEND        │          │            BACKEND               │
 │                      │          │                                  │
 │  ┌────────────────┐  │  start   │  ┌────────────────────────────┐  │
-│  │   Sidebar      │──┼─────────►│  │   Experimento (orquesta)  │  │
+│  │   Sidebar      │──┼─────────►│  │   Experiment (orchestrates)│  │
 │  │  (experiments) │  │          │  │                            │  │
 │  └────────────────┘  │          │  │  setup:                    │  │
 │                      │          │  │   Constructor → Red        │  │
-│  ┌────────────────┐  │  click   │  │               + Regiones   │  │
+│  ┌────────────────┐  │  click   │  │               + Regions     │  │
 │  │  PixelCanvas   │──┼─────────►│  │                            │  │
 │  │  (HTML5 Canvas)│  │          │  │  click(x,y):               │  │
 │  │  50×50 pixels  │  │          │  │   region_entrada           │  │
@@ -587,7 +588,7 @@ Conexión: ws://host/ws/experiment
 │           │          │          │  │     .activar_external(1)   │  │
 │  ┌────────┴───────┐  │  frame   │  │                            │  │
 │  │  useExperiment │◄─┼──────────│  │  step:                     │  │
-│  │  (WebSocket)   │  │          │  │   red.procesar()  ← tonta  │  │
+│  │  (WebSocket)   │  │          │  │   red.procesar()  ← dumb   │  │
 │  └────────────────┘  │          │  │     Neurona.procesar()     │  │
 │                      │          │  │       Dendrita.procesar()  │  │
 │  ┌────────────────┐  │          │  │         Sinapsis.procesar()│  │
@@ -599,47 +600,47 @@ Conexión: ws://host/ws/experiment
 
 ---
 
-## 6. Frontend: Diseño de UI
+## 6. Frontend: UI Design
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  NeuroFlow                                          v0.1.0  │
 ├──────────────┬──────────────────────────────────────────────┤
 │              │                                              │
-│ EXPERIMENTOS │         GRILLA DE NEURONAS                   │
+│ EXPERIMENTS  │         NEURON GRID                          │
 │              │                                              │
 │ ● Exp 0:    │    ┌──────────────────────────────┐           │
-│   Von Neumann│    │  ■ □ □ ■ □ ■ ■ □ □ ■ ...  │  SALIDA   │
+│   Von Neumann│    │  ■ □ □ ■ □ ■ ■ □ □ ■ ...  │  OUTPUT    │
 │              │    │  □ ■ □ □ ■ □ □ ■ □ □ ...  │           │
-│   Regla:     │    │  ■ ■ □ ■ ■ ■ □ □ ■ □ ...  │           │
-│   [111 ▼]    │    │  □ □ ■ □ □ □ ■ □ □ ■ ...  │  INTERNA  │
+│   Rule:      │    │  ■ ■ □ ■ ■ ■ □ □ ■ □ ...  │           │
+│   [111 ▼]    │    │  □ □ ■ □ □ □ ■ □ □ ■ ...  │           │
 │              │    │  ...                        │           │
-│   Tamaño:    │    │  □ □ □ □ □ ■ □ □ □ □ ...  │           │
-│   50 × 50    │    │  □ □ □ □ □ □ □ □ □ □ ...  │  ENTRADA  │
+│   Size:      │    │  □ □ □ □ □ ■ □ □ □ □ ...  │  INTERNAL  │
+│   50 × 50    │    │  □ □ □ □ □ □ □ □ □ □ ...  │           │
 │              │    └──────────────────────────────┘           │
-│   Velocidad: │    ← Click para activar neuronas →           │
+│   Speed:     │    ← Click to activate neurons →             │
 │   ████░░ 7fps│                                              │
 │              │   ┌──────────────────────────────────┐       │
 │ ○ Exp 1:    │   │  ▶ Play  ⏸ Pause  ⏭ Step  ↺ Reset │    │
 │   Conway     │   └──────────────────────────────────┘       │
-│   (próximo)  │                                              │
-│              │   Gen: 23/50  │  Celdas activas: 147         │
+│   (next)     │                                              │
+│              │   Gen: 23/50  │  Active cells: 147           │
 │              │                                              │
 ├──────────────┴──────────────────────────────────────────────┤
-│  ⬛ = neurona activa (valor=1)   □ = inactiva (valor=0)     │
-│  🔵 = ENTRADA   🔴 = SALIDA   ⬜ = INTERNA                 │
+│  ⬛ = active neuron (valor=1)   □ = inactive (valor=0)      │
+│  🔵 = INPUT   🔴 = OUTPUT   ⬜ = INTERNAL                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 7. Hosting Gratuito
+## 7. Free Hosting
 
 ### 7.1 Backend → Render.com
 
-- **Plan**: Free tier (750 horas/mes)
-- **Limitación**: Spin-down tras 15min de inactividad (~1min cold start)
-- **Deploy**: Desde Git, auto-build con `requirements.txt`
+- **Plan**: Free tier (750 hours/month)
+- **Limitation**: Spin-down after 15min of inactivity (~1min cold start)
+- **Deploy**: From Git, auto-build with `requirements.txt`
 - **Runtime**: Python 3.11, uvicorn
 
 ```yaml
@@ -657,9 +658,9 @@ services:
 
 ### 7.2 Frontend → Vercel
 
-- **Plan**: Hobby (gratis)
-- **Build**: Vite produce archivos estáticos
-- **Deploy**: Desde Git, auto-detect Vite
+- **Plan**: Hobby (free)
+- **Build**: Vite produces static files
+- **Deploy**: From Git, auto-detect Vite
 
 ```json
 // vercel.json
@@ -672,7 +673,7 @@ services:
 
 ### 7.3 CORS
 
-El backend debe permitir requests del frontend:
+The backend must allow requests from the frontend:
 
 ```python
 # main.py
@@ -686,83 +687,83 @@ app.add_middleware(
 
 ---
 
-## 8. Plan de Implementación
+## 8. Implementation Plan
 
-### Fase 0: Walking Skeleton (este sprint)
+### Phase 0: Walking Skeleton (this sprint)
 
 ```
 1. [Tests]  → test_sinapsis.py, test_dendrita.py, test_neurona.py, test_red.py
 2. [Core]   → sinapsis.py, dendrita.py, neurona.py, red.py, constructor.py
 3. [Tests]  → test_deamons_lab.py, test_red_tensor.py
-4. [API]    → main.py con WebSocket + endpoint de experimentos
-5. [UI]     → React app con Canvas, sidebar, controles
-6. [Exp]    → Deamons Lab (todos los conexionados + Wolfram) end-to-end
-7. [Deploy] → Backend en Render, Frontend en Vercel
+4. [API]    → main.py with WebSocket + experiments endpoint
+5. [UI]     → React app with Canvas, sidebar, controls
+6. [Exp]    → Deamons Lab (all wirings + Wolfram) end-to-end
+7. [Deploy] → Backend on Render, Frontend on Vercel
 ```
 
-### Fase 1: Más Reglas + Conway
+### Phase 1: More Rules + Conway
 
 ```
-8.  Rule 30, 90, 110 (solo reconfiguración de dendritas)
-9.  Experimento 1: Game of Life (Conway) - vecindad Moore (8 vecinos)
-10. UI: selector de experimentos dinámico
+8.  Rule 30, 90, 110 (dendrita reconfiguration only)
+9.  Experiment 1: Game of Life (Conway) - Moore neighborhood (8 neighbors)
+10. UI: dynamic experiment selector
 ```
 
-### Fase 2: Aprendizaje Emergente
+### Phase 2: Emergent Learning
 
 ```
-11. Activar entrenamiento Hebbiano
-12. Poda sináptica
-13. Visualización de pesos en tiempo real
+11. Activate Hebbian training
+12. Synaptic pruning
+13. Real-time weight visualization
 ```
 
-### Fase 3: Deamons + HTM
+### Phase 3: Daemons + HTM
 
 ```
-14. Mapas auto-organizados
-15. Memoria temporal jerárquica
-16. Regiones funcionales (DOLOR)
+14. Self-organized maps
+15. Hierarchical temporal memory
+16. Functional regions (PAIN)
 ```
 
 ---
 
-## 9. Decisiones Técnicas Clave
+## 9. Key Technical Decisions
 
-### ¿Por qué no Jupyter Notebooks?
+### Why not Jupyter Notebooks?
 
-- No son desplegables como aplicación web
-- Requieren instalación local
-- La visualización interactiva es limitada
-- No escalan a múltiples usuarios
+- Not deployable as a web application
+- Require local installation
+- Interactive visualization is limited
+- Do not scale to multiple users
 
-### ¿Por qué separar frontend y backend?
+### Why separate frontend and backend?
 
-- El cómputo neural puede ser pesado → backend dedicado
-- La UI debe ser responsive → no bloquear con cómputo
-- Permite escalar independientemente
-- Permite usar GPU en backend sin afectar UI
+- Neural computation can be heavy → dedicated backend
+- UI must be responsive → do not block with computation
+- Allows independent scaling
+- Allows using GPU in backend without affecting UI
 
-### ¿Por qué WebSocket y no polling?
+### Why WebSocket and not polling?
 
-- El autómata produce ~10-30 frames/segundo
-- Polling generaría demasiados HTTP requests
-- WebSocket permite streaming bidireccional continuo
-- El cliente puede enviar clicks sin latencia extra
+- The automaton produces ~10-30 frames/second
+- Polling would generate too many HTTP requests
+- WebSocket enables continuous bidirectional streaming
+- Client can send clicks without extra latency
 
-### ¿Por qué React y no Svelte/Vue?
+### Why React and not Svelte/Vue?
 
-- React es el más adoptado y documentado
-- Para un Canvas con sidebar, React es suficientemente simple
-- Ecosistema más grande para futuras necesidades
-- TypeScript support maduro
+- React is the most adopted and documented
+- For a Canvas with sidebar, React is sufficiently simple
+- Larger ecosystem for future needs
+- Mature TypeScript support
 
-### ¿Por qué NumPy para el cómputo?
+### Why NumPy for computation?
 
-- Operaciones vectorizadas son ~100x más rápidas que loops Python
-- Para 50×50 = 2500 neuronas, es instantáneo
-- Escala bien hasta ~1000×1000 sin GPU
-- Familiar para científicos e ingenieros
+- Vectorized operations are ~100x faster than Python loops
+- For 50×50 = 2500 neurons, it is instant
+- Scales well up to ~1000×1000 without GPU
+- Familiar to scientists and engineers
 
 ---
 
-← Volver al [README](../README.md)
+← Back to [README](../README.md)

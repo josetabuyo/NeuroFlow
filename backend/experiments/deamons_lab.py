@@ -1,11 +1,11 @@
-"""Experimento Deamons Lab — laboratorio de conexionados con máscara configurable.
+"""Deamons Lab experiment — configurable mask connectivity lab.
 
-Permite elegir entre múltiples presets de conexionado (sombrero mexicano)
-y ajustar el balance excitación/inhibición. Soporta reconexión en caliente:
-cambiar máscara y balance sin perder el estado de las neuronas.
+Choose from multiple wiring presets (Mexican hat) and adjust the
+excitation/inhibition balance. Supports hot reconnection: change mask
+and balance without losing neuron state.
 
-Incluye métricas de "daemons" (Dennett): clusters de activación en forma de
-campana que compiten por exclusión lateral.
+Includes "daemon" metrics (Dennett): bell-shaped activation clusters
+that compete through lateral exclusion.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def _detect_daemons(
 
 
 class DeamonsLabExperiment(Experimento):
-    """Laboratorio de conexionados con máscara configurable."""
+    """Configurable mask connectivity lab."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -107,13 +107,13 @@ class DeamonsLabExperiment(Experimento):
         self._last_history_gen: int = -1
 
     def setup(self, config: dict[str, Any]) -> None:
-        """Configura grilla 2D con máscara, balance e inicialización elegidos.
+        """Configure a 2D grid with the chosen mask, balance, and initialization.
 
         Config keys:
-            width (int): Ancho de la grilla (default 50).
-            height (int): Alto de la grilla (default 50).
-            mask (str): ID del preset de máscara (default "simple").
-            balance (float | None): Balance excitación/inhibición (default None).
+            width (int): Grid width (default 50).
+            height (int): Grid height (default 50).
+            mask (str): Mask preset ID (default "simple").
+            balance (float | None): Excitation/inhibition balance (default None).
             balance_mode (str): "none", "weight", or "synapse_count".
 
         Wolfram masks (mask_type == "wolfram") automatically set:
@@ -175,7 +175,7 @@ class DeamonsLabExperiment(Experimento):
         self._last_history_gen = -1
 
     def reconnect(self, config: dict[str, Any]) -> None:
-        """Cambia máscara y/o balance. Wolfram masks do a full reset (new init)."""
+        """Change mask and/or balance. Wolfram masks do a full reset (new init)."""
         if self.red_tensor is None:
             return
 
@@ -239,14 +239,14 @@ class DeamonsLabExperiment(Experimento):
         self._last_history_gen = -1
 
     def click(self, x: int, y: int) -> None:
-        """Toggle: si valor < 0.5 -> activar (1.0), si >= 0.5 -> desactivar (0.0)."""
+        """Toggle: if value < 0.5 -> activate (1.0), if >= 0.5 -> deactivate (0.0)."""
         idx = y * self.width + x
         if 0 <= idx < self.red_tensor.n_real:
             current = self.red_tensor.valores[idx].item()
             self.red_tensor.set_valor(idx, 0.0 if current >= 0.5 else 1.0)
 
     def step(self) -> dict[str, Any]:
-        """Un step procesa toda la red de golpe."""
+        """One step processes the entire network at once."""
         self.red_tensor.procesar()
         self.generation += 1
 
@@ -261,7 +261,7 @@ class DeamonsLabExperiment(Experimento):
         }
 
     def step_n(self, count: int) -> dict[str, Any]:
-        """N steps en una sola operación tensorial."""
+        """N steps in a single tensor operation."""
         self.red_tensor.procesar_n(count)
         self.generation += count
         return {
@@ -272,19 +272,19 @@ class DeamonsLabExperiment(Experimento):
         }
 
     def get_frame(self) -> list[list[float]]:
-        """Retorna la grilla actual como matriz de valores."""
+        """Return the current grid as a matrix of values."""
         if self.red_tensor:
             return self.red_tensor.get_grid(self.width, self.height)
         return super().get_frame()
 
     def get_tension_frame(self) -> list[list[float]] | None:
-        """Retorna la grilla de tensiones superficiales."""
+        """Return the surface tension grid."""
         if self.red_tensor:
             return self.red_tensor.get_tension_grid(self.width, self.height)
         return None
 
     def get_stats(self) -> dict[str, Any]:
-        """Retorna estadísticas con métricas de daemons.
+        """Return statistics with daemon metrics.
 
         Daemon metrics (only clusters >= _MIN_DAEMON_SIZE count as daemons):
         - daemon_count: number of daemons (real clusters, not noise)
@@ -343,9 +343,9 @@ class DeamonsLabExperiment(Experimento):
         }
 
     def reset(self) -> None:
-        """Reinicia el experimento con la misma configuración."""
+        """Reset the experiment with the same configuration."""
         self.setup(self._config)
 
     def is_complete(self) -> bool:
-        """Deamons Lab nunca termina."""
+        """Deamons Lab never ends."""
         return False

@@ -227,7 +227,7 @@ export function Sidebar({
             letterSpacing: "0.1em",
           }}
         >
-          Experimentos
+          Experiments
         </h3>
         {experiments.map((exp) => (
           <button
@@ -269,7 +269,7 @@ export function Sidebar({
                   marginBottom: "4px",
                 }}
               >
-                Regla
+                Rule
               </label>
               <select
                 value={config.rule ?? ""}
@@ -305,7 +305,7 @@ export function Sidebar({
                   marginBottom: "4px",
                 }}
               >
-                Ancho
+                Width
               </label>
               <NumericInput
                 value={config.width}
@@ -324,7 +324,7 @@ export function Sidebar({
                   marginBottom: "4px",
                 }}
               >
-                Alto
+                Height
               </label>
               <NumericInput
                 value={config.height}
@@ -347,7 +347,7 @@ export function Sidebar({
                   letterSpacing: "0.1em",
                 }}
               >
-                Conexionado
+                Wiring
               </label>
               <select
                 value={config.mask ?? masks[0].id}
@@ -382,7 +382,7 @@ export function Sidebar({
                   marginBottom: "4px",
                 }}
               >
-                Modo de balance
+                Balance mode
               </label>
               <select
                 value={config.balance_mode ?? "none"}
@@ -439,7 +439,7 @@ export function Sidebar({
                   display: "block",
                 }}
               >
-                0 = sin cambio, + excitatorio, − inhibitorio
+                0 = no change, + excitatory, - inhibitory
               </span>
             </div>
           )}
@@ -474,7 +474,7 @@ export function Sidebar({
                   display: "block",
                 }}
               >
-                0 = sin cambio, + excitatorio, − inhibitorio
+                0 = no change, + excitatory, - inhibitory
               </span>
             </div>
           )}
@@ -490,7 +490,7 @@ export function Sidebar({
                   letterSpacing: "0.1em",
                 }}
               >
-                Vista previa
+                Preview
               </label>
               <MaskPreview grid={balancedGrid} />
             </div>
@@ -507,7 +507,7 @@ export function Sidebar({
                   marginBottom: "2px",
                 }}
               >
-                Sinapsis
+                Synapses
               </label>
               <div
                 style={{
@@ -560,7 +560,7 @@ export function Sidebar({
             }}
           >
             {isInitializing && <span className="neuro-spinner-sm" />}
-            {isInitializing ? "Inicializando..." : connected ? "Iniciar Experimento" : "Conectando..."}
+            {isInitializing ? "Initializing..." : connected ? "Start Experiment" : "Connecting..."}
           </button>
 
           {canReconnect && onReconnect && (
@@ -578,7 +578,7 @@ export function Sidebar({
                 transition: "all 0.15s",
               }}
             >
-              Reconectar
+              Reconnect
             </button>
           )}
         </div>
@@ -587,11 +587,11 @@ export function Sidebar({
       <div style={{ marginTop: "auto", fontSize: "0.7rem", color: "#444" }}>
         <p>
           {selectedExp?.rules
-            ? "Click en la fila inferior (azul) para activar neuronas de entrada."
-            : "Click en cualquier celda para activar/desactivar neuronas."}
+            ? "Click on the bottom row (blue) to activate input neurons."
+            : "Click on any cell to activate/deactivate neurons."}
         </p>
         <p style={{ marginTop: "4px" }}>
-          Usa Play para ver la propagacion automatica.
+          Use Play to see automatic propagation.
         </p>
       </div>
     </aside>

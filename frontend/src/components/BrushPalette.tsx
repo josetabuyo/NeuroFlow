@@ -108,11 +108,10 @@ export function BrushPalette({
         zIndex: 10,
       }}
     >
-      {/* ── Ver Tensiones ── */}
       <button
         onClick={onToggleTension}
-        title={tensionMode ? "Ocultar tensiones" : "Ver tensiones superficiales"}
-        aria-label="Ver tensiones"
+        title={tensionMode ? "Hide tensions" : "View surface tensions"}
+        aria-label="View tensions"
         style={{
           ...toolBtnStyle(tensionMode, "#ff6b35"),
           width: "100%",
@@ -122,12 +121,11 @@ export function BrushPalette({
         ≋
       </button>
 
-      {/* ── Inspeccionar ── */}
       <button
         onClick={onToggleInspect}
         disabled={!canInspect && !inspectMode}
-        title="Inspeccionar conexiones"
-        aria-label="Herramienta inspeccionar"
+        title="Inspect connections"
+        aria-label={inspectMode ? "Brush tool" : "Inspect tool"}
         style={{
           ...toolBtnStyle(inspectMode, "#ffff00"),
           width: "100%",
@@ -145,7 +143,6 @@ export function BrushPalette({
         }}
       />
 
-      {/* ── Brush controls ── */}
       <div
         data-testid="brush-controls"
         style={{
@@ -161,8 +158,8 @@ export function BrushPalette({
         <button
           onClick={onIncrease}
           disabled={!canIncrease}
-          title="Aumentar tamaño"
-          aria-label="Aumentar pincel"
+          title="Increase size"
+          aria-label="Increase brush"
           style={{
             width: 36,
             height: 24,
@@ -183,7 +180,7 @@ export function BrushPalette({
         </button>
 
         <div
-          title={`Pincel ${brushSize}×${brushSize} (${pixelCount} px)`}
+          title={`Brush ${brushSize}×${brushSize} (${pixelCount} px)`}
           style={{
             width: 36,
             height: 36,
@@ -214,8 +211,8 @@ export function BrushPalette({
         <button
           onClick={onDecrease}
           disabled={!canDecrease}
-          title="Reducir tamaño"
-          aria-label="Reducir pincel"
+          title="Decrease size"
+          aria-label="Decrease brush"
           style={{
             width: 36,
             height: 24,
@@ -237,7 +234,7 @@ export function BrushPalette({
 
         <button
           onClick={onToggleMode}
-          title={isActivate ? "Activar (ON)" : "Desactivar (OFF)"}
+          title={isActivate ? "Activate (ON)" : "Deactivate (OFF)"}
           style={{
             width: 36,
             height: 24,

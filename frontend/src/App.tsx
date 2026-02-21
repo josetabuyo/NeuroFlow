@@ -16,18 +16,18 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
     id: "deamons_lab",
     name: "Deamons Lab",
     description:
-      "Laboratorio de conexionados con máscara y balance configurables",
+      "Configurable mask connectivity lab with balance control",
     masks: [
-      { id: "simple", name: "Kohonen Simple", description: "Moore r=1, corona r=2-4, 8 dendritas inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, 8 bloques 3x3", dendrites_inh: 8 },
-      { id: "wide_hat", name: "Sombrero Ancho", description: "Moore r=1, corona r=2-7, 8 dendritas inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-7, corona grande", dendrites_inh: 8 },
-      { id: "narrow_hat", name: "Sombrero Estrecho", description: "Moore r=1, corona r=2-3, 8 dendritas inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-3, corona cercana", dendrites_inh: 8 },
-      { id: "big_center", name: "Centro Grande", description: "Moore r=2 (24 vecinos), corona r=4-7, 8 dendritas inh.", center: "Moore r=2 (24 vecinos)", corona: "r=4-7, corona lejana", dendrites_inh: 8 },
-      { id: "cross_center", name: "Cruz Central", description: "Von Neumann r=1 (4 vecinos), corona r=2-4, 4 dendritas inh.", center: "Von Neumann r=1 (4 vecinos)", corona: "r=2-4, 4 bloques cardinales", dendrites_inh: 4 },
-      { id: "one_dendrite", name: "Una Dendrita", description: "Moore r=1, corona r=2-4 en 1 sola dendrita inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, todo en 1 dendrita", dendrites_inh: 1 },
-      { id: "fine_grain", name: "Grano Fino", description: "Moore r=1, corona r=2-4, 16 sectores inh.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, 16 sectores", dendrites_inh: 16 },
-      { id: "double_ring", name: "Doble Anillo", description: "Moore r=1, anillo r=2-3 (-1) + anillo r=5-7 (-0.5).", center: "Moore r=1 (8 vecinos)", corona: "r=2-3 (-1) + r=5-7 (-0.5)", dendrites_inh: 16 },
-      { id: "soft_inhibit", name: "Inhibicion Suave", description: "Moore r=1, corona r=2-4, peso inh. -0.5.", center: "Moore r=1 (8 vecinos)", corona: "r=2-4, peso -0.5", dendrites_inh: 8 },
-      { id: "strong_center", name: "Centro Fuerte", description: "Moore r=1 x2 dendritas exc., corona r=2-4.", center: "Moore r=1 (2 dendritas exc.)", corona: "r=2-4, peso -1", dendrites_inh: 8 },
+      { id: "simple", name: "Kohonen Simple", description: "Moore r=1, corona r=2-4, 8 inh. dendrites.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, 8 blocks 3x3", dendrites_inh: 8 },
+      { id: "wide_hat", name: "Wide Hat", description: "Moore r=1, corona r=2-7, 8 inh. dendrites.", center: "Moore r=1 (8 neighbors)", corona: "r=2-7, large corona", dendrites_inh: 8 },
+      { id: "narrow_hat", name: "Narrow Hat", description: "Moore r=1, corona r=2-3, 8 inh. dendrites.", center: "Moore r=1 (8 neighbors)", corona: "r=2-3, close corona", dendrites_inh: 8 },
+      { id: "big_center", name: "Big Center", description: "Moore r=2 (24 neighbors), corona r=4-7, 8 inh. dendrites.", center: "Moore r=2 (24 neighbors)", corona: "r=4-7, far corona", dendrites_inh: 8 },
+      { id: "cross_center", name: "Cross Center", description: "Von Neumann r=1 (4 neighbors), corona r=2-4, 4 inh. dendrites.", center: "Von Neumann r=1 (4 neighbors)", corona: "r=2-4, 4 cardinal blocks", dendrites_inh: 4 },
+      { id: "one_dendrite", name: "One Dendrite", description: "Moore r=1, corona r=2-4 in 1 single inh. dendrite.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, all in 1 dendrite", dendrites_inh: 1 },
+      { id: "fine_grain", name: "Fine Grain", description: "Moore r=1, corona r=2-4, 16 inh. sectors.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, 16 sectors", dendrites_inh: 16 },
+      { id: "double_ring", name: "Double Ring", description: "Moore r=1, ring r=2-3 (-1) + ring r=5-7 (-0.5).", center: "Moore r=1 (8 neighbors)", corona: "r=2-3 (-1) + r=5-7 (-0.5)", dendrites_inh: 16 },
+      { id: "soft_inhibit", name: "Soft Inhibition", description: "Moore r=1, corona r=2-4, inh. weight -0.5.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, weight -0.5", dendrites_inh: 8 },
+      { id: "strong_center", name: "Strong Center", description: "Moore r=1 x2 exc. dendrites, corona r=2-4.", center: "Moore r=1 (2 exc. dendrites)", corona: "r=2-4, weight -1", dendrites_inh: 8 },
     ],
     default_config: { width: 50, height: 50, balance: 0.0 },
   },
@@ -267,7 +267,7 @@ function App() {
                   <div style={{ textAlign: "center", color: "#888" }}>
                     <div className="neuro-spinner" />
                     <p style={{ marginTop: "12px", fontSize: "0.85rem" }}>
-                      Construyendo red...
+                      Building network...
                     </p>
                   </div>
                 </div>
@@ -284,7 +284,7 @@ function App() {
               {isInitializing ? (
                 <>
                   <div className="neuro-spinner" style={{ margin: "0 auto 12px" }} />
-                  <p>Construyendo red...</p>
+                  <p>Building network...</p>
                 </>
               ) : (
                 <>
@@ -293,8 +293,8 @@ function App() {
                   </p>
                   <p>
                     {connected
-                      ? "Selecciona un experimento e inicia"
-                      : "Conectando al servidor..."}
+                      ? "Select an experiment and start"
+                      : "Connecting to server..."}
                   </p>
                 </>
               )}
@@ -329,45 +329,45 @@ function App() {
             <>
               <span>
                 <span style={colorSwatch("#00ff00")} />
-                Excitatorio (+1)
+                Excitatory (+1)
               </span>
               <span>
                 <span style={colorSwatch("#000000", "1px solid #333")} />
-                Neutro (0)
+                Neutral (0)
               </span>
               <span>
                 <span style={colorSwatch("#8b00ff")} />
-                Inhibitorio (-1)
+                Inhibitory (-1)
               </span>
               <span>
                 <span style={colorSwatch("#111111", "1px solid #333")} />
-                Sin conexión
+                No connection
               </span>
             </>
           ) : tensionMode ? (
             <>
               <span>
                 <span style={colorSwatch("#ff8c00")} />
-                Excitación (+1)
+                Excitation (+1)
               </span>
               <span>
                 <span style={colorSwatch("#0a0a0a", "1px solid #333")} />
-                Neutro (0)
+                Neutral (0)
               </span>
               <span>
                 <span style={colorSwatch("#5000ff")} />
-                Inhibición (-1)
+                Inhibition (-1)
               </span>
             </>
           ) : (
             <>
               <span>
                 <span style={colorSwatch("#ffffff")} />
-                Activa
+                Active
               </span>
               <span>
                 <span style={colorSwatch("#0a0a0a", "1px solid #333")} />
-                Inactiva
+                Inactive
               </span>
             </>
           )}

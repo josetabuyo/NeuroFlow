@@ -1,84 +1,84 @@
-# Experimentos — `backend/experiments/`
+# Experiments — `backend/experiments/`
 
-Los experimentos orquestan el modelo neuronal: deciden qué es entrada,
-qué es salida, cómo se alimenta la red y cómo se leen los resultados.
-
----
-
-## En una línea
-
-> Cada experimento usa el Constructor para armar una Red con Regiones,
-> y luego la procesa frame a frame vía WebSocket.
+Experiments orchestrate the neural model: they decide what is input, what
+is output, how to feed the network, and how to read the results.
 
 ---
 
-## Estructura
+## In one line
 
-Todos los experimentos heredan de `base.py`:
+> Each experiment uses the Constructor to assemble a Network with Regions,
+> then processes it frame by frame via WebSocket.
+
+---
+
+## Structure
+
+All experiments inherit from `base.py`:
 
 ```
-Experimento (base)
-├── setup(config)  → usa Constructor para armar Red + Regiones
-├── step()         → red.procesar() + retorna frame
-├── click(x, y)    → manipula neurona en región de entrada
-├── reset()        → reinicia
-└── get_frame()    → red.get_grid()
+Experiment (base)
+├── setup(config)  → uses Constructor to build Network + Regions
+├── step()         → network.process() + returns frame
+├── click(x, y)    → manipulates neuron in input region
+├── reset()        → resets
+└── get_frame()    → network.get_grid()
 ```
 
 ---
 
-## Experimentos actuales
+## Current experiments
 
 ### Deamons Lab (`deamons_lab.py`)
 
-**Etapa:** 1 — Encontrar el Daemon (✓ prácticamente cubierta)
+**Stage:** 1 — Finding the Daemon (practically covered)
 
-Laboratorio de conexionados donde se prueban distintas máscaras Daemon
-(`E G I DE DI`) para observar la dinámica de daemons: formación,
-estabilidad, movimiento, exclusión competitiva y balance natural.
+Connectivity lab where different Daemon masks (`E G I DE DI`) are tested
+to observe daemon dynamics: formation, stability, movement, competitive
+exclusion, and natural balance.
 
-**Configuración:**
+**Configuration:**
 
-| Parámetro | Descripción | Default |
+| Parameter | Description | Default |
 |-----------|-------------|---------|
-| `width` | Ancho de la grilla | 30 |
-| `height` | Alto de la grilla | 30 |
-| `mask` | Preset de máscara | (primer preset) |
+| `width` | Grid width | 30 |
+| `height` | Grid height | 30 |
+| `mask` | Mask preset | (first preset) |
 
-**Qué se observa:**
+**What to observe:**
 
-- Formación de daemons (burbujas de activación estables)
-- Movimiento direccional de los daemons
-- Exclusión competitiva entre daemons cercanos
-- Balance natural (~50% de neuronas activas)
-- Convergencia ante manipulación externa
+- Formation of daemons (stable activation bubbles)
+- Directional movement of daemons
+- Competitive exclusion between nearby daemons
+- Natural balance (~50% active neurons)
+- Convergence upon external manipulation
 
-Las máscaras disponibles se cargan dinámicamente desde `core/masks.py`.
-Ver [Modelo Neuronal](../core/README.md) para la nomenclatura.
-
----
-
-## Experimentos planificados
-
-| # | Nombre | Etapa | Descripción |
-|---|--------|-------|-------------|
-| 2 | **Dynamic SOM** | 2 | Mapa auto-organizativo con el modelo conexionista |
-| 3 | **Motor y Nociceptor** | 3 | Modelos teóricos de salida motora e inhibición nociceptiva |
-| 4 | **Tuning** | 4 | Optimización con algoritmos genéticos y scikit-learn |
-| 5 | **Agentes Motores** | 5 | Agentes en mundo simulado (Aplysia, pez cebra) |
-
-Ver [Hoja de Ruta](../../docs/STAGES.md) para el detalle de cada etapa.
+Available masks are loaded dynamically from `core/masks.py`.
+See [Neural Model](../core/README.md) for the nomenclature.
 
 ---
 
-## Cómo agregar un experimento
+## Planned experiments
 
-1. Crear un nuevo archivo en esta carpeta (ej. `dynamic_som.py`)
-2. Heredar de `Experiment` (en `base.py`)
-3. Implementar `setup()`, `step()`, `click()`, `reset()`
-4. Registrar en `__init__.py`
-5. El frontend lo descubre automáticamente vía la API
+| # | Name | Stage | Description |
+|---|------|-------|-------------|
+| 2 | **Dynamic SOM** | 2 | Self-organizing map with the connectionist model |
+| 3 | **Motor & Nociceptor** | 3 | Theoretical models of motor output and nociceptive inhibition |
+| 4 | **Tuning** | 4 | Optimization with genetic algorithms and scikit-learn |
+| 5 | **Motor Agents** | 5 | Agents in simulated world (Aplysia, zebrafish) |
+
+See [Roadmap](../../docs/STAGES.md) for details on each stage.
 
 ---
 
-← Volver al [README](../../README.md)
+## How to add an experiment
+
+1. Create a new file in this folder (e.g. `dynamic_som.py`)
+2. Inherit from `Experiment` (in `base.py`)
+3. Implement `setup()`, `step()`, `click()`, `reset()`
+4. Register in `__init__.py`
+5. The frontend discovers it automatically via the API
+
+---
+
+← Back to [README](../../README.md)

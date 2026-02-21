@@ -1,11 +1,11 @@
-"""Tests para Constructor.balancear_pesos — escalado Fuzzy OR-compatible.
+"""Tests for Constructor.balancear_pesos — Fuzzy OR-compatible scaling.
 
-Nueva semántica:
-  target = 0.0  → sin cambio (retorno inmediato)
-  target > 0    → escala sinapsis inhibitorias por (1 - target)
-  target < 0    → escala sinapsis excitatorias por (1 + target)
-  target = +1   → inhibición eliminada
-  target = -1   → excitación eliminada
+New semantics:
+  target = 0.0  → no change (immediate return)
+  target > 0    → scales inhibitory synapses by (1 - target)
+  target < 0    → scales excitatory synapses by (1 + target)
+  target = +1   → inhibition removed
+  target = -1   → excitation removed
 """
 
 import pytest
@@ -21,7 +21,7 @@ def _build_neuron_with_dendrites(
     peso_exc: float = 1.0,
     peso_inh: float = -1.0,
 ) -> Neurona:
-    """Crea una neurona con una dendrita excitatoria y una inhibitoria."""
+    """Creates a neuron with one excitatory and one inhibitory dendrite."""
     dummy = NeuronaEntrada(id="dummy")
 
     exc_sinapsis = [Sinapsis(neurona_entrante=dummy, peso=w) for w in exc_weights]
@@ -36,7 +36,7 @@ def _build_neuron_with_dendrites(
 
 
 def _get_syn_weights(neurona: Neurona, kind: str) -> list[float]:
-    """Retorna pesos sinápticos de dendritas excitatorias o inhibitorias."""
+    """Returns synaptic weights from excitatory or inhibitory dendrites."""
     result = []
     for d in neurona.dendritas:
         if kind == "exc" and d.peso > 0:
@@ -47,10 +47,10 @@ def _get_syn_weights(neurona: Neurona, kind: str) -> list[float]:
 
 
 class TestBalancearPesosNuevaSemantica:
-    """Constructor.balancear_pesos: escalado Fuzzy OR-compatible."""
+    """Constructor.balancear_pesos: Fuzzy OR-compatible scaling."""
 
     def test_target_cero_no_modifica_nada(self) -> None:
-        """Con target=0, los pesos no se tocan (retorno inmediato)."""
+        """With target=0, weights are not touched (immediate return)."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.8, 0.9, 0.7],
             inh_weights=[0.3, 0.2],
@@ -65,7 +65,7 @@ class TestBalancearPesosNuevaSemantica:
         assert _get_syn_weights(neurona, "inh") == inh_before
 
     def test_target_positivo_reduce_inhibitorias(self) -> None:
-        """Con target>0, las sinapsis inhibitorias se escalan por (1 - target)."""
+        """With target>0, inhibitory synapses are scaled by (1 - target)."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.6, 0.8],
             inh_weights=[0.5, 0.4],
@@ -76,15 +76,15 @@ class TestBalancearPesosNuevaSemantica:
         constructor = Constructor()
         constructor.balancear_pesos([neurona], target=0.5)
 
-        # Excitatorias no cambian
+        # Excitatory ones don't change
         assert _get_syn_weights(neurona, "exc") == exc_before
-        # Inhibitorias se escalaron por 0.5
+        # Inhibitory ones were scaled by 0.5
         inh_after = _get_syn_weights(neurona, "inh")
         for before, after in zip(inh_before, inh_after):
             assert after == pytest.approx(before * 0.5, abs=1e-9)
 
     def test_target_negativo_reduce_excitatorias(self) -> None:
-        """Con target<0, las sinapsis excitatorias se escalan por (1 + target)."""
+        """With target<0, excitatory synapses are scaled by (1 + target)."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.6, 0.8],
             inh_weights=[0.5, 0.4],
@@ -95,15 +95,15 @@ class TestBalancearPesosNuevaSemantica:
         constructor = Constructor()
         constructor.balancear_pesos([neurona], target=-0.5)
 
-        # Inhibitorias no cambian
+        # Inhibitory ones don't change
         assert _get_syn_weights(neurona, "inh") == inh_before
-        # Excitatorias se escalaron por 0.5
+        # Excitatory ones were scaled by 0.5
         exc_after = _get_syn_weights(neurona, "exc")
         for before, after in zip(exc_before, exc_after):
             assert after == pytest.approx(before * 0.5, abs=1e-9)
 
     def test_target_uno_elimina_inhibicion(self) -> None:
-        """Con target=+1, inhibición se escala por 0.01 (~eliminada)."""
+        """With target=+1, inhibition is scaled by 0.01 (~removed)."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.6],
             inh_weights=[0.5, 0.4],
@@ -113,10 +113,10 @@ class TestBalancearPesosNuevaSemantica:
 
         inh_after = _get_syn_weights(neurona, "inh")
         for w in inh_after:
-            assert w < 0.01  # casi cero
+            assert w < 0.01  # nearly zero
 
     def test_target_menos_uno_elimina_excitacion(self) -> None:
-        """Con target=-1, excitación se escala por 0.01 (~eliminada)."""
+        """With target=-1, excitation is scaled by 0.01 (~removed)."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.6, 0.8],
             inh_weights=[0.5],
@@ -126,24 +126,24 @@ class TestBalancearPesosNuevaSemantica:
 
         exc_after = _get_syn_weights(neurona, "exc")
         for w in exc_after:
-            assert w < 0.01  # casi cero
+            assert w < 0.01  # nearly zero
 
     def test_neurona_sin_dendritas_no_falla(self) -> None:
-        """Neuronas sin dendritas se ignoran sin error."""
+        """Neurons without dendrites are ignored without error."""
         neurona = Neurona(id="vacia")
         constructor = Constructor()
         constructor.balancear_pesos([neurona], target=0.5)
         assert neurona.dendritas == []
 
     def test_neurona_entrada_se_ignora(self) -> None:
-        """NeuronaEntrada se salta sin modificar."""
+        """NeuronaEntrada is skipped without modification."""
         entrada = NeuronaEntrada(id="entrada")
         constructor = Constructor()
         constructor.balancear_pesos([entrada], target=0.5)
         assert entrada.dendritas == []
 
     def test_pesos_se_mantienen_en_rango(self) -> None:
-        """Los pesos sinápticos quedan clampeados a [0, 1]."""
+        """Synaptic weights are clamped to [0, 1]."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.99, 0.95, 0.98],
             inh_weights=[0.1],
@@ -156,7 +156,7 @@ class TestBalancearPesosNuevaSemantica:
                 assert 0.0 <= s.peso <= 1.0
 
     def test_balancea_multiples_neuronas(self) -> None:
-        """Balancea correctamente una lista de varias neuronas."""
+        """Correctly balances a list of multiple neurons."""
         n1 = _build_neuron_with_dendrites(
             exc_weights=[0.8, 0.7],
             inh_weights=[0.3, 0.2, 0.1],
@@ -179,7 +179,7 @@ class TestBalancearPesosNuevaSemantica:
             assert after == pytest.approx(before * 0.5, abs=1e-9)
 
     def test_escala_siempre_hacia_abajo(self) -> None:
-        """Los pesos siempre se reducen o quedan igual, nunca suben."""
+        """Weights are always reduced or stay the same, never increase."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.6, 0.7, 0.8],
             inh_weights=[0.4, 0.5],
@@ -194,7 +194,7 @@ class TestBalancearPesosNuevaSemantica:
             assert despues <= antes + 1e-9
 
     def test_factor_proporcional_a_target(self) -> None:
-        """target=0.3 produce factor 0.7 en inhibitorias."""
+        """target=0.3 produces factor 0.7 on inhibitory ones."""
         neurona = _build_neuron_with_dendrites(
             exc_weights=[0.6],
             inh_weights=[0.5],
@@ -207,7 +207,7 @@ class TestBalancearPesosNuevaSemantica:
 
 
 def _count_synapses(neurona: Neurona, kind: str) -> list[int]:
-    """Retorna lista de cantidades de sinapsis por dendrita del tipo dado."""
+    """Returns list of synapse counts per dendrite of the given type."""
     result = []
     for d in neurona.dendritas:
         if kind == "exc" and d.peso > 0:
@@ -222,7 +222,7 @@ def _build_neuron_many_synapses(
     n_inh_dendritas: int = 8,
     n_inh_sinapsis: int = 9,
 ) -> Neurona:
-    """Crea una neurona con 1 dendrita excitatoria y N inhibitorias."""
+    """Creates a neuron with 1 excitatory dendrite and N inhibitory ones."""
     dummy = NeuronaEntrada(id="dummy")
 
     exc_sinapsis = [Sinapsis(neurona_entrante=dummy, peso=0.6) for _ in range(n_exc)]
@@ -239,10 +239,10 @@ def _build_neuron_many_synapses(
 
 
 class TestBalancearSinapsis:
-    """Constructor.balancear_sinapsis: eliminación de sinapsis."""
+    """Constructor.balancear_sinapsis: synapse elimination."""
 
     def test_target_cero_no_elimina_sinapsis(self) -> None:
-        """Con target=0, no se elimina ninguna sinapsis."""
+        """With target=0, no synapses are eliminated."""
         neurona = _build_neuron_many_synapses()
         counts_before = _count_synapses(neurona, "inh")
 
@@ -253,7 +253,7 @@ class TestBalancearSinapsis:
         assert counts_before == counts_after
 
     def test_target_positivo_elimina_inhibitorias(self) -> None:
-        """Con target=0.5, cada dendrita inhibitoria pierde ~50% de sinapsis."""
+        """With target=0.5, each inhibitory dendrite loses ~50% of synapses."""
         neurona = _build_neuron_many_synapses(n_inh_sinapsis=10)
 
         constructor = Constructor()
@@ -264,7 +264,7 @@ class TestBalancearSinapsis:
                 assert len(d.sinapsis) == 5  # 10 - floor(10 * 0.5) = 5
 
     def test_target_positivo_no_toca_excitatorias(self) -> None:
-        """Con target>0, las dendritas excitatorias no pierden sinapsis."""
+        """With target>0, excitatory dendrites do not lose synapses."""
         neurona = _build_neuron_many_synapses(n_exc=8)
         exc_before = _count_synapses(neurona, "exc")
 
@@ -275,7 +275,7 @@ class TestBalancearSinapsis:
         assert exc_before == exc_after
 
     def test_target_negativo_elimina_excitatorias(self) -> None:
-        """Con target=-0.5, dendritas excitatorias pierden ~50% de sinapsis."""
+        """With target=-0.5, excitatory dendrites lose ~50% of synapses."""
         neurona = _build_neuron_many_synapses(n_exc=10)
 
         constructor = Constructor()
@@ -285,7 +285,7 @@ class TestBalancearSinapsis:
         assert exc_counts[0] == 5  # 10 - floor(10 * 0.5) = 5
 
     def test_target_negativo_no_toca_inhibitorias(self) -> None:
-        """Con target<0, las dendritas inhibitorias no pierden sinapsis."""
+        """With target<0, inhibitory dendrites do not lose synapses."""
         neurona = _build_neuron_many_synapses(n_inh_sinapsis=9)
         inh_before = _count_synapses(neurona, "inh")
 
@@ -296,7 +296,7 @@ class TestBalancearSinapsis:
         assert inh_before == inh_after
 
     def test_target_uno_deja_una_sinapsis(self) -> None:
-        """Con target=1.0, cada dendrita inhibitoria queda con 1 sinapsis."""
+        """With target=1.0, each inhibitory dendrite is left with 1 synapse."""
         neurona = _build_neuron_many_synapses(n_inh_sinapsis=9)
 
         constructor = Constructor()
@@ -307,7 +307,7 @@ class TestBalancearSinapsis:
                 assert len(d.sinapsis) == 1
 
     def test_siempre_al_menos_una_sinapsis(self) -> None:
-        """Nunca se eliminan todas las sinapsis de una dendrita."""
+        """All synapses are never eliminated from a dendrite."""
         neurona = _build_neuron_many_synapses(n_inh_sinapsis=2)
 
         constructor = Constructor()
@@ -317,14 +317,14 @@ class TestBalancearSinapsis:
             assert len(d.sinapsis) >= 1
 
     def test_neurona_entrada_se_ignora(self) -> None:
-        """NeuronaEntrada se salta sin modificar."""
+        """NeuronaEntrada is skipped without modification."""
         entrada = NeuronaEntrada(id="entrada")
         constructor = Constructor()
         constructor.balancear_sinapsis([entrada], target=0.5)
         assert entrada.dendritas == []
 
     def test_neurona_sin_dendritas_no_falla(self) -> None:
-        """Neuronas sin dendritas se ignoran sin error."""
+        """Neurons without dendrites are ignored without error."""
         neurona = Neurona(id="vacia")
         constructor = Constructor()
         constructor.balancear_sinapsis([neurona], target=0.5)

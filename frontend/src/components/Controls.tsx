@@ -156,7 +156,7 @@ export function Controls({
           </strong>
         </span>
         <span>
-          Activas:{" "}
+          Active:{" "}
           <strong style={{ color: "#4cc9f0" }}>
             {stats?.active_cells ?? 0}
           </strong>
@@ -164,7 +164,7 @@ export function Controls({
         {stats?.daemon_count != null && (
           <>
             <span
-              title="Clusters de ≥3 neuronas activas contiguas"
+              title="Clusters of >=3 contiguous active neurons"
             >
               Daemons:{" "}
               <strong style={{ color: "#f0a500" }}>
@@ -175,20 +175,20 @@ export function Controls({
               </span>
             </span>
             <span
-              title="Neuronas activas sueltas (no forman daemon)"
+              title="Active neurons not part of any daemon (isolated/small groups)"
               style={{
                 color: (stats.noise_cells ?? 0) > (stats.active_cells * 0.3)
                   ? "#f72585"
                   : "#888",
               }}
             >
-              Ruido:{" "}
+              Noise:{" "}
               <strong>
                 {stats.noise_cells ?? 0}
               </strong>
             </span>
-            <span title="Estabilidad del conteo de daemons (ventana 20 frames)">
-              Estab:{" "}
+            <span title="Daemon count stability (20-frame sliding window)">
+              Stab:{" "}
               <strong
                 style={{
                   color:
@@ -202,7 +202,7 @@ export function Controls({
                 {(stats.stability ?? 0).toFixed(2)}
               </strong>
             </span>
-            <span title="Contraste entre activación dentro vs fuera de daemons">
+            <span title="Activation contrast inside vs outside daemons">
               Excl:{" "}
               <strong style={{ color: "#7b61ff" }}>
                 {(stats.exclusion ?? 0).toFixed(2)}

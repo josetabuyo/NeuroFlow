@@ -11,7 +11,7 @@ export async function startExperiment(
   experiment: "deamons_lab"
 ): Promise<void> {
   await page.getByRole("button", { name: "Deamons Lab" }).click();
-  await page.getByRole("button", { name: "Iniciar Experimento" }).click();
+  await page.getByRole("button", { name: "Start Experiment" }).click();
   // Use "main canvas" to avoid matching the MaskPreview canvas in the sidebar.
   // deamons_lab with large masks can take 30+ seconds to build on the backend.
   await expect(page.locator("main canvas")).toBeVisible({ timeout: 45_000 });
@@ -36,7 +36,7 @@ export async function getStepCount(page: Page): Promise<number> {
 
 /** Get the active cells count from the stats display. */
 export async function getActiveCount(page: Page): Promise<number> {
-  const el = page.locator("text=Activas:").locator("strong");
+  const el = page.locator("text=Active:").locator("strong");
   const text = await el.textContent();
   return parseInt(text ?? "0", 10);
 }

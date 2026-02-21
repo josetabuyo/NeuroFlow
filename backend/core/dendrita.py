@@ -1,7 +1,7 @@
-"""Dendrita — rama de entrada con múltiples sinapsis.
+"""Dendrita — input branch with multiple synapses.
 
-Almacena sinapsis y peso dendrítico. El procesamiento real
-(promedio de sinapsis × peso) se hace en RedTensor.
+Stores synapses and dendritic weight. The actual processing
+(average of synapses × weight) is done in RedTensor.
 """
 
 from __future__ import annotations
@@ -10,13 +10,13 @@ from .sinapsis import Sinapsis
 
 
 class Dendrita:
-    """Rama dendrítica: agrupa sinapsis y su peso."""
+    """Dendritic branch: groups synapses and their weight."""
 
     __slots__ = ("sinapsis", "peso")
 
     def __init__(self, sinapsis: list[Sinapsis], peso: float) -> None:
         if peso < -1.0 or peso > 1.0:
-            raise ValueError(f"Peso de dendrita debe estar en [-1, 1], recibido: {peso}")
+            raise ValueError(f"Dendrite weight must be in [-1, 1], got: {peso}")
         self.sinapsis = sinapsis
         self.peso = peso
 

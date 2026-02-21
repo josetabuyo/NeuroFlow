@@ -1,7 +1,7 @@
-"""Red — contenedor de neuronas y topología.
+"""Red — neuron container and topology.
 
-Almacena neuronas y su conectividad (dendritas, sinapsis).
-El procesamiento real se hace en RedTensor (paralelo).
+Stores neurons and their connectivity (dendrites, synapses).
+The actual processing is done in RedTensor (parallel).
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from .neurona import Neurona
 
 
 class Red:
-    """Contenedor de neuronas — estructura de datos para construcción."""
+    """Neuron container — data structure for construction."""
 
     __slots__ = ("neuronas", "_neuronas_dict")
 
@@ -19,11 +19,11 @@ class Red:
         self._neuronas_dict: dict[str, Neurona] = {n.id: n for n in neuronas}
 
     def get_neurona(self, id: str) -> Neurona:
-        """Retorna una neurona por su ID."""
+        """Return a neuron by its ID."""
         return self._neuronas_dict[id]
 
     def get_grid(self, width: int, height: int) -> list[list[float]]:
-        """Retorna una matriz de valores con IDs en formato x{col}y{row}."""
+        """Return a value matrix with IDs in x{col}y{row} format."""
         grid: list[list[float]] = []
         for row in range(height):
             fila: list[float] = []

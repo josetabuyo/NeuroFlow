@@ -1,11 +1,11 @@
-"""Tests para la acción paint — activar/desactivar múltiples neuronas con pincel.
+"""Tests for the paint action — activate/deactivate multiple neurons with brush.
 
-Valida:
-- Paint con una celda activa valor 1.0
-- Paint con una celda desactiva valor 0.0
-- Paint con múltiples celdas activa todas
-- Paint con celdas fuera del grid no falla
-- Paint actualiza el frame (el grid refleja los cambios)
+Validates:
+- Paint with one cell activates value 1.0
+- Paint with one cell deactivates value 0.0
+- Paint with multiple cells activates all
+- Paint with cells outside the grid does not fail
+- Paint updates the frame (the grid reflects changes)
 """
 
 import pytest
@@ -13,10 +13,10 @@ from experiments.deamons_lab import DeamonsLabExperiment
 
 
 class TestPaint:
-    """Acción paint: activar/desactivar grupos de neuronas."""
+    """Paint action: activate/deactivate groups of neurons."""
 
     def test_paint_una_celda_activa(self) -> None:
-        """Paint con una celda y valor 1.0 activa la neurona."""
+        """Paint with one cell and value 1.0 activates the neuron."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
@@ -28,7 +28,7 @@ class TestPaint:
         assert exp.red_tensor.valores[idx].item() == 1.0
 
     def test_paint_una_celda_desactiva(self) -> None:
-        """Paint con una celda y valor 0.0 desactiva la neurona."""
+        """Paint with one cell and value 0.0 deactivates the neuron."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
@@ -40,7 +40,7 @@ class TestPaint:
         assert exp.red_tensor.valores[idx].item() == 0.0
 
     def test_paint_multiples_celdas_activa_todas(self) -> None:
-        """Paint con múltiples celdas activa todas las neuronas."""
+        """Paint with multiple cells activates all neurons."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
@@ -56,20 +56,20 @@ class TestPaint:
         for x, y in celdas:
             idx = y * 10 + x
             assert exp.red_tensor.valores[idx].item() == 1.0, \
-                f"Neurona ({x},{y}) debería estar activa"
+                f"Neuron ({x},{y}) should be active"
 
     def test_paint_celdas_fuera_del_grid_no_falla(self) -> None:
-        """Paint con celdas fuera del grid ignora sin fallar."""
+        """Paint with cells outside the grid ignores without failing."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
         celdas = [
-            (5, 5),    # Válida
-            (-1, 5),   # Fuera
-            (5, -1),   # Fuera
-            (10, 5),   # Fuera
-            (5, 10),   # Fuera
-            (99, 99),  # Fuera
+            (5, 5),    # Valid
+            (-1, 5),   # Outside
+            (5, -1),   # Outside
+            (10, 5),   # Outside
+            (5, 10),   # Outside
+            (99, 99),  # Outside
         ]
 
         for x, y in celdas:
@@ -81,7 +81,7 @@ class TestPaint:
         assert exp.red_tensor.valores[idx_valid].item() == 1.0
 
     def test_paint_actualiza_frame(self) -> None:
-        """Paint modifica el frame: el grid refleja los cambios."""
+        """Paint modifies the frame: the grid reflects changes."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
 
@@ -101,4 +101,4 @@ class TestPaint:
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
                 assert frame_despues[5 + dy][5 + dx] == 1.0, \
-                    f"Celda ({5+dx},{5+dy}) debería estar activa en el frame"
+                    f"Cell ({5+dx},{5+dy}) should be active in the frame"

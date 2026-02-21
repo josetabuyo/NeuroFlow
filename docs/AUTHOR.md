@@ -1,151 +1,146 @@
-# Sobre el Autor
+# About the Author
 
 ## José Miguel Tabuyo
 
-Argentino. Programador desde los 12 años y modelador de arcilla — dos
-pasiones de la infancia que continuaron en la vida adulta. La búsqueda
-constante por entender cómo funcionan las cosas, con obsesiones fijas
-en las preguntas fundamentales del mundo, lo llevó a la pregunta que
-impulsa NeuroFlow: **¿qué es la mente?**
+Argentine. A programmer since age 12 and a clay modeler — two childhood
+passions that carried into adulthood. A constant drive to understand how
+things work, with a lasting obsession with the fundamental questions of
+the world, led to the question that drives NeuroFlow: **what is the mind?**
 
-Más de 20 años de experiencia profesional en desarrollo de software,
-ingeniería electrónica e inteligencia artificial.
+Over 20 years of professional experience in software development,
+electronic engineering, and artificial intelligence.
 
-### Formación
+### Education
 
-Estudios secundarios en un colegio bachiller con fuerte orientación en
-informática — en contacto con lenguajes de programación desde los 12
-años.
+Secondary studies at a high school with a strong focus on computer
+science — in contact with programming languages since age 12.
 
-Ingresó a la **[Universidad Tecnológica Nacional (UTN)](https://www.utn.edu.ar)**
-de Argentina (2000–2006) para estudiar Ingeniería Electrónica.
+He enrolled at **[Universidad Tecnológica Nacional (UTN)](https://www.utn.edu.ar)**
+in Argentina (2000–2006) to study Electronic Engineering.
 
 ### GIAR — Grupo de Inteligencia Artificial y Robótica
 
-Muy joven, entrando en sus veinte, se incorporó al
+Very young, in his early twenties, he joined the
 **[GIAR](https://giar.ai)** (Grupo de Inteligencia Artificial y
-Robótica) de la UTN — un laboratorio de investigación y desarrollo
-fundado en 1986, pionero en IA y robótica en Latinoamérica. El grupo
-originalmente se llamaba **GIA** (Grupo de Inteligencia Artificial) y
-extendió su alcance a robótica cuando se incorporaron miembros
-dedicados a la parte mecánica de robots.
+Robótica) at UTN — a research and development laboratory founded in
+1986, a pioneer in AI and robotics in Latin America. The group was
+originally called **GIA** (Grupo de Inteligencia Artificial) and
+expanded its scope to robotics when members dedicated to the mechanical
+aspects of robots joined.
 
-En el GIAR, José Miguel trabajó en:
+At GIAR, José Miguel worked on:
 
-- **Reconocimiento de texto manuscrito**: desarrollo de un reconocedor
-  de caracteres manuscritos, mantenimiento de la base de datos de
-  imágenes, cálculo de descriptores y análisis matemático del
-  hiperespacio de clasificación.
+- **Handwritten text recognition**: development of a handwritten
+  character recognizer, maintenance of the image database, computation
+  of descriptors, and mathematical analysis of the classification
+  hyperspace.
 
-- **Momentos de Hu y descriptores de imagen**: estudio profundo de los
-  descriptores utilizados en la época para distinguir caracteres,
-  logos y otros tipos de imágenes. Análisis de la viabilidad material
-  de clasificación con los conjuntos de datos y descriptores disponibles.
+- **Hu moments and image descriptors**: in-depth study of the
+  descriptors used at the time to distinguish characters, logos, and
+  other types of images. Analysis of the material feasibility of
+  classification with the available datasets and descriptors.
 
-- **Ranking de descriptores**: clasificación de descriptores de más
-  relevante a menos relevante para la tarea de reconocimiento.
+- **Descriptor ranking**: classification of descriptors from most to
+  least relevant for the recognition task.
 
-- **Estudio del hiperespacio de clasificación**: investigación
-  independiente sobre cómo se organizan las clases en espacios de alta
-  dimensión — progresión desde hipótesis de esferas, elipses, elipsoides,
-  elipsoides correlacionados hasta formas complejas. Dos años después,
-  descubrió que la literatura existente (Fukunaga, Duda & Hart)
-  confirmaba sus hallazgos intuitivos.
+- **Study of the classification hyperspace**: independent research on
+  how classes are organized in high-dimensional spaces — progression
+  from hypotheses of spheres, ellipses, ellipsoids, correlated
+  ellipsoids, to complex shapes. Two years later, he discovered that
+  the existing literature (Fukunaga, Duda & Hart) confirmed his
+  intuitive findings.
 
-- **Redes neuronales**: desarrollo de modelos de Hopfield, Perceptron y
-  **backpropagation implementado desde cero** — a partir de PDFs
-  académicos, sin acceso a las herramientas modernas de internet ni
-  agentes de IA. En una época donde el software se perdía en disquetes.
+- **Neural networks**: development of Hopfield, Perceptron, and
+  **backpropagation models implemented from scratch** — from academic
+  PDFs, without access to modern internet tools or AI agents. In an era
+  when software was lost on floppy disks.
 
-- **Tomógrafo PET**: colaboración en un equipo que desarrolló un
-  tomógrafo de rayos PET. Interpretación matemática (integrales a papel
-  y lápiz) de la densidad de probabilidad de encuentro de rayos en los
-  paneles detectores, para entender la ubicación probabilística de
-  cuerpos y tumores.
+- **PET tomograph**: collaboration on a team that developed a PET-ray
+  tomograph. Mathematical interpretation (integrals on paper and pencil)
+  of the probability density of ray encounters in the detector panels,
+  to understand the probabilistic location of bodies and tumors.
 
-- **FPGA**: participación en conversaciones y debates sobre desarrollo
-  de hardware con FPGAs.
+- **FPGA**: participation in conversations and debates on hardware
+  development with FPGAs.
 
-### Trayectoria profesional
+### Professional career
 
-| Período | Rol | Empresa |
-|---------|-----|---------|
+| Period | Role | Company |
+|--------|------|---------|
 | 2004–2008 | Software Developer | **INDEC** (Instituto Nacional de Estadísticas y Censos) |
-| 2005–2008 | Software Developer & Electronic Engineer | Cuenta propia (SIME, microcontroladores) |
-| 2008–2014 | Senior Frontend Developer | **Plus Sistemas** (cliente: Marval, mayor estudio jurídico de Argentina) |
-| 2011–2013 | Creador | **VortexJS** (protocolo de comunicaciones en JavaScript) |
-| 2014–2018 | Senior Integration Developer | **Fusap** (clientes: Telecom, Telefónica) |
-| 2018–2019 | Functional Analysis Consultant | **Fusap** (cliente: Banco Central de la República Argentina) |
-| 2019–2020 | Senior QA Automation Engineer / Team Lead | **Fusap** (clientes: State Fund, Consultatio) |
-| 2020–2021 | Tech Lead RPA | **Fusap** (cliente: Consultatio) |
-| 2021–2024 | Software Developer In Test | **Mercatus Technologies** (Canadá) |
-| 2024–presente | Senior SDET | **[dLocal](https://dlocal.com)** |
+| 2005–2008 | Software Developer & Electronic Engineer | Self-employed (SIME, microcontrollers) |
+| 2008–2014 | Senior Frontend Developer | **Plus Sistemas** (client: Marval, Argentina's largest law firm) |
+| 2011–2013 | Creator | **VortexJS** (communications protocol in JavaScript) |
+| 2014–2018 | Senior Integration Developer | **Fusap** (clients: Telecom, Telefónica) |
+| 2018–2019 | Functional Analysis Consultant | **Fusap** (client: Banco Central de la República Argentina) |
+| 2019–2020 | Senior QA Automation Engineer / Team Lead | **Fusap** (clients: State Fund, Consultatio) |
+| 2020–2021 | Tech Lead RPA | **Fusap** (client: Consultatio) |
+| 2021–2024 | Software Developer In Test | **Mercatus Technologies** (Canada) |
+| 2024–present | Senior SDET | **[dLocal](https://dlocal.com)** |
 
-### Camino intelectual
+### Intellectual journey
 
-1. ***The Mind's I*** (Hofstadter & Dennett, 1981) — la puerta de
-   entrada a la filosofía de la mente
-2. **Richard Dawkins** — biología evolutiva, *The Selfish Gene*, memes
-   y memética
-3. **Daniel Dennett** — *Consciousness Explained*, daemons, la máquina
-   Joyciana, el rechazo del teatro cartesiano
-4. La visión **evolutiva, iterativa y distribuida** de la realidad —
-   aplicada tanto a la biología como a la economía y a la actividad
-   neuronal
-5. El trabajo en el **GIAR** — contacto directo con la física profunda,
-   la electrónica, la clasificación de patrones y las redes neuronales
-   desde sus cimientos
+1. ***The Mind's I*** (Hofstadter & Dennett, 1981) — the gateway to
+   philosophy of mind
+2. **Richard Dawkins** — evolutionary biology, *The Selfish Gene*, memes
+   and memetics
+3. **Daniel Dennett** — *Consciousness Explained*, daemons, the Joycean
+   machine, the rejection of the Cartesian theater
+4. The **evolutionary, iterative, and distributed** view of reality —
+   applied to biology as well as economics and neuronal activity
+5. Work at **GIAR** — direct contact with deep physics, electronics,
+   pattern classification, and neural networks from their foundations
 
-### Enlaces
+### Links
 
 - [LinkedIn](https://www.linkedin.com/in/jos%C3%A9-miguel-tabuyo-16334655/)
 
 ---
 
-## Dedicatoria
+## Dedication
 
-Este trabajo está dedicado a **Carlos Javier Lurgo**, colaborador cercano,
-también argentino, egresado de Ingeniería Electrónica de la UTN (2000–2007)
-y miembro del **GIAR**, donde realizó investigación en inteligencia
-artificial y robótica.
+This work is dedicated to **Carlos Javier Lurgo**, a close collaborator,
+also Argentine, graduate in Electronic Engineering from UTN (2000–2007)
+and member of **GIAR**, where he conducted research in artificial
+intelligence and robotics.
 
-### Caminos paralelos
+### Parallel paths
 
-José Miguel y Javier comparten una trayectoria entrelazada que atraviesa
-más de dos décadas:
+José Miguel and Javier share an intertwined trajectory spanning more
+than two decades:
 
-- **UTN y GIAR** (2000+): estudiaron juntos, investigaron juntos en el
-  Grupo de Inteligencia Artificial y Robótica
-- **INDEC** (2004–2008): coincidieron como desarrolladores en el
-  Instituto Nacional de Estadísticas y Censos
-- **Plus Sistemas** (2010–2013): volvieron a coincidir en la misma
+- **UTN and GIAR** (2000+): they studied together, researched together
+  in the Grupo de Inteligencia Artificial y Robótica
+- **INDEC** (2004–2008): they coincided as developers at the Instituto
+  Nacional de Estadísticas y Censos
+- **Plus Sistemas** (2010–2013): they coincided again at the same
   software factory
-- **Protocolo Vortex**: ambos trabajaron en el ecosistema Vortex — José
-  Miguel creó VortexJS (implementación del protocolo en JavaScript),
-  Javier desarrolló VortexCommander, VortexComm y ConsolaVortex
-- **Traders**: sistema distribuido P2P para intercambio de mercancías,
-  proyecto compartido
+- **Vortex protocol**: both worked in the Vortex ecosystem — José
+  Miguel created VortexJS (implementation of the protocol in
+  JavaScript), Javier developed VortexCommander, VortexComm and
+  ConsolaVortex
+- **Traders**: distributed P2P system for commodity exchange, a shared
+  project
 
-A lo largo de ese camino, participaron en innumerables conversaciones,
-trabajo conjunto y desarrollo paralelo en la búsqueda compartida de un
-modelo de la mente — la maquinaria del yo, la maquinaria que observamos
-en los animales inteligentes, mucho más allá del lenguaje.
+Along that path, they participated in countless conversations, joint
+work, and parallel development in a shared search for a model of the
+mind — the machinery of the self, the machinery we observe in
+intelligent animals, far beyond language.
 
-### Javier hoy
+### Javier today
 
-Javier se especializó en robótica y sistemas cloud. Su trayectoria
-reciente:
+Javier specialized in robotics and cloud systems. His recent trajectory:
 
-| Período | Rol | Empresa |
-|---------|-----|---------|
+| Period | Role | Company |
+|--------|------|---------|
 | 2018–2023 | Cloud & Robotics Software Developer | **[Ekumen](https://www.ekumenlabs.com)** |
 | 2023–2024 | Cloud & Robotics Software Developer | **[Relay Robotics](https://relayrobotics.com)** |
 | 2024 | Senior Robotics Software Dev | **[Covariant](https://covariant.ai)** |
-| 2024–presente | Senior Full Stack Developer | **[Transitive Robotics](https://transitiverobotics.com)** |
+| 2024–present | Senior Full Stack Developer | **[Transitive Robotics](https://transitiverobotics.com)** |
 
 - [LinkedIn](https://www.linkedin.com/in/javier-lurgo-13b9ab26/)
 - [GitHub](https://github.com/jlurgo)
 
 ---
 
-← Volver al [README](../README.md)
+← Back to [README](../README.md)

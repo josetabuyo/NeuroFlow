@@ -1,9 +1,9 @@
-"""Tests para Deamons Lab — laboratorio de conexionados con máscara configurable.
+"""Tests for Deamons Lab — wiring lab with configurable mask.
 
-Valida:
-- Todos los presets de máscara se aplican correctamente
-- Reconexión preserva valores
-- Funcionalidad estándar (step, click, reset, get_frame)
+Validates:
+- All mask presets are applied correctly
+- Reconnection preserves values
+- Standard functionality (step, click, reset, get_frame)
 """
 
 import random
@@ -24,7 +24,7 @@ from experiments.deamons_lab import DeamonsLabExperiment
 
 
 class TestMaskHelpers:
-    """Tests para las funciones helper de generación de offsets."""
+    """Tests for offset generation helper functions."""
 
     def test_moore_radius_1_gives_8_neighbors(self) -> None:
         offsets = _moore(1)
@@ -58,7 +58,7 @@ class TestMaskHelpers:
 
 
 class TestMaskPresets:
-    """Tests para cada preset de máscara."""
+    """Tests for each mask preset."""
 
     def test_all_presets_exist(self) -> None:
         expected = [
@@ -133,10 +133,10 @@ class TestMaskPresets:
 
 
 class TestDeamonsLabSetup:
-    """Setup del experimento Deamons Lab."""
+    """Deamons Lab experiment setup."""
 
     def test_setup_default_mask(self) -> None:
-        """Setup con mask por defecto (simple) crea red correcta."""
+        """Setup with default mask (simple) creates correct network."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
         assert len(exp.red.neuronas) == 100
@@ -144,14 +144,14 @@ class TestDeamonsLabSetup:
         assert len(neurona.dendritas) == 9
 
     def test_setup_wide_hat(self) -> None:
-        """Setup con wide_hat produce más dendritas inhibitorias."""
+        """Setup with wide_hat produces more inhibitory dendrites."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "wide_hat"})
         neurona = exp.red.get_neurona("x7y7")
         assert len(neurona.dendritas) >= 9
 
     def test_setup_cross_center(self) -> None:
-        """Setup con cross_center usa Von Neumann + 4 dendritas."""
+        """Setup with cross_center uses Von Neumann + 4 dendrites."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "cross_center"})
         neurona = exp.red.get_neurona("x7y7")
@@ -159,14 +159,14 @@ class TestDeamonsLabSetup:
         assert len(exc[0].sinapsis) == 4
 
     def test_setup_one_dendrite(self) -> None:
-        """Setup con one_dendrite: 1 exc + 1 inh."""
+        """Setup with one_dendrite: 1 exc + 1 inh."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "one_dendrite"})
         neurona = exp.red.get_neurona("x5y5")
         assert len(neurona.dendritas) == 2
 
     def test_setup_with_balance_positive(self) -> None:
-        """Setup con balance>0 reduce sinapsis inhibitorias."""
+        """Setup with balance>0 reduces inhibitory synapses."""
         random.seed(42)
         exp_no = DeamonsLabExperiment()
         exp_no.setup({"width": 10, "height": 10, "mask": "simple"})
@@ -184,7 +184,7 @@ class TestDeamonsLabSetup:
                     assert s_bal.peso < s_no.peso or s_no.peso == 0.0
 
     def test_setup_with_balance_zero_no_change(self) -> None:
-        """Setup con balance=0.0 no modifica pesos (retorno inmediato)."""
+        """Setup with balance=0.0 does not modify weights (immediate return)."""
         random.seed(42)
         exp_no = DeamonsLabExperiment()
         exp_no.setup({"width": 10, "height": 10, "mask": "simple"})
@@ -201,7 +201,7 @@ class TestDeamonsLabSetup:
                 assert s_no.peso == pytest.approx(s_bal.peso, abs=1e-9)
 
     def test_setup_without_balance_no_balancing(self) -> None:
-        """Setup sin balance key no aplica balanceo."""
+        """Setup without balance key does not apply balancing."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         assert exp.red_tensor is not None
@@ -209,10 +209,10 @@ class TestDeamonsLabSetup:
 
 
 class TestDeamonsLabInit:
-    """Tests para la inicialización aleatoria."""
+    """Tests for random initialization."""
 
     def test_init_random(self) -> None:
-        """Setup siempre usa random (valores entre 0 y 1)."""
+        """Setup always uses random (values between 0 and 1)."""
         random.seed(42)
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
@@ -222,10 +222,10 @@ class TestDeamonsLabInit:
 
 
 class TestDeamonsLabBalanceMode:
-    """Tests para balance_mode en Deamons Lab."""
+    """Tests for balance_mode in Deamons Lab."""
 
     def test_balance_mode_none_no_modifica(self) -> None:
-        """balance_mode='none' no modifica pesos ni sinapsis."""
+        """balance_mode='none' does not modify weights or synapses."""
         random.seed(42)
         exp_ref = DeamonsLabExperiment()
         exp_ref.setup({"width": 10, "height": 10, "mask": "simple"})
@@ -246,7 +246,7 @@ class TestDeamonsLabBalanceMode:
                 assert s_ref.peso == pytest.approx(s_test.peso, abs=1e-9)
 
     def test_balance_mode_weight_scales_weights(self) -> None:
-        """balance_mode='weight' escala pesos inhibitorios (comportamiento existente)."""
+        """balance_mode='weight' scales inhibitory weights (existing behavior)."""
         random.seed(42)
         exp_ref = DeamonsLabExperiment()
         exp_ref.setup({"width": 10, "height": 10, "mask": "simple"})
@@ -268,7 +268,7 @@ class TestDeamonsLabBalanceMode:
                     assert s_test.peso == pytest.approx(s_ref.peso * 0.5, abs=1e-9)
 
     def test_balance_mode_synapse_count_reduces_synapses(self) -> None:
-        """balance_mode='synapse_count' reduce cantidad de sinapsis inhibitorias."""
+        """balance_mode='synapse_count' reduces inhibitory synapse count."""
         random.seed(42)
         exp_ref = DeamonsLabExperiment()
         exp_ref.setup({"width": 10, "height": 10, "mask": "simple"})
@@ -290,7 +290,7 @@ class TestDeamonsLabBalanceMode:
                 assert len(d_test.sinapsis) == len(d_ref.sinapsis)
 
     def test_reconnect_with_balance_mode_synapse_count(self) -> None:
-        """Reconnect con balance_mode='synapse_count' reduce sinapsis."""
+        """Reconnect with balance_mode='synapse_count' reduces synapses."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
 
@@ -303,14 +303,14 @@ class TestDeamonsLabBalanceMode:
         n = exp.red.get_neurona("x5y5")
         for d in n.dendritas:
             if d.peso < 0:
-                assert len(d.sinapsis) < 9  # simple mask has 9 inh per dendrita
+                assert len(d.sinapsis) < 9  # simple mask has 9 inh per dendrite
 
 
 class TestDeamonsLabReconnect:
-    """Reconexión: cambiar máscara preservando valores."""
+    """Reconnection: change mask while preserving values."""
 
     def test_reconnect_preserves_values(self) -> None:
-        """Reconnect mantiene los valores de las neuronas."""
+        """Reconnect preserves neuron values."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
 
@@ -322,7 +322,7 @@ class TestDeamonsLabReconnect:
         assert frame_before == frame_after
 
     def test_reconnect_changes_connectivity(self) -> None:
-        """Reconnect cambia la estructura de dendritas."""
+        """Reconnect changes the dendrite structure."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "simple"})
 
@@ -334,7 +334,7 @@ class TestDeamonsLabReconnect:
         assert n_before != n_after
 
     def test_reconnect_updates_config(self) -> None:
-        """Reconnect actualiza _config con los nuevos valores."""
+        """Reconnect updates _config with new values."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple", "balance": 0.0})
 
@@ -344,7 +344,7 @@ class TestDeamonsLabReconnect:
         assert exp._config["balance"] == 0.3
 
     def test_reconnect_with_balance(self) -> None:
-        """Reconnect con balance>0 reduce sinapsis inhibitorias vs balance=0."""
+        """Reconnect with balance>0 reduces inhibitory synapses vs balance=0."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
 
@@ -370,7 +370,7 @@ class TestDeamonsLabReconnect:
 
 
 class TestDeamonsLabFunctionality:
-    """Funcionalidad estándar del experimento."""
+    """Standard experiment functionality."""
 
     def test_step_avanza_generacion(self) -> None:
         exp = DeamonsLabExperiment()
@@ -486,10 +486,10 @@ class TestToroidalTopology:
 
 
 class TestDaemonMetrics:
-    """Tests para las métricas de daemons en Deamons Lab."""
+    """Tests for daemon metrics in Deamons Lab."""
 
     def test_stats_include_daemon_fields(self) -> None:
-        """get_stats() retorna daemon_count, avg_daemon_size, noise_cells, stability y exclusion."""
+        """get_stats() returns daemon_count, avg_daemon_size, noise_cells, stability and exclusion."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         exp.step()
@@ -647,7 +647,7 @@ class TestDaemonMetrics:
 
 
 class TestMaskStatsInInfo:
-    """Tests para mask_stats en get_mask_info()."""
+    """Tests for mask_stats in get_mask_info()."""
 
     def test_mask_info_includes_mask_stats(self) -> None:
         """get_mask_info() includes mask_stats for each preset."""
@@ -681,7 +681,7 @@ class TestMaskStatsInInfo:
 
 
 class TestWolframMasksInDeamonsLab:
-    """Tests para Wolfram elementary CA rules ejecutados como máscaras en Deamons Lab."""
+    """Tests for Wolfram elementary CA rules executed as masks in Deamons Lab."""
 
     def _get_row(self, exp: DeamonsLabExperiment, row: int) -> list[int]:
         """Extract a row from the frame as binary ints."""

@@ -12,7 +12,7 @@ from core.region import Region
 
 
 def _parse_coords(neuron_id: str) -> tuple[int, int] | None:
-    """Extrae (x, y) del ID de neurona. Retorna None si no es parseable."""
+    """Extract (x, y) from neuron ID. Returns None if not parseable."""
     match = re.match(r"^x(\d+)y(\d+)$", neuron_id)
     if match:
         return int(match.group(1)), int(match.group(2))
@@ -20,10 +20,10 @@ def _parse_coords(neuron_id: str) -> tuple[int, int] | None:
 
 
 class Experimento(ABC):
-    """Clase base para experimentos.
+    """Base class for experiments.
 
-    Orquesta: qué es entrada, qué es salida,
-    cómo se alimenta, cómo se lee.
+    Orchestrates: what is input, what is output,
+    how it is fed, how it is read.
     """
 
     def __init__(self) -> None:
@@ -35,16 +35,16 @@ class Experimento(ABC):
 
     @abstractmethod
     def setup(self, config: dict[str, Any]) -> None:
-        """Usa Constructor para armar Red + Regiones."""
+        """Use Constructor to build Red + Regions."""
         ...
 
     @abstractmethod
     def step(self) -> dict[str, Any]:
-        """Avanza un paso de procesamiento."""
+        """Advance one processing step."""
         ...
 
     def step_n(self, count: int) -> dict[str, Any]:
-        """Avanza N pasos de procesamiento de forma eficiente.
+        """Advance N processing steps efficiently.
 
         Subclasses should override for optimized bulk processing.
         Default falls back to calling step() in a loop.
@@ -58,26 +58,26 @@ class Experimento(ABC):
 
     @abstractmethod
     def click(self, x: int, y: int) -> None:
-        """Activa una neurona en la región de entrada."""
+        """Activate a neuron in the input region."""
         ...
 
     @abstractmethod
     def reset(self) -> None:
-        """Reinicia el experimento."""
+        """Reset the experiment."""
         ...
 
     def get_frame(self) -> list[list[float]]:
-        """Retorna la grilla actual como matriz de valores."""
+        """Return the current grid as a value matrix."""
         if self.red is None:
             return []
         return self.red.get_grid(self.width, self.height)
 
     def get_tension_frame(self) -> list[list[float]] | None:
-        """Retorna la grilla de tensiones. None si no está disponible."""
+        """Return the tension grid. None if not available."""
         return None
 
     def get_stats(self) -> dict[str, Any]:
-        """Retorna estadísticas del estado actual."""
+        """Return statistics for the current state."""
         frame = self.get_frame()
         active = sum(1 for row in frame for cell in row if cell > 0)
         return {
@@ -86,13 +86,13 @@ class Experimento(ABC):
         }
 
     def inspect(self, x: int, y: int) -> dict[str, Any]:
-        """Retorna el mapa de pesos efectivos para una neurona.
+        """Return the effective weight map for a neuron.
 
-        Para cada sinapsis de la neurona en (x, y), calcula:
-          peso_efectivo = sinapsis.peso × dendrita.peso
+        For each synapse of the neuron at (x, y), computes:
+          effective_weight = synapse.peso × dendrite.peso
 
-        Si una neurona fuente aparece en múltiples dendritas, suma los
-        pesos efectivos. Clampea el resultado a [-1, 1].
+        If a source neuron appears in multiple dendrites, sums the
+        effective weights. Clamps the result to [-1, 1].
 
         Returns:
             {
@@ -103,10 +103,10 @@ class Experimento(ABC):
                 "total_sinapsis": int,
                 "weight_grid": list[list[float | None]]
             }
-            weight_grid contiene:
-            - float en [-1, 1] para celdas conectadas (peso efectivo)
-            - None para celdas sin conexión
-            - La celda inspeccionada se marca con valor especial 999.
+            weight_grid contains:
+            - float in [-1, 1] for connected cells (effective weight)
+            - None for unconnected cells
+            - The inspected cell is marked with special value 999.
         """
         if self.red is None:
             return {
@@ -121,7 +121,7 @@ class Experimento(ABC):
         key = Constructor.key_by_coord(x, y)
         neurona = self.red.get_neurona(key)
 
-        # Acumular pesos efectivos por neurona fuente
+        # Accumulate effective weights by source neuron
         pesos: dict[str, float] = {}
         total_sinapsis = 0
 
@@ -134,14 +134,14 @@ class Experimento(ABC):
                 peso_efectivo = sinapsis.peso * dendrita.peso
                 pesos[fuente_id] = pesos.get(fuente_id, 0.0) + peso_efectivo
 
-        # Clampear a [-1, 1]
+        # Clamp to [-1, 1]
         for nid in pesos:
             if pesos[nid] > 1.0:
                 pesos[nid] = 1.0
             elif pesos[nid] < -1.0:
                 pesos[nid] = -1.0
 
-        # Construir weight_grid
+        # Build weight_grid
         weight_grid: list[list[float | None]] = []
         for row in range(self.height):
             fila: list[float | None] = []

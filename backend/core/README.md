@@ -1,159 +1,158 @@
-# Modelo Neuronal — `backend/core/`
+# Neural Model — `backend/core/`
 
-El corazón de NeuroFlow. Aquí vive el modelo conexionista: las piezas
-fundamentales que procesan información sin controlador central.
-
----
-
-## En una línea
-
-> Sinapsis reconocen patrones → Dendritas los combinan (excitan o inhiben)
-> → Neuronas compiten y se activan → la Red las procesa a todas sin saber
-> nada de organización.
+The heart of NeuroFlow. This is where the connectionist model lives: the
+fundamental pieces that process information without a central controller.
 
 ---
 
-## Piezas fundamentales
+## In one line
+
+> Synapses recognize patterns → Dendrites combine them (excite or inhibit)
+> → Neurons compete and activate → the Network processes them all without
+> knowing anything about organization.
+
+---
+
+## Fundamental pieces
 
 ```
-Sinapsis (peso ≥ 0)  →  Dendrita (peso ∈ [-1,1])  →  Neurona (activa/inactiva)
-   reconoce patrón         AND fuzzy + inhibición         OR fuzzy competitivo
+Synapse (weight ≥ 0)  →  Dendrite (weight ∈ [-1,1])  →  Neuron (active/inactive)
+   recognizes pattern       fuzzy AND + inhibition          competitive fuzzy OR
 ```
 
-### Sinapsis (`sinapsis.py`)
+### Synapse (`sinapsis.py`)
 
-La unidad mínima de conexión. Conecta una neurona entrante con una
-dendrita.
+The minimal unit of connection. Connects an incoming neuron to a dendrite.
 
-- **Peso**: siempre en `[0, 1]` — representa reconocimiento de patrón
-- **Procesamiento**: `valor = 1 - |peso - entrada|`
-  - `peso≈1` reconoce `entrada=1` (match perfecto → 1)
-  - `peso≈0` reconoce `entrada=0` (match perfecto → 1)
-  - Mismatch → valor bajo
-- **Entrenamiento**: Hebbiano — `peso += (entrada - peso) × η`
+- **Weight**: always in `[0, 1]` — represents pattern recognition
+- **Processing**: `value = 1 - |weight - input|`
+  - `weight≈1` recognizes `input=1` (perfect match → 1)
+  - `weight≈0` recognizes `input=0` (perfect match → 1)
+  - Mismatch → low value
+- **Training**: Hebbian — `weight += (input - weight) × η`
 
-### Dendrita (`dendrita.py`)
+### Dendrite (`dendrita.py`)
 
-Rama de entrada que agrupa sinapsis y las combina.
+Input branch that groups synapses and combines them.
 
-- **Peso**: en `[-1, 1]` — puede ser negativo (inhibición)
-- **Procesamiento**: `valor = promedio(sinapsis) × peso_dendrita` (fuzzy AND)
-- Peso positivo → dendrita **excitatoria**
-- Peso negativo → dendrita **inhibitoria**
-- Puede tener una sola sinapsis si se requiere
+- **Weight**: in `[-1, 1]` — can be negative (inhibition)
+- **Processing**: `value = average(synapses) × dendrite_weight` (fuzzy AND)
+- Positive weight → **excitatory** dendrite
+- Negative weight → **inhibitory** dendrite
+- Can have a single synapse if needed
 
-### Neurona (`neurona.py`)
+### Neuron (`neurona.py`)
 
-La unidad de decisión. Contiene dendritas y resuelve la competencia.
+The decision unit. Contains dendrites and resolves the competition.
 
-- **Valor**: `{0, 1}` — activa o inactiva
-- **Tensión superficial**: `[-1, 1]` — acumulación antes de umbral
-- **Procesamiento**:
-  1. `max_dendrita = max(dendritas.valor)` (excitación)
-  2. `min_dendrita = min(dendritas.valor)` (inhibición, si negativas)
-  3. `tensión = max + min` (competencia)
-  4. Si `tensión > umbral` → activa (1), si no → inactiva (0)
-- Fuzzy OR: cualquier dendrita positiva puede activar
-- Pero dendritas negativas pueden inhibir
+- **Value**: `{0, 1}` — active or inactive
+- **Surface tension**: `[-1, 1]` — accumulation before threshold
+- **Processing**:
+  1. `max_dendrite = max(dendrites.value)` (excitation)
+  2. `min_dendrite = min(dendrites.value)` (inhibition, if negative)
+  3. `tension = max + min` (competition)
+  4. If `tension > threshold` → active (1), otherwise → inactive (0)
+- Fuzzy OR: any positive dendrite can activate
+- But negative dendrites can inhibit
 
-**NeuronaEntrada** (hereda de Neurona): sin dendritas, su valor se setea
-externamente. La Red la procesa igual pero ella no hace nada internamente.
+**InputNeuron** (inherits from Neuron): no dendrites, its value is set
+externally. The Network processes it the same way but it does nothing internally.
 
-### Red (`red.py`)
+### Network (`red.py`)
 
-Contenedor "tonto" — no sabe de organización, solo procesa.
+"Dumb" container — knows nothing about organization, only processes.
 
-- Contiene un diccionario de neuronas
-- `procesar()`: itera todas y las procesa (incluye NeuronaEntrada, que no-op)
-- `get_grid(w, h)`: retorna la matriz de valores para visualización
-- **No sabe** qué es entrada, salida, región ni experimento
+- Contains a dictionary of neurons
+- `procesar()`: iterates all and processes them (includes InputNeuron, which is a no-op)
+- `get_grid(w, h)`: returns the value matrix for visualization
+- **Does not know** what input, output, region, or experiment is
 
 ---
 
-## Organización (sin procesamiento)
+## Organization (without processing)
 
 ### Region (`region.py`)
 
-Agrupación nombrada de neuronas — solo referencias, no dueña.
-La Red no sabe que existen regiones.
+Named grouping of neurons — references only, not owner.
+The Network does not know that regions exist.
 
 ### Constructor (`constructor.py`)
 
-Factory/Builder que arma la red: crea neuronas, las agrupa en regiones,
-construye conectividad (dendritas, sinapsis) según reglas.
+Factory/Builder that assembles the network: creates neurons, groups them
+into regions, builds connectivity (dendrites, synapses) according to rules.
 
-**Es el único que sabe cómo cablear la red.** Una vez construida, la Red
-funciona sola.
+**It is the only one that knows how to wire the network.** Once built,
+the Network runs on its own.
 
 ### ConstructorTensor (`constructor_tensor.py`)
 
-Versión tensorizada del constructor para cómputo matricial eficiente.
+Tensorized version of the constructor for efficient matrix computation.
 
-### RedTensor (`red_tensor.py`)
+### NetworkTensor (`red_tensor.py`)
 
-Versión tensorizada de la Red que opera con matrices NumPy en lugar de
-objetos Python individuales.
+Tensorized version of the Network that operates with matrices instead of
+individual Python objects.
 
 ---
 
-## Máscaras de conexionado (`masks.py`)
+## Wiring masks (`masks.py`)
 
-Las máscaras definen la topología: qué vecinos son excitatorios, cuáles
-inhibitorios, con qué densidad.
+Masks define the connection topology: which neighbors are excitatory, which
+are inhibitory, and with what density.
 
-### Nomenclatura Daemon: `E G I [DE DI]`
+### Daemon nomenclature: `E G I [DE DI]`
 
-| Parámetro | Significado | Ejemplo |
-|-----------|-------------|---------|
-| **E***n* | Radio excitatorio (Moore r=*n*) | E3 = Moore r=3 (48 vecinos) |
-| **G***n* | Gap: anillos de silencio | G12 = 12 anillos sin conexión |
-| **I***n* | Radio inhibitorio (corona) | I3 = 3 anillos inhibitorios |
-| **DE***n* | Densidad excitatoria (1/*n*) | DE1 = completa, DE3 = ~33% |
-| **DI***n* | Densidad inhibitoria (1/*n*) | DI1 = completa, DI1.5 = ~67% |
+| Parameter | Meaning | Example |
+|-----------|---------|---------|
+| **E***n* | Excitatory radius (Moore r=*n*) | E3 = Moore r=3 (48 neighbors) |
+| **G***n* | Gap: silence rings | G12 = 12 rings without connection |
+| **I***n* | Inhibitory radius (corona) | I3 = 3 inhibitory rings |
+| **DE***n* | Excitatory density (1/*n*) | DE1 = full, DE3 = ~33% |
+| **DI***n* | Inhibitory density (1/*n*) | DI1 = full, DI1.5 = ~67% |
 
 ```
-      Excitación (E)         Gap (G)          Inhibición (I)
+      Excitation (E)         Gap (G)          Inhibition (I)
     ┌─────────────┐    ┌──────────────┐    ┌───────────────┐
-    │  Moore r=n  │    │  sin conexión │    │  anillo/corona │
-    │  (vecinos   │    │  (silencio)   │    │  sectorizada   │
-    │  cercanos)  │    │              │    │  (8 dendritas)  │
+    │  Moore r=n  │    │  no connection│    │  ring/corona  │
+    │  (close     │    │  (silence)    │    │  sectorized   │
+    │  neighbors) │    │              │    │  (8 dendrites)  │
     └─────────────┘    └──────────────┘    └───────────────┘
 ```
 
-**Ejemplo**: `E2 G3 I3 DE1 DI1.5`
-- Excitación: Moore r=2 completa (24 vecinos)
-- Gap: r=3–5 (3 anillos de silencio)
-- Inhibición: r=6–8 con densidad 1/1.5 ≈ 67%
+**Example**: `E2 G3 I3 DE1 DI1.5`
+- Excitation: Moore r=2 full (24 neighbors)
+- Gap: r=3–5 (3 silence rings)
+- Inhibition: r=6–8 with density 1/1.5 ≈ 67%
 
-### Inspiración biológica
+### Biological inspiration
 
-Esta estructura replica el **sombrero mexicano** (Mexican hat) observado
-en el córtex visual por Hubel & Wiesel (1962) y formalizado por Kohonen
-en los SOMs: excitación local rodeada de inhibición lateral — el patrón
-fundamental que permite la auto-organización topográfica en el cerebro.
-
----
-
-## Principio de diseño: separación de responsabilidades
-
-```
-PROCESAMIENTO                          ORGANIZACIÓN
-(no sabe de organización)              (no sabe de procesamiento)
-
-  Red                                    Region
-  Solo procesa neuronas.                 Solo agrupa neuronas.
-  No sabe de regiones.                   No las procesa.
-
-                                         Constructor
-                                         Crea y cablea.
-
-                                         Experimento
-                                         Orquesta todo.
-```
-
-Ver [Arquitectura Técnica](../../docs/ARCHITECTURE.md) para el diseño
-completo con diagramas.
+This structure replicates the **Mexican hat** observed in the visual cortex
+by Hubel & Wiesel (1962) and formalized by Kohonen in SOMs: local excitation
+surrounded by lateral inhibition — the fundamental pattern that enables
+topographic self-organization in the brain.
 
 ---
 
-← Volver al [README](../../README.md)
+## Design principle: separation of responsibilities
+
+```
+PROCESSING                            ORGANIZATION
+(knows nothing about organization)    (knows nothing about processing)
+
+  Network                               Region
+  Only processes neurons.               Only groups neurons.
+  Knows nothing about regions.          Does not process them.
+
+                                        Constructor
+                                        Creates and wires.
+
+                                        Experiment
+                                        Orchestrates everything.
+```
+
+See [Technical Architecture](../../docs/ARCHITECTURE.md) for the complete
+design with diagrams.
+
+---
+
+← Back to [README](../../README.md)

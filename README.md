@@ -1,72 +1,70 @@
 # NeuroFlow
 
-**Un modelo conexionista de la mente — más allá del lenguaje.**
+**A connectionist model of the mind — beyond language.**
 
-Red de neuronas artificiales que busca el *daemon*: la unidad mínima de
-procesamiento distribuido que emerge sin observador central, inspirada en la
-neurociencia, los autómatas celulares y la filosofía de la consciencia.
-
----
-
-## En una línea
-
-> Tejido 2D de neuronas conectadas por sinapsis y dendritas donde daemons
-> compiten, se estabilizan y auto-organizan — un camino conexionista hacia
-> la emulación de la mente.
+A network of artificial neurons seeking the *daemon*: the minimal unit of
+distributed processing that emerges without a central observer, inspired by
+neuroscience, cellular automata, and the philosophy of consciousness.
 
 ---
 
-## ¿Qué es NeuroFlow?
+## In one line
 
-NeuroFlow es un framework de autómatas neuronales conexionistas. Cada pixel de
-la pantalla es una neurona. Las neuronas se conectan entre sí mediante dendritas
-y sinapsis. El comportamiento emerge de reglas locales simples, sin controlador
-central.
+> A 2D tissue of neurons connected by synapses and dendrites where daemons
+> compete, stabilize, and self-organize — a connectionist path toward
+> mind emulation.
+
+---
+
+## What is NeuroFlow?
+
+NeuroFlow is a connectionist neural automata framework. Each pixel on the
+screen is a neuron. Neurons connect to each other through dendrites and
+synapses. Behavior emerges from simple local rules, without a central
+controller.
 
 ```
-Sinapsis (peso ≥ 0)  →  Dendrita (peso ∈ [-1,1])  →  Neurona (activa/inactiva)
-   reconoce patrón         AND fuzzy + inhibición         OR fuzzy competitivo
+Synapse (weight ≥ 0)  →  Dendrite (weight ∈ [-1,1])  →  Neuron (active/inactive)
+   recognizes pattern       fuzzy AND + inhibition          competitive fuzzy OR
 ```
 
-El proyecto no busca replicar lo que los LLMs ya resuelven (lenguaje), sino
-atacar las áreas menos exploradas: **movimiento**, **percepción visual** y la
-**profundidad del razonamiento** — lo que informalmente podríamos llamar
-*intuición*.
+The project does not aim to replicate what LLMs already solve (language),
+but rather to tackle less explored areas: **movement**, **visual perception**,
+and the **depth of reasoning** — what we might informally call *intuition*.
 
 ---
 
-## Documentación
+## Documentation
 
-La documentación está organizada en niveles de profundidad. Empezá por donde
-te interese:
+The documentation is organized by depth level. Start wherever interests you:
 
-| Documento | Qué encontrás |
-|-----------|---------------|
-| **[Visión y Filosofía](docs/VISION.md)** | Qué es un daemon, por qué sin observador central, inspiraciones teóricas |
-| **[Hoja de Ruta](docs/STAGES.md)** | Las 5 etapas del proyecto: Daemons → SOM → Motor/Nociceptor → Tuning → Agentes |
-| **[Arquitectura Técnica](docs/ARCHITECTURE.md)** | Stack, diseño de clases, API, protocolo WebSocket, hosting |
-| **[Referencias](docs/REFERENCES.md)** | Bibliografía completa con citas: Dennett, Hawkins, Kohonen, Kandel y más |
-| **[Sobre el Autor](docs/AUTHOR.md)** | José Miguel Tabuyo — trayectoria, motivación y dedicatoria |
+| Document | What you'll find |
+|----------|-----------------|
+| **[Vision and Philosophy](docs/VISION.md)** | What is a daemon, why no central observer, theoretical inspirations |
+| **[Roadmap](docs/STAGES.md)** | The 5 stages of the project: Daemons → SOM → Motor/Nociceptor → Tuning → Agents |
+| **[Technical Architecture](docs/ARCHITECTURE.md)** | Stack, class design, API, WebSocket protocol, hosting |
+| **[References](docs/REFERENCES.md)** | Complete bibliography with citations: Dennett, Hawkins, Kohonen, Kandel and more |
+| **[About the Author](docs/AUTHOR.md)** | José Miguel Tabuyo — career, motivation, and dedication |
 
-### Documentación cercana al código
+### Code-level documentation
 
-| Documento | Qué encontrás |
-|-----------|---------------|
-| **[Modelo Neuronal](backend/core/README.md)** | Cómo funcionan Sinapsis, Dendrita, Neurona y Red en el código |
-| **[Experimentos](backend/experiments/README.md)** | Qué hace cada experimento, cómo se configura, qué se observa |
+| Document | What you'll find |
+|----------|-----------------|
+| **[Neural Model](backend/core/README.md)** | How Synapse, Dendrite, Neuron, and Network work in code |
+| **[Experiments](backend/experiments/README.md)** | What each experiment does, how it's configured, what to observe |
 
 ---
 
 ## Stack
 
-| Capa | Tecnología | Hosting |
-|------|-----------|---------|
+| Layer | Technology | Hosting |
+|-------|-----------|---------|
 | Backend | Python 3.11+ / FastAPI / WebSocket / NumPy | Render.com (free) |
 | Frontend | Vite / React 19 / TypeScript / HTML5 Canvas | Vercel (free) |
 
 ```
 Frontend (React + Canvas)  ←WebSocket→  Backend (FastAPI)
-         UI                                Red → Neurona → Dendrita → Sinapsis
+         UI                                Network → Neuron → Dendrite → Synapse
 ```
 
 ---
@@ -77,19 +75,19 @@ Frontend (React + Canvas)  ←WebSocket→  Backend (FastAPI)
 ./start.sh
 ```
 
-Levanta backend (`:8501`) y frontend (`:5173`) en paralelo.
-Abrir **http://localhost:5173** en el navegador.
+Starts backend (`:8501`) and frontend (`:5173`) in parallel.
+Open **http://localhost:5173** in the browser.
 
-### Desde cero
+### From scratch
 
 ```bash
-# Backend (puerto 8501)
+# Backend (port 8501)
 cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8501
 
-# Frontend (puerto 5173) — en otra terminal
+# Frontend (port 5173) — in another terminal
 cd frontend
 npm install
 npm run dev
@@ -98,26 +96,26 @@ npm run dev
 ### Tests
 
 ```bash
-# Unitarios (backend)
+# Unit tests (backend)
 cd backend && pytest -v
 
 # E2E (frontend + backend, Playwright)
 cd frontend
-npx playwright install        # solo la primera vez
+npx playwright install        # first time only
 npm run test:e2e              # headless
-npm run test:e2e:ui           # modo interactivo
+npm run test:e2e:ui           # interactive mode
 ```
 
 ---
 
-## Origen
+## Origin
 
-Este proyecto evoluciona de [RedJavaScript](https://github.com/), una
-implementación 100% en navegador. NeuroFlow separa frontend (visualización)
-de backend (cómputo), permitiendo escalar y desplegar como servicio web.
+This project evolved from [RedJavaScript](https://github.com/), a
+100% in-browser implementation. NeuroFlow separates frontend (visualization)
+from backend (computation), allowing it to scale and deploy as a web service.
 
 ---
 
-## Licencia
+## License
 
-*Por definir.*
+*To be defined.*

@@ -1,7 +1,7 @@
-"""Sinapsis — conexión sináptica pesada.
+"""Sinapsis — weighted synaptic connection.
 
-Almacena neurona fuente y peso. El procesamiento real
-(1 - |peso - entrada|) se hace en RedTensor.
+Stores source neuron and weight. The actual processing
+(1 - |weight - input|) is done in RedTensor.
 """
 
 from __future__ import annotations
@@ -13,13 +13,13 @@ if TYPE_CHECKING:
 
 
 class Sinapsis:
-    """Conexión sináptica entre una neurona entrante y una dendrita."""
+    """Synaptic connection between an incoming neuron and a dendrite."""
 
     __slots__ = ("neurona_entrante", "peso")
 
     def __init__(self, neurona_entrante: Neurona, peso: float) -> None:
         if peso < 0.0 or peso > 1.0:
-            raise ValueError(f"Peso de sinapsis debe estar en [0, 1], recibido: {peso}")
+            raise ValueError(f"Synapse weight must be in [0, 1], got: {peso}")
         self.neurona_entrante = neurona_entrante
         self.peso = peso
 

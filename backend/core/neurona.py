@@ -1,7 +1,7 @@
-"""Neurona y NeuronaEntrada — nodos del grafo neuronal.
+"""Neurona and NeuronaEntrada — neural graph nodes.
 
-Almacenan topología (dendritas, sinapsis) y valor de activación.
-El procesamiento real se hace en RedTensor (paralelo, vectorizado).
+Store topology (dendrites, synapses) and activation value.
+The actual processing is done in RedTensor (parallel, vectorized).
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from .dendrita import Dendrita
 
 
 class Neurona:
-    """Nodo neuronal: almacena dendritas, umbral y valor de activación."""
+    """Neural node: stores dendrites, threshold, and activation value."""
 
     __slots__ = ("id", "valor", "dendritas", "umbral")
 
@@ -26,7 +26,7 @@ class Neurona:
         self.umbral = umbral
 
     def activar_external(self, valor: float) -> None:
-        """Setea valor directamente desde el exterior (click, inicialización)."""
+        """Set value directly from external source (click, initialization)."""
         self.valor = valor
 
     def __repr__(self) -> str:
@@ -34,9 +34,9 @@ class Neurona:
 
 
 class NeuronaEntrada(Neurona):
-    """Neurona de entrada: sin dendritas, valor seteado externamente.
+    """Input neuron: no dendrites, value set externally.
 
-    RedTensor la identifica y preserva su valor durante el procesamiento.
+    RedTensor identifies it and preserves its value during processing.
     """
 
     def __init__(self, id: str) -> None:

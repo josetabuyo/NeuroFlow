@@ -1,177 +1,173 @@
-# Hoja de Ruta
+# Roadmap
 
-Las etapas siguen un orden lógico: cada una construye sobre la anterior.
-El objetivo final es un agente motor inteligente que opere sin lenguaje,
-emulando criaturas simples como *Aplysia* o el pez cebra.
+The stages follow a logical order: each one builds on the previous one.
+The ultimate goal is an intelligent motor agent that operates without language,
+emulating simple creatures such as *Aplysia* or the zebrafish.
 
 ---
 
-## Resumen
+## Summary
 
 ```
-Etapa 1   Etapa 2       Etapa 3              Etapa 4      Etapa 5
-Daemon  → SOM Dinámico → Motor/Nociceptor  → Tuning     → Agentes Motores
-(✓)       (próximo)      (teórico)           (genéticos)   (simulación)
+Stage 1   Stage 2       Stage 3              Stage 4      Stage 5
+Daemon  → Dynamic SOM → Motor/Nociceptor  → Tuning     → Motor Agents
+(✓)       (next)        (theoretical)       (genetic)    (simulation)
 ```
 
 ---
 
-## Etapa 1: Encontrar el Daemon ✓
+## Stage 1: Finding the Daemon ✓
 
-**Estado:** Prácticamente cubierta.
+**Status:** Essentially complete.
 
-**Objetivo:** Descubrir si una red puramente conexionista, con reglas
-locales y sin procesamiento centralizado, puede producir unidades
-estables de activación — los *daemons*.
+**Objective:** Discover whether a purely connectionist network, with local rules
+and no centralized processing, can produce stable units of activation — the *daemons*.
 
-**Qué se logró:**
+**What was achieved:**
 
-| Logro | Descripción |
-|-------|-------------|
-| Movimiento | Los daemons se mueven: arriba, abajo, izquierda, derecha |
-| Estabilidad | No se disipan; mantienen su forma |
-| Resistencia al ruido | La señal se impone sobre el ruido |
-| Exclusión competitiva | Los daemons compiten y se excluyen mutuamente |
-| Balance natural | ~50% de neuronas activas en todo momento |
-| Burbujas de activación | Al apagar una, otra se enciende; equilibrio dinámico |
-| Convergencia | Al manipular externamente, el sistema converge a nuevo estado |
-| Múltiples resoluciones | Diferentes conectados almacenan información a distintas escalas |
+| Achievement | Description |
+|-------------|-------------|
+| Movement | Daemons move: up, down, left, right |
+| Stability | They do not dissipate; they maintain their shape |
+| Noise resistance | The signal prevails over noise |
+| Competitive exclusion | Daemons compete and mutually exclude one another |
+| Natural balance | ~50% of neurons active at any given time |
+| Activation bubbles | When one turns off, another turns on; dynamic equilibrium |
+| Convergence | When manipulated externally, the system converges to a new state |
+| Multiple resolutions | Different connectomes store information at different scales |
 
-**Experimento:** *Deamons Lab* — laboratorio de conexionados con
-presets tipo `E G I DE DI` (ver [Modelo Neuronal](../backend/core/README.md)).
+**Experiment:** *Deamons Lab* — connectome laboratory with
+presets such as `E G I DE DI` (see [Neuronal Model](../backend/core/README.md)).
 
-**Hallazgo inesperado:** Los daemons se comportan como notas musicales
-respecto a la exclusión competitiva (ver [Visión](VISION.md#paralelo-con-las-notas-musicales)).
+**Unexpected finding:** Daemons behave like musical notes
+with respect to competitive exclusion (see [Vision](VISION.md#paralelo-con-las-notas-musicales)).
 
-**Siguiente:** Se retomará en la Etapa 4 (Tuning) con algoritmos genéticos.
-
----
-
-## Etapa 2: SOM Dinámico
-
-**Estado:** Próximo.
-
-**Objetivo:** Implementar un mapa auto-organizativo (Self-Organizing Map)
-usando el modelo conexionista de NeuroFlow y observar si el sistema
-replica la capacidad de organización topográfica que Kohonen describió.
-
-**Qué se busca:**
-
-- Ver cómo el sistema se comporta de forma similar a un SOM clásico
-- Mejorar cómo se almacenan y organizan las imágenes
-- Observar la dinámica del SOM tanto para:
-  - Conectados estables (daemons fijos)
-  - Conectados con movimiento (sin perder capacidad de clustering)
-- Implementar el **entrenamiento** dentro de esta etapa
-
-**Experimento:** *Dynamic SOM* — nuevo experimento en la sidebar.
-
-**Inspiración:** Kohonen (1990), Hubel & Wiesel (1981), la relación
-entre SOMs y las capas de redes convolucionales (Deep Dream).
+**Next:** Will be revisited in Stage 4 (Tuning) with genetic algorithms.
 
 ---
 
-## Etapa 3: Motor y Nociceptor
+## Stage 2: Dynamic SOM
 
-**Estado:** Planificado.
+**Status:** Next.
 
-**Objetivo:** Explorar dos conceptos fundamentales antes de pasar a
-agentes motores completos:
+**Objective:** Implement a Self-Organizing Map (SOM)
+using NeuroFlow's connectionist model and observe whether the system
+replicates the topographic organization capacity that Kohonen described.
+
+**What we seek:**
+
+- To see how the system behaves similarly to a classical SOM
+- To improve how images are stored and organized
+- To observe SOM dynamics for both:
+  - Stable connectomes (fixed daemons)
+  - Connectomes with movement (without losing clustering capability)
+- To implement **training** within this stage
+
+**Experiment:** *Dynamic SOM* — new experiment in the sidebar.
+
+**Inspiration:** Kohonen (1990), Hubel & Wiesel (1981), the relationship
+between SOMs and convolutional network layers (Deep Dream).
+
+---
+
+## Stage 3: Motor & Nociceptor
+
+**Status:** Planned.
+
+**Objective:** Explore two fundamental concepts before moving on to
+full motor agents:
 
 ### Nociceptor
 
-El nociceptor es el receptor del dolor. En NeuroFlow, modelar la
-**inhibición nociceptiva** permite entender cómo un sistema distribuido
-puede señalar "peligro" sin un procesador central — análogo a la
-teoría de compuerta del dolor (gate control theory) en el asta dorsal
-de la médula espinal.
+The nociceptor is the pain receptor. In NeuroFlow, modeling
+**nociceptive inhibition** makes it possible to understand how a distributed
+system can signal "danger" without a central processor — analogous to
+gate control theory in the dorsal horn of the spinal cord.
 
 ### Motor
 
-Cómo interpretar las **salidas** de un sistema conexionista como
-señales motoras. No se busca resolver un problema concreto en esta
-etapa, sino:
+How to interpret the **outputs** of a connectionist system as
+motor signals. The goal in this stage is not to solve a specific problem,
+but rather:
 
-- Desarrollar modelos teóricos abstractos
-- Observar qué dinámicas emergen
-- Definir qué métricas se pueden obtener
+- To develop abstract theoretical models
+- To observe what dynamics emerge
+- To define what metrics can be obtained
 
-**Experimento:** *Motor y Nociceptor* — modelos teóricos y abstractos.
+**Experiment:** *Motor & Nociceptor* — theoretical and abstract models.
 
-Cualquier métrica obtenida aquí alimentará la Etapa 4 (Tuning).
-
----
-
-## Etapa 4: Tuning
-
-**Estado:** Planificado.
-
-**Objetivo:** Optimizar los conectados y parámetros del sistema usando
-técnicas sistemáticas de búsqueda y selección.
-
-**Herramientas:**
-
-| Herramienta | Para qué |
-|-------------|----------|
-| **Algoritmos genéticos** | Variar conectados (máscaras) y seleccionar por métricas |
-| **scikit-learn** | Comparar propuestas de red, seleccionar por mérito (GridSearchCV, pipelines) |
-
-**Parámetros a optimizar:**
-
-- Cantidad de neuronas, sinapsis y dendritas
-- Zona excitatoria, gap e inhibitoria (`E G I`)
-- Densidad de cada zona (`DE DI`)
-- Ubicación de sinapsis respecto al axón
-- Posición del axón respecto al centro de masa de conexiones
-
-**Métricas a pulir (deben estar maduras para esta etapa):**
-
-- Cantidad de daemons
-- Nivel de ruido
-- Velocidad de formación desde ruido
-- Estabilidad de cada candidato
-
-**Se retoma:** El laboratorio de Daemons con estas herramientas de
-optimización.
+Any metrics obtained here will feed into Stage 4 (Tuning).
 
 ---
 
-## Etapa 5: Agentes Motores
+## Stage 4: Tuning
 
-**Estado:** Planificado (horizonte largo).
+**Status:** Planned.
 
-**Objetivo:** Llevar el modelo conexionista a un mundo simulado donde
-un agente se mueva de forma inteligente sin lenguaje.
+**Objective:** Optimize connectomes and system parameters using
+systematic search and selection techniques.
+
+**Tools:**
+
+| Tool | Purpose |
+|------|---------|
+| **Genetic algorithms** | Vary connectomes (masks) and select by metrics |
+| **scikit-learn** | Compare network proposals, select by merit (GridSearchCV, pipelines) |
+
+**Parameters to optimize:**
+
+- Number of neurons, synapses, and dendrites
+- Excitatory zone, gap, and inhibitory zone (`E G I`)
+- Density of each zone (`DE DI`)
+- Synapse location relative to the axon
+- Axon position relative to the center of mass of connections
+
+**Metrics to refine (must be mature for this stage):**
+
+- Number of daemons
+- Noise level
+- Formation speed from noise
+- Stability of each candidate
+
+**Resumption:** The Daemons laboratory with these optimization tools.
+
+---
+
+## Stage 5: Motor Agents
+
+**Status:** Planned (long-term horizon).
+
+**Objective:** Take the connectionist model into a simulated world where
+an agent moves intelligently without language.
 
 **Plan:**
 
-1. Simular un mundo virtual con un agente simple (esfera u objeto mínimo)
-2. Publicar modelos que emulen seres vivos sin lenguaje:
-   - ***Aplysia californica***: babosa marina estudiada por Eric Kandel;
-     sistema nervioso con ~20.000 neuronas, permitió descubrir los
-     mecanismos sinápticos del aprendizaje y la memoria
-   - **Pez cebra** (*Danio rerio*): sistema nervioso transparente y
-     relativamente simple; circuitos motores espinales bien
-     caracterizados para locomoción
+1. Simulate a virtual world with a simple agent (sphere or minimal object)
+2. Publish models that emulate living beings without language:
+   - ***Aplysia californica***: sea slug studied by Eric Kandel;
+     nervous system with ~20,000 neurons, which enabled the discovery of
+     synaptic mechanisms of learning and memory
+   - **Zebrafish** (*Danio rerio*): transparent and relatively simple
+     nervous system; spinal motor circuits well characterized for locomotion
 
-**Inspiración científica:**
+**Scientific inspiration:**
 
 - Kandel, E. R. (2001). *The Molecular Biology of Memory Storage: A
   Dialogue Between Genes and Synapses*. Nobel Lecture.
-- Modelos computacionales de circuitos locomotores espinales en pez
-  cebra (eLife, 2021; Nature Neuroscience, 2023).
+- Computational models of spinal locomotor circuits in zebrafish
+  (eLife, 2021; Nature Neuroscience, 2023).
 
 ---
 
-## Líneas futuras (sin etapa asignada)
+## Future lines (no stage assigned)
 
-| Línea | Descripción |
-|-------|-------------|
-| Generación musical | Modelo neuronal que sintetice música a partir de la dinámica de exclusión competitiva |
-| Generación de imágenes | Explorar la conexión entre SOMs, Deep Dream y el modelo conexionista |
-| Modelos 3D | Extender el tejido 2D a volúmenes neuronales 3D |
-| Lenguaje | Abordar modelado de lenguaje desde el enfoque conexionista |
+| Line | Description |
+|------|-------------|
+| Musical generation | Neuronal model that synthesizes music from competitive exclusion dynamics |
+| Image generation | Explore the connection between SOMs, Deep Dream, and the connectionist model |
+| 3D models | Extend the 2D tissue to 3D neuronal volumes |
+| Language | Approach language modeling from the connectionist perspective |
 
 ---
 
-← Volver al [README](../README.md)
+← Back to [README](../README.md)

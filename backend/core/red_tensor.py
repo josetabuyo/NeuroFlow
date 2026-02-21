@@ -1,17 +1,17 @@
-"""RedTensor — Red neuronal como tensores, procesamiento vectorizado.
+"""RedTensor — Neural network as tensors, vectorized processing.
 
-Equivalente paralelo de Red. Todas las operaciones son tensoriales PyTorch:
-sin loops Python sobre neuronas/dendritas/sinapsis.
+Parallel equivalent of Red. All operations are PyTorch tensor operations:
+no Python loops over neurons/dendrites/synapses.
 
-Tensores principales:
-  V  [N]          — valores actuales de cada neurona (+1 zero neuron if border)
-  W  [N, max_syn] — pesos sinápticos
-  C  [N, max_syn] — índices de neurona fuente (conectividad)
-  Dp [N, max_syn] — peso de dendrita para cada sinapsis
-  M  [N, max_syn] — máscara de sinapsis válidas (bool)
-  Di [N, max_syn] — ID de dendrita por sinapsis (para segment_mean)
-  U  [N]          — umbrales de activación
-  Em [N]          — máscara de NeuronaEntrada (no procesar)
+Main tensors:
+  V  [N]          — current values of each neuron (+1 zero neuron if border)
+  W  [N, max_syn] — synaptic weights
+  C  [N, max_syn] — source neuron indices (connectivity)
+  Dp [N, max_syn] — dendrite weight per synapse
+  M  [N, max_syn] — valid synapse mask (bool)
+  Di [N, max_syn] — dendrite ID per synapse (for segment_mean)
+  U  [N]          — activation thresholds
+  Em [N]          — NeuronaEntrada mask (do not process)
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import torch
 
 
 class RedTensor:
-    """Red neuronal como tensores — procesamiento vectorizado."""
+    """Neural network as tensors — vectorized processing."""
 
     def __init__(
         self,
@@ -85,15 +85,15 @@ class RedTensor:
         return dend_pesos, dendrita_mascara
 
     def procesar(self) -> None:
-        """Un step completo vectorizado.
+        """A full vectorized step.
 
-        1. Gather: obtener valores de neuronas fuente
-        2. Sinapsis: 1 - |peso - entrada|
-        3. Promedio por dendrita (segment mean con scatter_add_)
-        4. Multiplicar por peso de dendrita
-        5. Fuzzy OR: max(0, dendritas) + min(0, dendritas) → tensión
-        6. Activar: tensión > umbral
-        7. Preservar NeuronaEntrada (no tocar sus valores)
+        1. Gather: obtain source neuron values
+        2. Synapse: 1 - |weight - input|
+        3. Average per dendrite (segment mean with scatter_add_)
+        4. Multiply by dendrite weight
+        5. Fuzzy OR: max(0, dendrites) + min(0, dendrites) → tension
+        6. Activate: tension > threshold
+        7. Preserve NeuronaEntrada (do not touch their values)
         """
         NR = self.n_real  # real neurons (synapse tensors have NR rows)
         expanded = self.max_dendritas + 1

@@ -1,94 +1,94 @@
 ---
-description: Procedimiento para agregar un nuevo preset de máscara/conexionado a NeuroFlow
+description: Procedure for adding a new mask/wiring preset to NeuroFlow
 globs: backend/core/masks.py
 alwaysApply: false
 ---
 
-# Agregar nuevo preset de máscara
+# Adding a new mask preset
 
-Cuando el usuario pida un nuevo conexionado/máscara, seguir estos pasos en orden:
+When the user requests a new wiring/mask, follow these steps in order:
 
-## 0. Interpretar la notación del usuario
+## 0. Interpret the user's notation
 
-El usuario puede pedir una máscara de dos formas:
+The user can request a mask in two ways:
 
-**Forma explícita:** `E2 G6 I3 DE1 DI1`
+**Explicit form:** `E2 G6 I3 DE1 DI1`
 
-**Forma numérica (shorthand):** `2 6 3 1 1`
+**Numeric shorthand:** `2 6 3 1 1`
 
-El orden por defecto siempre es: **E G I DE DI**
+The default order is always: **E G I DE DI**
 
-| Posición | Parámetro | Significado | Cómo se traduce a código |
-|----------|-----------|-------------|--------------------------|
-| 1ª | **E** | Radio excitatorio Moore | `_moore(E)` |
-| 2ª | **G** | Gap (anillos de silencio) | gap va de r=E+1 a r=E+G |
-| 3ª | **I** | Anillos inhibitorios | `_ring(E+G+1, E+G+I)` |
-| 4ª | **DE** | Densidad excitatoria (1/DE) | DE=1 → completa, DE=3 → `_random_sparse(..., 1/3, seed)` |
-| 5ª | **DI** | Densidad inhibitoria (1/DI) | DI=1 → completa, DI=1.5 → `_random_sparse(..., 2/3, seed)` |
+| Position | Parameter | Meaning | How it translates to code |
+|----------|-----------|---------|--------------------------|
+| 1st | **E** | Excitatory Moore radius | `_moore(E)` |
+| 2nd | **G** | Gap (silence rings) | gap goes from r=E+1 to r=E+G |
+| 3rd | **I** | Inhibitory rings | `_ring(E+G+1, E+G+I)` |
+| 4th | **DE** | Excitatory density (1/DE) | DE=1 → full, DE=3 → `_random_sparse(..., 1/3, seed)` |
+| 5th | **DI** | Inhibitory density (1/DI) | DI=1 → full, DI=1.5 → `_random_sparse(..., 2/3, seed)` |
 
-Si el usuario omite DE y DI, asumir DE=1 DI=1 (densidad completa).
+If the user omits DE and DI, assume DE=1 DI=1 (full density).
 
-**Ejemplo:** `2 6 3 1 1` → E=2, G=6, I=3, DE=1, DI=1
-- Excitación: `_moore(2)` (24 vecinos, completa)
-- Gap: r=3 a r=8 (6 anillos de silencio)
-- Inhibición: `_ring(9, 11)` (3 anillos, completa)
+**Example:** `2 6 3 1 1` → E=2, G=6, I=3, DE=1, DI=1
+- Excitation: `_moore(2)` (24 neighbors, full)
+- Gap: r=3 to r=8 (6 silence rings)
+- Inhibition: `_ring(9, 11)` (3 rings, full)
 
-**Ejemplo con densidad:** `3 12 3 3 3` → E=3, G=12, I=3, DE=3, DI=3
-- Excitación: `_random_sparse(_moore(3), 1/3, seed=42)`
-- Inhibición: `_make_inhibitory(_random_sparse(_ring(16, 18), 1/3, seed=43), -1.0, 8)`
+**Example with density:** `3 12 3 3 3` → E=3, G=12, I=3, DE=3, DI=3
+- Excitation: `_random_sparse(_moore(3), 1/3, seed=42)`
+- Inhibition: `_make_inhibitory(_random_sparse(_ring(16, 18), 1/3, seed=43), -1.0, 8)`
 
-## 1. Definir la máscara en `backend/core/masks.py`
+## 1. Define the mask in `backend/core/masks.py`
 
-- Agregar la constante `MASK_DEAMON_E<n>_G<n>_I<n>_DE<n>_DI<n>: MaskDef = [...]` junto a las demás.
-- Usar los helpers existentes: `_moore()`, `_ring()`, `_von_neumann()`, `_sparse_ring()`, `_random_sparse()`, `_make_inhibitory()`, `_partition()`.
-- Respetar la convención: dendritas excitatorias primero (peso > 0), luego inhibitorias (peso < 0).
-- Para densidad: DE=1/DI=1 → no usar `_random_sparse`. Para otros valores → `_random_sparse(offsets, 1/D, seed=N)`.
-- Usar seeds incrementales (42+ para exc, 43+ para inh) para que cada máscara tenga su propio patrón.
+- Add the constant `MASK_DEAMON_E<n>_G<n>_I<n>_DE<n>_DI<n>: MaskDef = [...]` alongside the others.
+- Use existing helpers: `_moore()`, `_ring()`, `_von_neumann()`, `_sparse_ring()`, `_random_sparse()`, `_make_inhibitory()`, `_partition()`.
+- Follow convention: excitatory dendrites first (weight > 0), then inhibitory (weight < 0).
+- For density: DE=1/DI=1 → don't use `_random_sparse`. For other values → `_random_sparse(offsets, 1/D, seed=N)`.
+- Use incremental seeds (42+ for exc, 43+ for inh) so each mask has its own pattern.
 
-## 2. Registrar en `MASK_PRESETS`
+## 2. Register in `MASK_PRESETS`
 
-Agregar la entrada en el dict `MASK_PRESETS` del mismo archivo con todos los campos:
+Add the entry in the `MASK_PRESETS` dict in the same file with all fields:
 
 ```python
 "deamon_e2_g6_i3_de1_di1": {
     "id": "deamon_e2_g6_i3_de1_di1",
     "name": "Deamon (E2 G6 I3 DE1 DI1)",
-    "description": "Moore r=2 completa (24 vecinos), gap r=3-8, corona r=9-11 completa.",
-    "center": "Moore r=2 (24 vecinos, densidad completa)",
-    "corona": "r=9-11 completa, gap r=3-8 silencio (x6)",
+    "description": "Moore r=2 full (24 neighbors), gap r=3-8, corona r=9-11 full.",
+    "center": "Moore r=2 (24 neighbors, full density)",
+    "corona": "r=9-11 full, gap r=3-8 silence (x6)",
     "dendrites_inh": 8,
     "random_weights": True,
     "mask": MASK_DEAMON_E2_G6_I3_DE1_DI1,
 },
 ```
 
-## 3. Actualizar test de conteo
+## 3. Update test count
 
-En `backend/tests/test_deamons_lab.py`, buscar `assert len(info) == N` dentro de `test_get_mask_info_excludes_mask_data` e incrementar N en 1 por cada máscara nueva.
+In `backend/tests/test_deamons_lab.py`, find `assert len(info) == N` inside `test_get_mask_info_excludes_mask_data` and increment N by 1 for each new mask.
 
-## 4. Correr tests
+## 4. Run tests
 
 ```bash
 cd /Users/josetabuyo/Personal/NeuroFlow && ./venv/bin/python -m pytest backend/tests/ -x -q
 ```
 
-Verificar 0 fallos antes de continuar.
+Verify 0 failures before continuing.
 
-## 5. Verificar la web
+## 5. Verify the web
 
-- Usar `browser_tabs` con action `list` para ver si ya hay una pestaña abierta con la app (localhost:5173).
-- Si hay pestaña abierta: hacer `browser_navigate` a la URL actual para recargar y que tome los cambios del backend (auto-reload con uvicorn) y frontend (HMR de Vite).
-- Si no hay pestaña: abrir `http://localhost:5173` con `browser_navigate`.
-- Tomar un `browser_snapshot` y verificar que la nueva máscara aparece en el dropdown de conexionados.
+- Use `browser_tabs` with action `list` to see if there's already an open tab with the app (localhost:5173).
+- If there's an open tab: `browser_navigate` to the current URL to reload and pick up backend changes (auto-reload with uvicorn) and frontend (Vite HMR).
+- If no tab: open `http://localhost:5173` with `browser_navigate`.
+- Take a `browser_snapshot` and verify the new mask appears in the wiring dropdown.
 
-## 6. Validación rápida
+## 6. Quick validation
 
-- Confirmar que el nombre de la máscara nueva aparece en la lista.
-- Confirmar que la vista previa (preview grid) se renderiza correctamente para la nueva máscara.
+- Confirm the new mask name appears in the list.
+- Confirm the preview grid renders correctly for the new mask.
 
-## Notas importantes
+## Important notes
 
-- La fuente de verdad para `default_config` es `backend/api/routes.py` (la API pisa los defaults del frontend al cargar).
-- El preview grid es dinámico: se adapta al tamaño del conexionado automáticamente.
-- El backend tiene `--reload`, los cambios en `.py` se toman solos. El frontend con Vite HMR también.
-- NO tocar `frontend/src/App.tsx` para agregar máscaras: las masks se cargan dinámicamente desde la API via `get_mask_info()`.
+- The source of truth for `default_config` is `backend/api/routes.py` (the API overrides frontend defaults on load).
+- The preview grid is dynamic: it adapts to the wiring size automatically.
+- The backend has `--reload`, changes to `.py` files are picked up automatically. The frontend with Vite HMR likewise.
+- DO NOT touch `frontend/src/App.tsx` to add masks: masks are loaded dynamically from the API via `get_mask_info()`.

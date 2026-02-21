@@ -1,10 +1,10 @@
-"""ConstructorTensor — compila una Red secuencial en una RedTensor paralela.
+"""ConstructorTensor — compiles a sequential Red into a parallel RedTensor.
 
-Recorre la Red UNA sola vez y construye todos los tensores PyTorch
-necesarios para el procesamiento vectorizado.
+Traverses the Red ONCE and builds all the PyTorch tensors
+needed for vectorized processing.
 
-Este es un paso de setup (O(N*S)), no de procesamiento.
-Solo corre una vez al iniciar el experimento.
+This is a setup step (O(N*S)), not a processing step.
+It only runs once when starting the experiment.
 """
 
 from __future__ import annotations
@@ -17,21 +17,21 @@ from .red_tensor import RedTensor
 
 
 class ConstructorTensor:
-    """Compila una Red secuencial en una RedTensor paralela."""
+    """Compiles a sequential Red into a parallel RedTensor."""
 
     @staticmethod
     def compilar(red: Red, device: str = "cpu") -> RedTensor:
-        """Convierte una Red secuencial en una RedTensor paralela.
+        """Convert a sequential Red into a parallel RedTensor.
 
-        Recorre la Red UNA sola vez y construye los tensores:
-        1. Extraer valores de todas las neuronas → tensor V [N]
-        2. Extraer pesos sinápticos → tensor W [N, max_syn]
-        3. Extraer conectividad (índices de neuronas fuente) → tensor C [N, max_syn]
-        4. Extraer pesos de dendrita por sinapsis → tensor Dp [N, max_syn]
-        5. Extraer máscara de sinapsis válidas → tensor M [N, max_syn]
-        6. Extraer pertenencia de sinapsis a dendrita → tensor Di [N, max_syn]
-        7. Extraer umbrales → tensor U [N]
-        8. Extraer máscara de NeuronaEntrada → tensor Em [N]
+        Traverses the Red ONCE and builds the tensors:
+        1. Extract values from all neurons → tensor V [N]
+        2. Extract synaptic weights → tensor W [N, max_syn]
+        3. Extract connectivity (source neuron indices) → tensor C [N, max_syn]
+        4. Extract dendrite weight per synapse → tensor Dp [N, max_syn]
+        5. Extract valid synapse mask → tensor M [N, max_syn]
+        6. Extract synapse-to-dendrite membership → tensor Di [N, max_syn]
+        7. Extract thresholds → tensor U [N]
+        8. Extract NeuronaEntrada mask → tensor Em [N]
 
         Args:
             red: The sequential Red with all neurons/dendrites/synapses configured.

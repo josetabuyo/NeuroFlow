@@ -1,4 +1,4 @@
-"""Tests para Constructor — factory para armar redes + regiones."""
+"""Tests for Constructor — factory for building networks + regions."""
 
 import pytest
 from core.constructor import Constructor
@@ -8,10 +8,10 @@ from core.region import Region
 
 
 class TestConstructor:
-    """Constructor: crea neuronas, regiones, conectividad."""
+    """Constructor: creates neurons, regions, connectivity."""
 
     def test_crear_grilla_de_neuronas(self) -> None:
-        """Constructor crea grilla de neuronas correctamente."""
+        """Constructor correctly creates neuron grid."""
         constructor = Constructor()
         red, regiones = constructor.crear_grilla(
             width=5,
@@ -22,7 +22,7 @@ class TestConstructor:
         assert len(red.neuronas) == 25  # 5x5
 
     def test_crear_regiones_separadas_de_red(self) -> None:
-        """Constructor crea regiones separadas de la Red."""
+        """Constructor creates regions separate from the Red."""
         constructor = Constructor()
         red, regiones = constructor.crear_grilla(
             width=5,
@@ -33,11 +33,11 @@ class TestConstructor:
         assert "entrada" in regiones
         assert "salida" in regiones
         assert "interna" in regiones
-        # Red no sabe de regiones
+        # Red does not know about regions
         assert not hasattr(red, "regiones")
 
     def test_neuronas_entrada_son_neurona_entrada(self) -> None:
-        """Las neuronas de la fila de entrada son NeuronaEntrada."""
+        """Neurons in the input row are NeuronaEntrada."""
         constructor = Constructor()
         red, regiones = constructor.crear_grilla(
             width=5,
@@ -49,7 +49,7 @@ class TestConstructor:
             assert isinstance(neurona, NeuronaEntrada)
 
     def test_conectar_neuronas_con_dendritas_y_sinapsis(self) -> None:
-        """Constructor conecta neuronas con dendritas y sinapsis."""
+        """Constructor connects neurons with dendrites and synapses."""
         constructor = Constructor()
         red, regiones = constructor.crear_grilla(
             width=5,
@@ -57,25 +57,25 @@ class TestConstructor:
             filas_entrada=[2],
             filas_salida=[0],
         )
-        # Conectar fila 1 a fila 2 (entrada) con vecindad de 3
-        mascara = [(-1, 1), (0, 1), (1, 1)]  # izq, centro, der de fila inferior
+        # Connect row 1 to row 2 (input) with 3-neighborhood
+        mascara = [(-1, 1), (0, 1), (1, 1)]  # left, center, right of lower row
         constructor.conectar_filas(
             red=red,
             fila_destino=1,
             width=5,
             height=3,
             mascara_relativa=mascara,
-            regla_pesos=[[1.0, 1.0, 1.0]],  # Una dendrita que reconoce todo 1s
+            regla_pesos=[[1.0, 1.0, 1.0]],  # One dendrite that recognizes all 1s
         )
 
-        # La neurona central de fila 1 debe tener al menos una dendrita
+        # The central neuron of row 1 must have at least one dendrite
         neurona_centro = red.get_neurona("x2y1")
         assert len(neurona_centro.dendritas) > 0
-        # Esa dendrita debe tener 3 sinapsis
+        # That dendrite must have 3 synapses
         assert len(neurona_centro.dendritas[0].sinapsis) == 3
 
     def test_aplicar_mascara_de_conexion_relativa(self) -> None:
-        """Constructor aplica máscara de conexión relativa."""
+        """Constructor applies relative connection mask."""
         constructor = Constructor()
         red, regiones = constructor.crear_grilla(
             width=5,
@@ -95,7 +95,7 @@ class TestConstructor:
 
         neurona = red.get_neurona("x2y1")
         dendrita = neurona.dendritas[0]
-        # Debe estar conectada a x1y2, x2y2, x3y2
+        # Should be connected to x1y2, x2y2, x3y2
         ids_conectados = [s.neurona_entrante.id for s in dendrita.sinapsis]
         assert "x1y2" in ids_conectados
         assert "x2y2" in ids_conectados

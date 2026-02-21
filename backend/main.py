@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(
     title="NeuroFlow",
-    description="Framework de autómatas neuronales conexionistas",
+    description="Connectionist neural automata framework",
     version="0.1.0",
 )
 

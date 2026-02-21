@@ -1,8 +1,8 @@
-"""Constructor — factory para armar redes + regiones.
+"""Constructor — factory for building networks + regions.
 
-Crea neuronas, las agrupa en regiones,
-construye la conectividad (dendritas, sinapsis).
-La Red resultante se compila a RedTensor para procesamiento paralelo.
+Creates neurons, groups them into regions,
+builds connectivity (dendrites, synapses).
+The resulting Red is compiled to RedTensor for parallel processing.
 """
 
 from __future__ import annotations
@@ -17,11 +17,11 @@ from .region import Region
 
 
 class Constructor:
-    """Factory/Builder de redes neuronales y regiones."""
+    """Factory/Builder for neural networks and regions."""
 
     @staticmethod
     def key_by_coord(x: int, y: int) -> str:
-        """Genera el ID de neurona a partir de coordenadas."""
+        """Generate neuron ID from coordinates."""
         return f"x{x}y{y}"
 
     def crear_grilla(
@@ -32,17 +32,17 @@ class Constructor:
         filas_salida: list[int],
         umbral: float = 0.0,
     ) -> tuple[Red, dict[str, Region]]:
-        """Crea una grilla de neuronas con regiones de entrada, salida e interna.
+        """Create a neuron grid with input, output, and internal regions.
 
         Args:
-            width: Ancho de la grilla.
-            height: Alto de la grilla.
-            filas_entrada: Índices de filas que son NeuronaEntrada.
-            filas_salida: Índices de filas que son salida (Neurona normal, solo etiqueta).
-            umbral: Umbral de activación para neuronas internas y de salida.
+            width: Grid width.
+            height: Grid height.
+            filas_entrada: Row indices that are NeuronaEntrada.
+            filas_salida: Row indices that are output (normal Neurona, label only).
+            umbral: Activation threshold for internal and output neurons.
 
         Returns:
-            Tupla (Red, dict de Regiones).
+            Tuple (Red, dict of Regions).
         """
         neuronas: list[Neurona] = []
         region_entrada = Region(nombre="entrada")
@@ -83,20 +83,20 @@ class Constructor:
         regla_pesos: list[list[float]],
         peso_dendrita: float = 1.0,
     ) -> None:
-        """Conecta neuronas de una fila con sus vecinas según una máscara relativa.
+        """Connect neurons from a row with their neighbors according to a relative mask.
 
         Uses toroidal (wrap-around) topology: offsets that fall outside the
         grid wrap to the opposite edge via modular arithmetic.
 
         Args:
-            red: La red que contiene las neuronas.
-            fila_destino: Índice de fila cuyas neuronas recibirán las conexiones.
-            width: Ancho de la grilla.
-            height: Alto de la grilla.
-            mascara_relativa: Lista de offsets (dx, dy) para encontrar vecinos.
-            regla_pesos: Lista de dendritas, cada una es una lista de pesos para las sinapsis.
-                         Cada lista de pesos corresponde a un patrón que debe reconocer.
-            peso_dendrita: Peso de cada dendrita creada.
+            red: The network containing the neurons.
+            fila_destino: Row index whose neurons will receive the connections.
+            width: Grid width.
+            height: Grid height.
+            mascara_relativa: List of offsets (dx, dy) to find neighbors.
+            regla_pesos: List of dendrites, each is a list of synapse weights.
+                         Each weight list corresponds to a pattern to recognize.
+            peso_dendrita: Weight for each created dendrite.
         """
         for x in range(width):
             neurona_destino = red.get_neurona(self.key_by_coord(x, fila_destino))
@@ -125,30 +125,29 @@ class Constructor:
         width: int,
         height: int,
     ) -> None:
-        """Configura las dendritas de una fila según una regla de Wolfram.
+        """Configure a row's dendrites according to a Wolfram rule.
 
-        Para cada patrón (de 0 a 7) que produce salida = 1 en la regla,
-        crea una dendrita con 3 sinapsis cuyos pesos codifican el patrón.
+        For each pattern (0 to 7) that produces output = 1 in the rule,
+        creates a dendrite with 3 synapses whose weights encode the pattern.
 
         Args:
-            red: La red con las neuronas.
-            regla: Número de regla de Wolfram (0-255).
-            fila_destino: Fila a configurar.
-            width: Ancho de la grilla.
-            height: Alto de la grilla.
+            red: The network with the neurons.
+            regla: Wolfram rule number (0-255).
+            fila_destino: Row to configure.
+            width: Grid width.
+            height: Grid height.
         """
-        # Decodificar la regla: para cada patrón de 3 bits, ¿produce 1?
         patrones_activos: list[list[float]] = []
         for patron in range(8):
             if regla & (1 << patron):
-                # Convertir patrón de 3 bits a pesos de sinapsis
-                # Bit 2 = izquierda, Bit 1 = centro, Bit 0 = derecha
+                # Convert 3-bit pattern to synapse weights
+                # Bit 2 = left, Bit 1 = center, Bit 0 = right
                 izq = float((patron >> 2) & 1)
                 cen = float((patron >> 1) & 1)
                 der = float(patron & 1)
                 patrones_activos.append([izq, cen, der])
 
-        mascara = [(-1, 1), (0, 1), (1, 1)]  # izq, centro, der de fila inferior
+        mascara = [(-1, 1), (0, 1), (1, 1)]  # left, center, right from row below
         self.conectar_filas(
             red=red,
             fila_destino=fila_destino,
@@ -164,28 +163,27 @@ class Constructor:
         neuronas: list[Neurona],
         target: float = 0.0,
     ) -> None:
-        """Desplaza el punto de operación del Fuzzy OR escalando pesos sinápticos.
+        """Shift the Fuzzy OR operating point by scaling synaptic weights.
 
-        El Fuzzy OR calcula: tension = max(D_exc) + min(D_inh).
-        Con pesos sinápticos similares (~0.6) en exc e inh, el Fuzzy OR
-        queda naturalmente equilibrado (tensión ≈ 0).
+        The Fuzzy OR computes: tension = max(D_exc) + min(D_inh).
+        With similar synaptic weights (~0.6) in exc and inh, the Fuzzy OR
+        is naturally balanced (tension ≈ 0).
 
-        Este método desplaza ese equilibrio escalando uniformemente las
-        sinapsis del lado opuesto:
+        This method shifts that balance by uniformly scaling the synapses
+        on the opposite side:
 
-          target =  0.0 → sin cambio (dinámica natural del Kohonen)
-          target > 0   → escala sinapsis inhibitorias por (1 - target)
-                         → sesgo excitatorio (más neuronas se activan)
-          target < 0   → escala sinapsis excitatorias por (1 + target)
-                         → sesgo inhibitorio (menos neuronas se activan)
-          target = +1  → inhibición eliminada (todo ON)
-          target = -1  → excitación eliminada (todo OFF)
+          target =  0.0 → no change (natural Kohonen dynamics)
+          target > 0   → scales inhibitory synapses by (1 - target)
+                         → excitatory bias (more neurons activate)
+          target < 0   → scales excitatory synapses by (1 + target)
+                         → inhibitory bias (fewer neurons activate)
+          target = +1  → inhibition removed (all ON)
+          target = -1  → excitation removed (all OFF)
 
         Args:
-            neuronas: Lista de neuronas a balancear.  NeuronaEntrada y neuronas
-                      sin dendritas se ignoran.
-            target: Desplazamiento del balance.  0.0 = sin cambio.
-                    Rango útil: [-1, 1].
+            neuronas: List of neurons to balance. NeuronaEntrada and neurons
+                      without dendrites are skipped.
+            target: Balance offset. 0.0 = no change. Useful range: [-1, 1].
         """
         if target == 0.0:
             return
@@ -214,14 +212,14 @@ class Constructor:
         neuronas: list[Neurona],
         target: float = 0.0,
     ) -> None:
-        """Elimina sinapsis aleatorias de dendritas para desplazar el balance.
+        """Remove random synapses from dendrites to shift the balance.
 
-        target > 0: elimina sinapsis de dendritas inhibitorias
-        target < 0: elimina sinapsis de dendritas excitatorias
-        target = 0: no hace nada
+        target > 0: removes synapses from inhibitory dendrites
+        target < 0: removes synapses from excitatory dendrites
+        target = 0: does nothing
 
-        Cada dendrita afectada pierde floor(len(sinapsis) * |target|) sinapsis,
-        pero siempre conserva al menos 1.
+        Each affected dendrite loses floor(len(synapses) * |target|) synapses,
+        but always keeps at least 1.
         """
         if target == 0.0:
             return
@@ -258,13 +256,13 @@ class Constructor:
         *,
         random_weights: bool = True,
     ) -> None:
-        """Aplica una máscara de conexión a cada neurona de la grilla 2D.
+        """Apply a connection mask to every neuron in the 2D grid.
 
         Args:
-            red: La red con las neuronas.
-            width: Ancho de la grilla.
-            height: Alto de la grilla.
-            mascara: Lista de definiciones de dendritas. Cada una:
+            red: The network with the neurons.
+            width: Grid width.
+            height: Grid height.
+            mascara: List of dendrite definitions. Each one:
                 {
                     "peso_dendrita": float,
                     "offsets": [(dx, dy), ...],
