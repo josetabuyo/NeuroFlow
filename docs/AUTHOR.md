@@ -100,7 +100,7 @@ At GIAR, José Miguel worked on:
 ## Dedication
 
 This work is dedicated to **Carlos Javier Lurgo**, a close collaborator,
-also Argentine, graduate in Electronic Engineering from UTN (2000–2007)
+also Argentine, student of Electronic Engineering at UTN (2000–2007)
 and member of **GIAR**, where he conducted research in artificial
 intelligence and robotics.
 
