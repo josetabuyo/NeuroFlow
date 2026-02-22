@@ -21,7 +21,7 @@ For the neural model close to the code, see [Neural Model](../backend/core/READM
 ┌──────────────────────┴──────────────────────────────────┐
 │                      BACKEND                            │
 │   Python 3.11+ / FastAPI / uvicorn                      │
-│   NumPy for matrix operations                           │
+│   PyTorch for tensor operations                         │
 │   Deploy: Render.com (free, 750h/month)                  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -32,7 +32,7 @@ For the neural model close to the code, see [Neural Model](../backend/core/READM
 |-----------|--------|-----|
 | Backend framework | **FastAPI** | Native async, WebSocket, typing, most popular in Python 2025-2026 |
 | Backend runtime | **uvicorn** | Standard ASGI server for FastAPI |
-| Compute | **NumPy** | Vectorized matrix operations, releases GIL |
+| Compute | **PyTorch** | Vectorized tensor operations, GPU-ready |
 | Frontend bundler | **Vite** | Instant build, HMR, current standard |
 | Frontend framework | **React 19 + TypeScript** | Most adopted, reusable components |
 | Rendering | **HTML5 Canvas** | Direct, fast, perfect for pixel grids |
@@ -757,11 +757,12 @@ app.add_middleware(
 - Larger ecosystem for future needs
 - Mature TypeScript support
 
-### Why NumPy for computation?
+### Why PyTorch for computation?
 
-- Vectorized operations are ~100x faster than Python loops
+- Vectorized tensor operations are ~100x faster than Python loops
 - For 50×50 = 2500 neurons, it is instant
-- Scales well up to ~1000×1000 without GPU
+- Scales to large grids and supports GPU acceleration (`cuda`) when available
+- Rich ecosystem for scatter/gather operations needed by the neural model
 - Familiar to scientists and engineers
 
 ---

@@ -59,7 +59,7 @@ The documentation is organized by depth level. Start wherever interests you:
 
 | Layer | Technology | Hosting |
 |-------|-----------|---------|
-| Backend | Python 3.11+ / FastAPI / WebSocket / NumPy | Render.com (free) |
+| Backend | Python 3.11+ / FastAPI / WebSocket / PyTorch | Render.com (free) |
 | Frontend | Vite / React 19 / TypeScript / HTML5 Canvas | Vercel (free) |
 
 ```
