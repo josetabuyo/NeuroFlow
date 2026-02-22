@@ -7,9 +7,10 @@ fundamental pieces that process information without a central controller.
 
 ## In one line
 
-> Synapses recognize patterns → Dendrites combine them (excite or inhibit)
-> → Neurons compete and activate → the Network processes them all without
-> knowing anything about organization.
+> Synapses match single inputs → Dendrites average them into patterns
+> that excite or inhibit → Neurons compete (best excitation vs worst
+> inhibition) and fire → the Network processes them all without knowing
+> anything about organization.
 
 ---
 
