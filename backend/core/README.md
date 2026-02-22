@@ -126,10 +126,14 @@ are inhibitory, and with what density.
 
 ### Biological inspiration
 
-This structure replicates the **Mexican hat** observed in the visual cortex
-by Hubel & Wiesel (1962) and formalized by Kohonen in SOMs: local excitation
-surrounded by lateral inhibition — the fundamental pattern that enables
-topographic self-organization in the brain.
+The connection masks define **wiring**, not the Mexican hat directly.
+The Mexican hat — local excitation surrounded by lateral inhibition —
+was observed biologically as a **response profile** (Kuffler, 1953 in
+retinal cells; Hubel & Wiesel, 1962 in cortical cells) and formalized
+by Kohonen in SOMs. In NeuroFlow, the masks produce wiring patterns that
+are not necessarily Mexican hat-shaped, but the **emergent daemon** — the
+stable activation bubble — exhibits exactly that profile as its surface
+tension.
 
 ---
 

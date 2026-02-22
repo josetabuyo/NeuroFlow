@@ -54,9 +54,13 @@ Comprehensive reference on neuroscience, including nociceptors, motor circuits a
 
 The **self-organizing map** (SOM) is a neural network where cells tune to input patterns through unsupervised learning, creating spatially organized representations analogous to the brain's topographic maps. It uses competitive lateral interactions with a **Mexican hat** pattern (local excitation, lateral inhibition). NeuroFlow implements this principle with its Daemon masks.
 
+### Kuffler, S. W. (1953). "Discharge Patterns and Functional Organization of Mammalian Retina." *Journal of Neurophysiology*, 16(1), 37-68.
+
+Discovered center-surround receptive fields in retinal ganglion cells (on-center/off-surround and vice versa) — the clearest biological manifestation of the **Mexican hat** profile. Kuffler measured the *response* of neurons to light stimulation, not the physical wiring. His work is the foundation that Hubel & Wiesel extended to the visual cortex.
+
 ### Hubel, D. H. & Wiesel, T. N. (1962). "Receptive Fields, Binocular Interaction and Functional Architecture in the Cat's Visual Cortex." *Journal of Physiology*, 160(1), 106-154.
 
-Discovered the organization of receptive fields in the cat's visual cortex — the biological basis of the Mexican hat and lateral inhibition. Nobel Prize in Physiology or Medicine (1981). Their observation of nature is the biological foundation of the Daemon connections in NeuroFlow.
+Building on Kuffler's retinal findings, they recorded **response profiles** of individual neurons in the cat's visual cortex — what neurons fire in response to, not how they are physically wired. They discovered that cortical neurons respond to oriented edges (not spots of light), with excitatory and inhibitory regions in their receptive fields. Nobel Prize in Physiology or Medicine (1981). The key insight for NeuroFlow: what biology observed was the **surface tension** (the response profile), not the connection pattern — and in NeuroFlow, the Daemon masks define wiring, but the emergent daemon itself is what exhibits the Mexican hat profile.
 
 ---
 
@@ -78,16 +82,6 @@ The **zebrafish** (*Danio rerio*) is the model for Stage 5 due to its transparen
 
 ---
 
-## Pattern recognition and classification
-
-### Fukunaga, K. (1990). *Introduction to Statistical Pattern Recognition* (2nd ed.). Academic Press.
-
-### Duda, R. O., Hart, P. E. & Stork, D. G. (2001). *Pattern Classification* (2nd ed.). Wiley. ISBN 0-471-05669-3.
-
-Foundational texts on classification in hyperspaces. They describe the progression of classification hypotheses: spheres → ellipses → ellipsoids → correlated ellipsoids → complex shapes. This theoretical framework informed the author's work at GIAR (UTN) on handwritten text recognition and image descriptors (Hu moments).
-
-*Note: The author conducted this study independently and later discovered that the existing literature confirmed his findings.*
-
 ---
 
 ## Pain and nociceptors
@@ -95,24 +89,6 @@ Foundational texts on classification in hyperspaces. They describe the progressi
 ### Melzack, R. & Wall, P. D. (1965). "Pain Mechanisms: A New Theory." *Science*, 150(3699), 971-979.
 
 The **gate control theory of pain** proposes that pain perception is not a direct channel but a system where excitatory signals (C fibers, nociceptive) and inhibitory signals (Aβ fibers, mechanical) compete in the dorsal horn of the spinal cord. This model of competition between excitation and inhibition is directly analogous to the daemon dynamics in NeuroFlow.
-
----
-
-## Convolutional networks and visualization
-
-### Mordvintsev, A. et al. (2015). "Inceptionism: Going Deeper into Neural Networks." *Google Research Blog*.
-
-**Deep Dream** demonstrates that a convolutional network trained to classify images contains enough information to *generate* them. Layers extract progressively more complex features — from edges to complete objects. The ability to organize images by similarity is analogous to what a SOM does, connecting modern artificial vision with NeuroFlow's connectionist approach.
-
----
-
-## Science communication
-
-### DotCSV (Carlos Santana Vega). YouTube channel.
-
-Science communication channel on artificial intelligence in Spanish (~1M subscribers). His explanations of convolutional networks and Deep Dream illuminated the connection between similarity-based organization in deep networks and self-organizing maps.
-
-URL: [youtube.com/@DotCSV](https://www.youtube.com/@DotCSV)
 
 ---
 

@@ -43,8 +43,9 @@ The documentation is organized by depth level. Start wherever interests you:
 | **[Vision and Philosophy](docs/VISION.md)** | What is a daemon, why no central observer, theoretical inspirations |
 | **[Roadmap](docs/STAGES.md)** | The 5 stages of the project: Daemons → SOM → Motor/Nociceptor → Tuning → Agents |
 | **[Technical Architecture](docs/ARCHITECTURE.md)** | Stack, class design, API, WebSocket protocol, hosting |
-| **[References](docs/REFERENCES.md)** | Complete bibliography with citations: Dennett, Hawkins, Kohonen, Kandel and more |
+| **[References](docs/REFERENCES.md)** | Complete bibliography with citations: Dennett, Hawkins, Kohonen, Kandel (*Aplysia*) and more |
 | **[About the Author](docs/AUTHOR.md)** | José Miguel Tabuyo — career, motivation, and dedication |
+| **[Decisions (ADR)](docs/decisions/)** | Architecture Decision Records: why WebSocket, why PyTorch, why React, etc. |
 
 ### Code-level documentation
 

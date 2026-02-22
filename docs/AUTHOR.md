@@ -44,11 +44,9 @@ At GIAR, José Miguel worked on:
   least relevant for the recognition task.
 
 - **Study of the classification hyperspace**: independent research on
-  how classes are organized in high-dimensional spaces — progression
-  from hypotheses of spheres, ellipses, ellipsoids, correlated
-  ellipsoids, to complex shapes. Two years later, he discovered that
-  the existing literature (Fukunaga, Duda & Hart) confirmed his
-  intuitive findings.
+  how classes are organized in high-dimensional spaces — modeling them
+  as point clouds and progressing through hypotheses: spheres, ellipses,
+  ellipsoids, correlated ellipsoids, to complex shapes.
 
 - **Neural networks**: development of Hopfield, Perceptron, and
   **backpropagation models implemented from scratch** — from academic

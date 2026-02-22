@@ -40,7 +40,7 @@ For the neural model close to the code, see [Neural Model](../backend/core/READM
 | Backend hosting | **Render.com** | Only one with real free tier for Python (750h/month) |
 | Frontend hosting | **Vercel** | Generous free tier, auto-deploy from Git, optimal for React |
 | Backend tests | **pytest** | Python standard, simple, powerful |
-| Frontend tests | **Vitest** | Native to Vite, Jest API compatible |
+| Frontend tests (E2E) | **Playwright** | Browser automation, headless and interactive modes |
 
 ---
 
@@ -100,7 +100,14 @@ NeuroFlow/
 │   ├── VISION.md                  # Philosophy, daemons, mind model
 │   ├── STAGES.md                  # Roadmap (5 stages)
 │   ├── REFERENCES.md              # Complete bibliography
-│   └── AUTHOR.md                  # About the author and dedication
+│   ├── AUTHOR.md                  # About the author and dedication
+│   └── decisions/                 # Architecture Decision Records (ADR)
+│       ├── README.md              # Index of all decisions
+│       ├── 0001-web-app-not-notebooks.md
+│       ├── 0002-separate-frontend-backend.md
+│       ├── 0003-websocket-not-polling.md
+│       ├── 0004-react-over-svelte-vue.md
+│       └── 0005-pytorch-for-computation.md
 │
 ├── README.md                      # Entry point, navigation
 └── .gitignore
@@ -157,21 +164,23 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 
 ```
 ═══════════════════════════════════════════════════════════════════
-  PROCESSING LAYER (core/) — Does not know about organization
+  STRUCTURE LAYER (core/) — Data containers, no processing logic
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────────────────────────────────────────────┐
 │                        Red                          │
 │─────────────────────────────────────────────────────│
-│  neuronas: dict[str, Neurona]                       │
+│  neuronas: list[Neurona]                            │
+│  _neuronas_dict: dict[str, Neurona]                 │
 │─────────────────────────────────────────────────────│
-│  procesar()     → processes ALL neurons             │
 │  get_grid(w, h) → returns value matrix              │
 │  get_neurona(id) → returns neuron by id             │
 │─────────────────────────────────────────────────────│
+│  Red is a structure container — it holds neurons    │
+│  but does NOT process them. Processing is done by   │
+│  RedTensor after compilation.                       │
 │  Does NOT have regions.                             │
 │  Does NOT know what is input or output.             │
-│  Only iterates and processes what it was given.     │
 └────────────┬────────────────────────────────────────┘
              │ contains N
              ▼
@@ -180,25 +189,21 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │─────────────────────────────────────────────────────│
 │  id: str                                            │
 │  valor: float {0, 1}                                │
-│  tension_superficial: float [-1, 1]                 │
 │  dendritas: list[Dendrita]                          │
 │  umbral: float                                      │
 │─────────────────────────────────────────────────────│
-│  procesar()   → fuzzy OR of dendritas               │
-│  activar()    → threshold over tension              │
-│  entrenar()   → propagates training                 │
+│  activar_external(valor) → sets value from outside  │
 │─────────────────────────────────────────────────────│
+│  Data container only. The processing formulas       │
+│  (fuzzy OR, tension, threshold) are implemented     │
+│  in RedTensor as vectorized tensor operations.      │
 │                                                     │
 │  ┌────────────────────────────────────────────┐     │
 │  │         NeuronaEntrada (inherits)           │     │
 │  │  No dendritas.                             │     │
-│  │  procesar() → no-op                        │     │
-│  │  activar()  → no-op                        │     │
-│  │  activar_external(valor) → sets value      │     │
-│  │                                            │     │
-│  │  Red processes it the same as others,      │     │
-│  │  but internally it does nothing.           │     │
-│  │  Red does NOT need to know it is special.  │     │
+│  │  Value is set externally.                  │     │
+│  │  RedTensor skips it during processing      │     │
+│  │  via mascara_entrada.                      │     │
 │  └────────────────────────────────────────────┘     │
 └────────────┬────────────────────────────────────────┘
              │ contains M
@@ -207,13 +212,11 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │                    Dendrita                         │
 │─────────────────────────────────────────────────────│
 │  peso: float [-1, 1]    ← CAN BE NEGATIVE           │
-│  valor: float                                       │
 │  sinapsis: list[Sinapsis]                           │
 │─────────────────────────────────────────────────────│
-│  procesar()   → avg(sinapsis) * peso  (fuzzy AND)   │
-│  entrenar()   → propagates to sinapsis              │
-│─────────────────────────────────────────────────────│
-│  Note: can have a SINGLE sinapsis if required       │
+│  Data container. The fuzzy AND formula              │
+│  (avg(sinapsis) × peso) runs in RedTensor.          │
+│  Note: can have a SINGLE sinapsis if required.      │
 └────────────┬────────────────────────────────────────┘
              │ contains K
              ▼
@@ -221,11 +224,50 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │                    Sinapsis                          │
 │─────────────────────────────────────────────────────│
 │  peso: float [0, 1]     ← ALWAYS POSITIVE           │
-│  valor: float                                       │
 │  neurona_entrante: Neurona (reference to axon)      │
 │─────────────────────────────────────────────────────│
-│  procesar()   → 1 - |peso - entrada|                │
-│  entrenar()   → Hebbian: peso += (entrada - peso)*η │
+│  Data container. The recognition formula            │
+│  (1 - |peso - entrada|) runs in RedTensor.          │
+└─────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+  PROCESSING LAYER (core/) — Vectorized computation with PyTorch
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────┐
+│                   RedTensor                         │
+│─────────────────────────────────────────────────────│
+│  valores: Tensor          (neuron activations)      │
+│  tensiones: Tensor        (surface tensions)        │
+│  pesos_sinapsis: Tensor   (synapse weights)         │
+│  indices_fuente: Tensor   (source neuron indices)   │
+│  pesos_dendrita: Tensor   (dendrite weights)        │
+│  mascara_valida: Tensor   (valid synapse mask)      │
+│  mascara_entrada: Tensor  (input neuron mask)       │
+│  umbrales: Tensor         (thresholds)              │
+│─────────────────────────────────────────────────────│
+│  procesar()               → one step (all neurons)  │
+│  procesar_n(n)            → n steps in a row        │
+│  get_grid(w, h)           → value matrix            │
+│  get_tension_grid(w, h)   → tension matrix          │
+│  get_valores()            → raw tensor              │
+│  set_valor(idx, valor)    → modify one neuron       │
+│─────────────────────────────────────────────────────│
+│  This is the engine. All processing formulas run    │
+│  here as vectorized tensor operations on GPU/CPU.   │
+│  Compiled from Red by ConstructorTensor.            │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│                ConstructorTensor                    │
+│─────────────────────────────────────────────────────│
+│  compilar(red, device) → RedTensor        (static)  │
+│─────────────────────────────────────────────────────│
+│  Reads the OOP graph (Red → Neurona → Dendrita →   │
+│  Sinapsis) and compiles it into flat tensors for    │
+│  RedTensor. This is the bridge between structure    │
+│  and computation.                                   │
 └─────────────────────────────────────────────────────┘
 
 
@@ -242,11 +284,11 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │  agregar(neurona)                                   │
 │  ids() → list of ids                                │
 │  valores() → list of values                         │
+│  get_neurona(id) → returns neuron by id             │
 │─────────────────────────────────────────────────────│
 │  Does NOT own the neurons (reference only).         │
-│  Red does not know regions exist.                   │
-│  It is a tool for Constructor and Experiment,      │
-│  not for Red.                                       │
+│  Red and RedTensor do not know regions exist.       │
+│  It is a tool for Constructor and Experiment.       │
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐
@@ -255,14 +297,17 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │  Creates neurons, groups them in regions,           │
 │  builds connectivity (dendritas, sinapsis).         │
 │─────────────────────────────────────────────────────│
-│  crear_grilla(w, h)  → Red + dict of regions        │
-│  crear_region(nombre, neuronas) → Region            │
-│  conectar(origen, destino, mascara_relativa)        │
-│  aplicar_regla_wolfram(regla, neuronas, vecinos)    │
+│  key_by_coord(x, y) → neuron id         (static)   │
+│  crear_grilla(w, h, filas_entrada,                  │
+│    filas_salida, umbral) → Red + regions            │
+│  aplicar_mascara_2d(red, w, h, mascara,             │
+│    random_weights) → applies mask to all neurons    │
+│  balancear_pesos(neuronas, target)                  │
+│  balancear_sinapsis(neuronas, target)               │
 │─────────────────────────────────────────────────────│
 │  Knows about topology and connection patterns.      │
-│  It is the ONLY one that knows how to wire the net. │
-│  Once built, Red works on its own.                  │
+│  The ONLY one that knows how to wire the net.       │
+│  Once built, ConstructorTensor compiles to tensors. │
 └─────────────────────────────────────────────────────┘
 
 
@@ -271,78 +316,110 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────────────────────────────────────────────┐
-│              Experiment (base)                      │
+│              Experimento (base)                     │
 │─────────────────────────────────────────────────────│
 │  red: Red                                           │
 │  regiones: dict[str, Region]                         │
+│  width: int, height: int, generation: int           │
 │─────────────────────────────────────────────────────│
-│  setup(config)  → uses Constructor to build all     │
-│  step()         → red.procesar() + returns frame    │
-│  click(x, y)    → finds neuron in input region       │
-│  reset()        → restarts                           │
-│  get_frame()    → red.get_grid()                     │
+│  setup(config)          → abstract                  │
+│  step() → dict          → abstract                  │
+│  step_n(count) → dict                               │
+│  click(x, y)            → abstract                  │
+│  reset()                → abstract                  │
+│  get_frame()            → value grid                │
+│  get_tension_frame()    → tension grid (or None)    │
+│  get_stats() → dict                                 │
+│  inspect(x, y) → dict                               │
+│  is_complete() → bool                               │
+└─────────────────────┬───────────────────────────────┘
+                      │ inherits
+                      ▼
+┌─────────────────────────────────────────────────────┐
+│            DeamonsLabExperiment                     │
 │─────────────────────────────────────────────────────│
-│  KNOWS which region is input and which is output.   │
-│  KNOWS how to feed the network and read results.    │
-│  Red knows nothing about this.                      │
+│  red_tensor: RedTensor                              │
+│  _daemon_history: list                              │
+│─────────────────────────────────────────────────────│
+│  setup(config)    → Constructor + ConstructorTensor  │
+│  step()           → red_tensor.procesar()            │
+│  reconnect(config)→ rewire without losing state     │
+│  get_frame()      → red_tensor.get_grid()            │
+│  get_tension_frame() → red_tensor.get_tension_grid() │
+│  get_stats()      → daemon count, size, exclusion,  │
+│                     stability, noise                │
+│  click(x, y)      → toggle neuron value             │
+│  reset()          → randomize + recompile           │
+│─────────────────────────────────────────────────────│
+│  The only experiment currently. Orchestrates the    │
+│  full pipeline: build → compile → process → detect. │
 └─────────────────────────────────────────────────────┘
 ```
 
 ### 3.2 Responsibility Flow
 
 ```
-Experiment (orchestrates)
+DeamonsLabExperiment (orchestrates)
   │
   │  1. setup: asks Constructor to build the network
   │
   ▼
-Constructor (organizes)
+Constructor (builds structure)
   │
   │  2. Creates neurons (Neurona and NeuronaEntrada)
   │  3. Groups them in regions
-  │  4. Connects dendritas and sinapsis according to the rule
+  │  4. Connects dendritas and sinapsis via aplicar_mascara_2d
   │  5. Delivers: Red + dict of Regions
   │
   ▼
-Red (processes) ◄── Regions (references)
+ConstructorTensor (compiles)
   │
-  │  6. Experiment calls red.procesar()
-  │  7. Red iterates ALL neurons:
-  │     - NeuronaEntrada.procesar() → no-op (it already has its value)
-  │     - Neurona.procesar() → evaluates dendritas → sinapsis
-  │  8. Red iterates ALL neurons:
-  │     - NeuronaEntrada.activar() → no-op
-  │     - Neurona.activar() → threshold over tension
+  │  6. Reads the OOP graph (Red → Neurona → Dendrita → Sinapsis)
+  │  7. Flattens it into tensors (weights, indices, masks)
+  │  8. Delivers: RedTensor
   │
   ▼
-Experiment reads red.get_grid() → frame → WebSocket → Frontend
+RedTensor (processes) — Red and Regions remain as references
+  │
+  │  9. Experiment calls red_tensor.procesar():
+  │     - Synapse:  1 - |peso - source_value|   (vectorized)
+  │     - Dendrite: avg(synapses) × peso         (vectorized)
+  │     - Neuron:   max(exc) + min(inh) → tension
+  │     - Threshold: tension > umbral → valor = 1, else 0
+  │     - Input neurons skipped via mascara_entrada
+  │
+  ▼
+Experiment reads red_tensor.get_grid() → frame → WebSocket → Frontend
 ```
 
 ### 3.3 Processing Logic
 
-```
-SINAPSIS:   valor = 1 - |peso - neurona_entrante.valor|
-            If peso=1 and entrada=1 → 1 (perfect match)
-            If peso=0 and entrada=0 → 1 (perfect match)
-            If peso=1 and entrada=0 → 0 (no match)
-            If peso=0 and entrada=1 → 0 (no match)
+All formulas run inside `RedTensor.procesar()` as vectorized tensor
+operations. The OOP classes (Neurona, Dendrita, Sinapsis) define the
+structure; RedTensor executes the math.
 
-DENDRITA:   valor = average(sinapsis.procesar()) × peso_dendrita
-            Fuzzy AND: all sinapsis must match
+```
+SYNAPSE:    value = 1 - |peso - source_neuron.valor|
+            If peso=1 and source=1 → 1 (perfect match)
+            If peso=0 and source=0 → 1 (perfect match)
+            If peso=1 and source=0 → 0 (no match)
+            If peso=0 and source=1 → 0 (no match)
+
+DENDRITE:   value = average(synapse values) × peso_dendrita
+            Fuzzy AND: all synapses must match
             peso_dendrita can be negative → inhibition
 
-NEURONA:    max_dendrita = max(dendritas.valor)
-            min_dendrita = min(dendritas.valor)   (negatives)
-            tension = max + min                   (competition)
+NEURON:     max_exc = max(dendrites where peso > 0)
+            min_inh = min(dendrites where peso < 0)
+            tension = max_exc + min_inh           (competition)
             If tension > umbral → valor = 1
             Else → valor = 0
-            Fuzzy OR: any positive dendrita can activate
-            But negative dendritas can inhibit
+            Fuzzy OR: any positive dendrite can activate
+            But negative dendrites can inhibit
 
-NEURONA_ENTRADA:
-            procesar() → no-op (no dendritas)
-            activar()  → no-op (its value was already set)
-            Only changes via activar_external(valor) from Experiment
+INPUT NEURON (NeuronaEntrada):
+            Skipped by RedTensor via mascara_entrada.
+            Value is set externally via activar_external(valor).
 ```
 
 ### 3.4 Weight Rules
@@ -364,15 +441,18 @@ DENDRITA.peso ∈ [-1, 1]    ← Can be negative
 ```
 PyTorch                          NeuroFlow
 ─────────────────────────────    ─────────────────────────────
-nn.Module (forward)          →   Red (procesar)
+nn.Module (forward)          →   RedTensor (procesar)
   Does not know if input/output    Does not know about regions
-  Only computes                    Only iterates neurons
+  Only computes                    Only processes tensors
 
-nn.Sequential / Model        →   Constructor
-  Composes modules in order        Builds Red with regions
-  Defines topology                 Defines connectivity
+Model definition (layers)    →   Red + Constructor
+  Defines topology                 Builds the OOP structure
+  Knows about connectivity         Defines connectivity
 
-Training loop                →   Experiment
+torch.compile / JIT          →   ConstructorTensor (compilar)
+  Optimizes the computation graph  Compiles OOP → flat tensors
+
+Training loop                →   DeamonsLabExperiment
   Feeds data                       Feeds inputs
   Reads outputs                    Reads the grid
   Orchestrates everything          Orchestrates everything
@@ -393,9 +473,10 @@ and loaded dynamically from the API.
         └───────────┘      └──────────────┘      └───────────────┘
 ```
 
-#### Daemon Nomenclature
+#### Wiring Nomenclature for Daemons
 
-Daemon-type masks use the convention `E G I [DE DI]`:
+
+Daemon wiring masks use the convention `E G I [DE DI]`:
 
 ```
 E<n>   Excitatory radius: Moore r=n
@@ -427,33 +508,48 @@ checkerboard-like patterns).
 
 ---
 
-## 4. Experiment 0: Elementary Automaton (Von Neumann)
+## 4. Model Validation: Wolfram Automata
 
-### 4.1 Concept
+Wolfram elementary cellular automata (1D, 256 rules) were the first
+test of the Synapse→Dendrite→Neuron system. By expressing arbitrary
+logic rules as wiring patterns, they validated that the connectionist
+model is **computationally expressive** — Rule 110 in particular is
+Turing-complete.
 
-An elementary cellular automaton (1D, Wolfram rules) implemented
-entirely with the neural model. The 2D grid shows the space-time
-diagram: each row is one generation of the automaton.
+Today, Wolfram rules are **wiring presets inside Deamons Lab** (`rule_110`,
+`rule_30`), selectable from the same dropdown as Daemon masks. They
+remain as a demonstration of compatibility: the same neural model that
+produces daemons can also reproduce deterministic automata.
+
+### 4.1 How It Works
+
+The 2D grid shows the space-time diagram: each row is one generation
+of the automaton. The bottom row is input (initial condition), and
+activity propagates upward — one row per step — due to data
+dependencies.
 
 ```
-      Columns (space, 50 cells)
+      Columns (space)
       ←─────────────────────────────→
 
-  ↑   ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐   Row 0: OUTPUT (last generation)
+  ↑   ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐   Row 0: last generation
   │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   Internal rows: INTERNAL
-  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   (processed bottom-up)
+  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   Each row reads from
+  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   the row below it
   │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
+  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   (flow ↑)
   │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-Flow ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-  │   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-  │   └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘   Row 49: INPUT (initial condition)
-                                        ← User clicks here
+  ↓   └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘   Bottom row: INPUT
+                                        (single center cell active)
 ```
 
-### 4.2 Neural Wiring for Rule 111
+`RedTensor.procesar()` processes all neurons in parallel, but since
+each neuron reads from the row below and rows above the frontier
+have zero inputs, the automaton naturally fills one row per step.
 
-Rule 111 in binary: `01101111`
+### 4.2 Neural Wiring for Rule 110 (Turing-complete)
+
+Rule 110 in binary: `01101110`
 
 | Pattern (left, center, right) | Decimal | Result |
 |------------------------------|---------|--------|
@@ -464,10 +560,10 @@ Rule 111 in binary: `01101111`
 | 0, 1, 1                      | 3       | **1**  |
 | 0, 1, 0                      | 2       | **1**  |
 | 0, 0, 1                      | 1       | **1**  |
-| 0, 0, 0                      | 0       | **1**  |
+| 0, 0, 0                      | 0       | **0**  |
 
-Each internal neuron at position (x, y) connects to the 3 neurons
-in the row below: (x-1, y+1), (x, y+1), (x+1, y+1).
+Each neuron at position (x, y) connects to the 3 neurons in the row
+below: (x-1, y+1), (x, y+1), (x+1, y+1). Threshold is set to 0.99.
 
 ```
 Row y:     [  ?  ]  ← neuron to compute
@@ -475,45 +571,34 @@ Row y:     [  ?  ]  ← neuron to compute
 Row y+1: [left][cen][right]  ← 3 inputs
 ```
 
-**Implementation with 6 dendritas** (one per pattern that produces 1):
+**Implementation with 5 dendrites** (one per pattern that produces 1):
 
 ```
-Dendrita 1 → pattern 110: sinapsis weights [1, 1, 0] → peso_dendrita = +1
-Dendrita 2 → pattern 101: sinapsis weights [1, 0, 1] → peso_dendrita = +1
-Dendrita 3 → pattern 011: sinapsis weights [0, 1, 1] → peso_dendrita = +1
-Dendrita 4 → pattern 010: sinapsis weights [0, 1, 0] → peso_dendrita = +1
-Dendrita 5 → pattern 001: sinapsis weights [0, 0, 1] → peso_dendrita = +1
-Dendrita 6 → pattern 000: sinapsis weights [0, 0, 0] → peso_dendrita = +1
+Dendrite 1 → pattern 110: synapse weights [1, 1, 0] → peso_dendrita = +1
+Dendrite 2 → pattern 101: synapse weights [1, 0, 1] → peso_dendrita = +1
+Dendrite 3 → pattern 011: synapse weights [0, 1, 1] → peso_dendrita = +1
+Dendrite 4 → pattern 010: synapse weights [0, 1, 0] → peso_dendrita = +1
+Dendrite 5 → pattern 001: synapse weights [0, 0, 1] → peso_dendrita = +1
 ```
 
 When the input pattern is, for example, `1 1 0`:
-- Dendrita 1 (110): sinapsis → [1-|1-1|, 1-|1-1|, 1-|0-0|] = [1, 1, 1] → avg=1.0 ✓
-- Dendrita 2 (101): sinapsis → [1-|1-1|, 1-|0-1|, 1-|1-0|] = [1, 0, 0] → avg=0.33 ✗
-- ...only dendrita 1 gives high value → neuron activates → **1** ✓
+- Dendrite 1 (110): synapses → [1-|1-1|, 1-|1-1|, 1-|0-0|] = [1, 1, 1] → avg=1.0 ✓
+- Dendrite 2 (101): synapses → [1-|1-1|, 1-|0-1|, 1-|1-0|] = [1, 0, 0] → avg=0.33 ✗
+- ...only dendrite 1 gives high value → neuron activates → **1** ✓
 
-### 4.3 Frame-by-Frame Processing
+The mask is generated automatically by `_wolfram_mask(rule)` in
+`masks.py` — any Wolfram rule (0–255) can be added as a preset.
 
-```
-Frame 0:  Only row 49 visible (INPUT, user click)
-Frame 1:  Row 48 processed (reads row 49)
-Frame 2:  Row 47 processed (reads row 48)
-...
-Frame 49: Row 0 processed (OUTPUT)
+### 4.3 Implemented Rules
 
-Total: 49 frames to fill the entire grid
-```
+| Preset | Rule | Type | Description |
+|--------|------|------|-------------|
+| `rule_110` | Rule 110 | Turing-complete | Universally expressive |
+| `rule_30` | Rule 30 | Chaotic | Pseudo-random, Sierpinski-like |
 
-### 4.4 Additional Rules Planned
-
-| Rule | Type | Description |
-|------|------|-------------|
-| Rule 111 | Deterministic | First test, many 1s |
-| Rule 30 | Chaotic | Sierpinski triangles, chaos |
-| Rule 90 | Fractal | Perfect Sierpinski triangle |
-| Rule 110 | Turing-complete | Theoretically most interesting |
-
-Each rule only requires reconfiguring which dendritas each neuron has.
-The neural model (Sinapsis, Dendrita, Neurona, Red) does not change.
+The neural model does not change between rules — only the dendrite
+configuration differs. This was the first validation that the
+Synapse→Dendrite→Neuron system can express arbitrary boolean logic.
 
 ---
 
@@ -526,7 +611,7 @@ GET  /api/experiments
      → [{ id: "deamons_lab", name: "Deamons Lab", masks: [...] }]
 
 GET  /api/experiments/:id
-     → { id, name, description, default_config: { width: 30, height: 30, mask: "simple" } }
+     → { id, name, description, default_config: { width: 50, height: 50, mask: "deamon_3_en_50" } }
 
 GET  /api/health
      → { status: "ok", version: "0.1.0" }
@@ -576,61 +661,30 @@ Connection: ws://host/ws/experiment
 │      FRONTEND        │          │            BACKEND               │
 │                      │          │                                  │
 │  ┌────────────────┐  │  start   │  ┌────────────────────────────┐  │
-│  │   Sidebar      │──┼─────────►│  │   Experiment (orchestrates)│  │
-│  │  (experiments) │  │          │  │                            │  │
+│  │   Sidebar      │──┼─────────►│  │   DeamonsLabExperiment     │  │
+│  │  (wiring menu) │  │          │  │                            │  │
 │  └────────────────┘  │          │  │  setup:                    │  │
 │                      │          │  │   Constructor → Red        │  │
-│  ┌────────────────┐  │  click   │  │               + Regions     │  │
-│  │  PixelCanvas   │──┼─────────►│  │                            │  │
-│  │  (HTML5 Canvas)│  │          │  │  click(x,y):               │  │
-│  │  50×50 pixels  │  │          │  │   region_entrada           │  │
-│  └────────▲───────┘  │          │  │     .get(x,y)              │  │
-│           │          │          │  │     .activar_external(1)   │  │
+│  ┌────────────────┐  │  click   │  │   ConstructorTensor →      │  │
+│  │  PixelCanvas   │──┼─────────►│  │     RedTensor              │  │
+│  │  (HTML5 Canvas)│  │          │  │                            │  │
+│  │  50×50 pixels  │  │          │  │  click(x,y):               │  │
+│  └────────▲───────┘  │          │  │   red_tensor.set_valor()   │  │
+│           │          │          │  │   (toggle neuron)          │  │
 │  ┌────────┴───────┐  │  frame   │  │                            │  │
 │  │  useExperiment │◄─┼──────────│  │  step:                     │  │
-│  │  (WebSocket)   │  │          │  │   red.procesar()  ← dumb   │  │
-│  └────────────────┘  │          │  │     Neurona.procesar()     │  │
-│                      │          │  │       Dendrita.procesar()  │  │
-│  ┌────────────────┐  │          │  │         Sinapsis.procesar()│  │
-│  │  Controls      │──┼─────────►│  │   red.get_grid() → frame  │  │
-│  │  Play/Pause    │  │  step    │  │                            │  │
-│  └────────────────┘  │          │  └────────────────────────────┘  │
+│  │  (WebSocket)   │  │          │  │   red_tensor.procesar()    │  │
+│  └────────────────┘  │          │  │   red_tensor.get_grid()    │  │
+│                      │          │  │     → frame                │  │
+│  ┌────────────────┐  │          │  │                            │  │
+│  │  Controls      │──┼─────────►│  │  reconnect:               │  │
+│  │  Play/Pause    │  │  step    │  │   rewire without losing    │  │
+│  └────────────────┘  │          │  │   neuron state             │  │
+│                      │          │  └────────────────────────────┘  │
 └──────────────────────┘          └──────────────────────────────────┘
 ```
 
 ---
-
-## 6. Frontend: UI Design
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  NeuroFlow                                          v0.1.0  │
-├──────────────┬──────────────────────────────────────────────┤
-│              │                                              │
-│ EXPERIMENTS  │         NEURON GRID                          │
-│              │                                              │
-│ ● Exp 0:    │    ┌──────────────────────────────┐           │
-│   Von Neumann│    │  ■ □ □ ■ □ ■ ■ □ □ ■ ...  │  OUTPUT    │
-│              │    │  □ ■ □ □ ■ □ □ ■ □ □ ...  │           │
-│   Rule:      │    │  ■ ■ □ ■ ■ ■ □ □ ■ □ ...  │           │
-│   [111 ▼]    │    │  □ □ ■ □ □ □ ■ □ □ ■ ...  │           │
-│              │    │  ...                        │           │
-│   Size:      │    │  □ □ □ □ □ ■ □ □ □ □ ...  │  INTERNAL  │
-│   50 × 50    │    │  □ □ □ □ □ □ □ □ □ □ ...  │           │
-│              │    └──────────────────────────────┘           │
-│   Speed:     │    ← Click to activate neurons →             │
-│   ████░░ 7fps│                                              │
-│              │   ┌──────────────────────────────────┐       │
-│ ○ Exp 1:    │   │  ▶ Play  ⏸ Pause  ⏭ Step  ↺ Reset │    │
-│   Conway     │   └──────────────────────────────────┘       │
-│   (next)     │                                              │
-│              │   Gen: 23/50  │  Active cells: 147           │
-│              │                                              │
-├──────────────┴──────────────────────────────────────────────┤
-│  ⬛ = active neuron (valor=1)   □ = inactive (valor=0)      │
-│  🔵 = INPUT   🔴 = OUTPUT   ⬜ = INTERNAL                   │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -687,83 +741,25 @@ app.add_middleware(
 
 ---
 
-## 8. Implementation Plan
+## 8. Roadmap
 
-### Phase 0: Walking Skeleton (this sprint)
-
-```
-1. [Tests]  → test_sinapsis.py, test_dendrita.py, test_neurona.py, test_red.py
-2. [Core]   → sinapsis.py, dendrita.py, neurona.py, red.py, constructor.py
-3. [Tests]  → test_deamons_lab.py, test_red_tensor.py
-4. [API]    → main.py with WebSocket + experiments endpoint
-5. [UI]     → React app with Canvas, sidebar, controls
-6. [Exp]    → Deamons Lab (all wirings + Wolfram) end-to-end
-7. [Deploy] → Backend on Render, Frontend on Vercel
-```
-
-### Phase 1: More Rules + Conway
-
-```
-8.  Rule 30, 90, 110 (dendrita reconfiguration only)
-9.  Experiment 1: Game of Life (Conway) - Moore neighborhood (8 neighbors)
-10. UI: dynamic experiment selector
-```
-
-### Phase 2: Emergent Learning
-
-```
-11. Activate Hebbian training
-12. Synaptic pruning
-13. Real-time weight visualization
-```
-
-### Phase 3: Daemons + HTM
-
-```
-14. Self-organized maps
-15. Hierarchical temporal memory
-16. Functional regions (PAIN)
-```
+See **[Stages](STAGES.md)** for the full project roadmap (5 stages:
+Daemons → SOM → Motor/Nociceptor → Tuning → Motor Agents).
 
 ---
 
-## 9. Key Technical Decisions
+## 9. Architecture Decision Records
 
-### Why not Jupyter Notebooks?
+Key technical decisions are documented as individual ADR files following
+the [ADR pattern](https://adr.github.io/) (Michael Nygard, 2011).
 
-- Not deployable as a web application
-- Require local installation
-- Interactive visualization is limited
-- Do not scale to multiple users
+See **[decisions/](decisions/)** for the full list, including:
 
-### Why separate frontend and backend?
-
-- Neural computation can be heavy → dedicated backend
-- UI must be responsive → do not block with computation
-- Allows independent scaling
-- Allows using GPU in backend without affecting UI
-
-### Why WebSocket and not polling?
-
-- The automaton produces ~10-30 frames/second
-- Polling would generate too many HTTP requests
-- WebSocket enables continuous bidirectional streaming
-- Client can send clicks without extra latency
-
-### Why React and not Svelte/Vue?
-
-- React is the most adopted and documented
-- For a Canvas with sidebar, React is sufficiently simple
-- Larger ecosystem for future needs
-- Mature TypeScript support
-
-### Why PyTorch for computation?
-
-- Vectorized tensor operations are ~100x faster than Python loops
-- For 50×50 = 2500 neurons, it is instant
-- Scales to large grids and supports GPU acceleration (`cuda`) when available
-- Rich ecosystem for scatter/gather operations needed by the neural model
-- Familiar to scientists and engineers
+- Why a web app instead of Jupyter Notebooks
+- Why separate frontend and backend
+- Why WebSocket instead of HTTP polling
+- Why React over Svelte/Vue
+- Why PyTorch for computation
 
 ---
 
