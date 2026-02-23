@@ -102,7 +102,7 @@ class DeamonsLabExperiment(Experimento):
     def __init__(self) -> None:
         super().__init__()
         self._config: dict[str, Any] = {}
-        self.red_tensor = None
+        self.brain_tensor = None
         self._daemon_history: deque[int] = deque(maxlen=_STABILITY_WINDOW)
         self._last_history_gen: int = -1
 
@@ -135,7 +135,7 @@ class DeamonsLabExperiment(Experimento):
 
         is_wolfram = self._mask_type == "wolfram"
 
-        self.red, self.regiones = constructor.crear_grilla(
+        self.brain, self.regiones = constructor.crear_grilla(
             width=self.width,
             height=self.height,
             filas_entrada=[self.height - 1] if is_wolfram else [],
@@ -144,39 +144,39 @@ class DeamonsLabExperiment(Experimento):
         )
 
         constructor.aplicar_mascara_2d(
-            self.red, self.width, self.height, mask,
+            self.brain, self.width, self.height, mask,
             random_weights=self._random_weights,
         )
 
         if balance is not None and balance_mode == "weight":
             constructor.balancear_pesos(
-                list(self.red.neuronas), target=balance
+                list(self.brain.neuronas), target=balance
             )
         elif balance is not None and balance_mode == "synapse_count":
             constructor.balancear_sinapsis(
-                list(self.red.neuronas), target=balance
+                list(self.brain.neuronas), target=balance
             )
 
         if is_wolfram:
-            for neurona in self.red.neuronas:
+            for neurona in self.brain.neuronas:
                 neurona.activar_external(0.0)
             center_x = self.width // 2
             bottom_y = self.height - 1
-            self.red.get_neurona(
+            self.brain.get_neurona(
                 f"x{center_x}y{bottom_y}"
             ).activar_external(1.0)
         else:
-            for neurona in self.red.neuronas:
+            for neurona in self.brain.neuronas:
                 neurona.activar_external(random.random())
 
-        self.red_tensor = ConstructorTensor.compilar(self.red)
+        self.brain_tensor = ConstructorTensor.compilar(self.brain)
 
         self._daemon_history.clear()
         self._last_history_gen = -1
 
     def reconnect(self, config: dict[str, Any]) -> None:
         """Change mask and/or balance. Wolfram masks do a full reset (new init)."""
-        if self.red_tensor is None:
+        if self.brain_tensor is None:
             return
 
         mask_id = config.get("mask", self._config.get("mask", "simple"))
@@ -193,7 +193,7 @@ class DeamonsLabExperiment(Experimento):
             self.setup(self._config)
             return
 
-        saved_values = self.red_tensor.valores[: self.red_tensor.n_real].clone()
+        saved_values = self.brain_tensor.valores[: self.brain_tensor.n_real].clone()
 
         balance = config.get("balance", self._config.get("balance", None))
         balance_mode = config.get(
@@ -208,7 +208,7 @@ class DeamonsLabExperiment(Experimento):
         is_wolfram = self._mask_type == "wolfram"
         constructor = Constructor()
 
-        self.red, self.regiones = constructor.crear_grilla(
+        self.brain, self.regiones = constructor.crear_grilla(
             width=self.width,
             height=self.height,
             filas_entrada=[self.height - 1] if is_wolfram else [],
@@ -217,23 +217,23 @@ class DeamonsLabExperiment(Experimento):
         )
 
         constructor.aplicar_mascara_2d(
-            self.red, self.width, self.height, mask,
+            self.brain, self.width, self.height, mask,
             random_weights=self._random_weights,
         )
 
         if balance is not None and balance_mode == "weight":
             constructor.balancear_pesos(
-                list(self.red.neuronas), target=balance
+                list(self.brain.neuronas), target=balance
             )
         elif balance is not None and balance_mode == "synapse_count":
             constructor.balancear_sinapsis(
-                list(self.red.neuronas), target=balance
+                list(self.brain.neuronas), target=balance
             )
 
-        for i, neurona in enumerate(self.red.neuronas):
+        for i, neurona in enumerate(self.brain.neuronas):
             neurona.activar_external(saved_values[i].item())
 
-        self.red_tensor = ConstructorTensor.compilar(self.red)
+        self.brain_tensor = ConstructorTensor.compilar(self.brain)
 
         self._daemon_history.clear()
         self._last_history_gen = -1
@@ -241,13 +241,13 @@ class DeamonsLabExperiment(Experimento):
     def click(self, x: int, y: int) -> None:
         """Toggle: if value < 0.5 -> activate (1.0), if >= 0.5 -> deactivate (0.0)."""
         idx = y * self.width + x
-        if 0 <= idx < self.red_tensor.n_real:
-            current = self.red_tensor.valores[idx].item()
-            self.red_tensor.set_valor(idx, 0.0 if current >= 0.5 else 1.0)
+        if 0 <= idx < self.brain_tensor.n_real:
+            current = self.brain_tensor.valores[idx].item()
+            self.brain_tensor.set_valor(idx, 0.0 if current >= 0.5 else 1.0)
 
     def step(self) -> dict[str, Any]:
         """One step processes the entire network at once."""
-        self.red_tensor.procesar()
+        self.brain_tensor.procesar()
         self.generation += 1
 
         frame = self.get_frame()
@@ -262,7 +262,7 @@ class DeamonsLabExperiment(Experimento):
 
     def step_n(self, count: int) -> dict[str, Any]:
         """N steps in a single tensor operation."""
-        self.red_tensor.procesar_n(count)
+        self.brain_tensor.procesar_n(count)
         self.generation += count
         return {
             "type": "frame",
@@ -273,14 +273,14 @@ class DeamonsLabExperiment(Experimento):
 
     def get_frame(self) -> list[list[float]]:
         """Return the current grid as a matrix of values."""
-        if self.red_tensor:
-            return self.red_tensor.get_grid(self.width, self.height)
+        if self.brain_tensor:
+            return self.brain_tensor.get_grid(self.width, self.height)
         return super().get_frame()
 
     def get_tension_frame(self) -> list[list[float]] | None:
         """Return the surface tension grid."""
-        if self.red_tensor:
-            return self.red_tensor.get_tension_grid(self.width, self.height)
+        if self.brain_tensor:
+            return self.brain_tensor.get_tension_grid(self.width, self.height)
         return None
 
     def get_stats(self) -> dict[str, Any]:
@@ -293,14 +293,14 @@ class DeamonsLabExperiment(Experimento):
         - exclusion: mean activation inside daemons minus outside (higher = better)
         - stability: 1 - CV of daemon count over a sliding window (higher = more stable)
         """
-        if self.red_tensor is None:
+        if self.brain_tensor is None:
             return super().get_stats()
 
-        vals = self.red_tensor.valores[: self.width * self.height]
+        vals = self.brain_tensor.valores[: self.width * self.height]
         n = self.width * self.height
 
         result = _detect_daemons(
-            self.red_tensor.valores, self.width, self.height, _DAEMON_THRESHOLD
+            self.brain_tensor.valores, self.width, self.height, _DAEMON_THRESHOLD
         )
 
         active = int((vals > _DAEMON_THRESHOLD).sum().item())

@@ -1,6 +1,6 @@
-"""RedTensor — Neural network as tensors, vectorized processing.
+"""BrainTensor — Neural network as tensors, vectorized processing.
 
-Parallel equivalent of Red. All operations are PyTorch tensor operations:
+Parallel equivalent of Brain. All operations are PyTorch tensor operations:
 no Python loops over neurons/dendrites/synapses.
 
 Main tensors:
@@ -19,7 +19,7 @@ from __future__ import annotations
 import torch
 
 
-class RedTensor:
+class BrainTensor:
     """Neural network as tensors — vectorized processing."""
 
     def __init__(
@@ -37,7 +37,7 @@ class RedTensor:
         device: str = "cpu",
     ) -> None:
         self.device = device
-        # n_real = number of actual neurons from the Red
+        # n_real = number of actual neurons from the Brain
         # N = total including possible border zero neuron
         self.n_real = n_real
         self.N = valores.shape[0]

@@ -99,15 +99,15 @@ class ExperimentSession:
         cells: list[dict[str, int]] = message.get("cells", [])
         value: float = message.get("value", 1.0)
 
-        red_tensor = getattr(self.experiment, "red_tensor", None)
-        if red_tensor:
+        brain_tensor = getattr(self.experiment, "brain_tensor", None)
+        if brain_tensor:
             w = self.experiment.width
             for cell in cells:
                 x = cell.get("x", 0)
                 y = cell.get("y", 0)
                 idx = y * w + x
-                if 0 <= x < w and 0 <= y < self.experiment.height and 0 <= idx < red_tensor.n_real:
-                    red_tensor.set_valor(idx, value)
+                if 0 <= x < w and 0 <= y < self.experiment.height and 0 <= idx < brain_tensor.n_real:
+                    brain_tensor.set_valor(idx, value)
         await self._send_frame()
 
     async def _stop_play_loop(self) -> None:

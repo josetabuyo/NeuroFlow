@@ -3,10 +3,10 @@
 from .sinapsis import Sinapsis
 from .dendrita import Dendrita
 from .neurona import Neurona, NeuronaEntrada
-from .red import Red
+from .brain import Brain
 from .region import Region
 from .constructor import Constructor
-from .red_tensor import RedTensor
+from .brain_tensor import BrainTensor
 from .constructor_tensor import ConstructorTensor
 
 __all__ = [
@@ -14,9 +14,9 @@ __all__ = [
     "Dendrita",
     "Neurona",
     "NeuronaEntrada",
-    "Red",
+    "Brain",
     "Region",
     "Constructor",
-    "RedTensor",
+    "BrainTensor",
     "ConstructorTensor",
 ]

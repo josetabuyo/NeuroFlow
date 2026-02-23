@@ -124,11 +124,11 @@ class TestMaskPresets:
         random.seed(42)
         mask = get_mask(preset_id)
         constructor = Constructor()
-        red, _ = constructor.crear_grilla(
+        brain, _ = constructor.crear_grilla(
             width=15, height=15, filas_entrada=[], filas_salida=[], umbral=0.0
         )
-        constructor.aplicar_mascara_2d(red, 15, 15, mask)
-        neurona = red.get_neurona("x7y7")
+        constructor.aplicar_mascara_2d(brain, 15, 15, mask)
+        neurona = brain.get_neurona("x7y7")
         assert len(neurona.dendritas) >= 1
 
 
@@ -139,22 +139,22 @@ class TestDeamonsLabSetup:
         """Setup with default mask (simple) creates correct network."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10})
-        assert len(exp.red.neuronas) == 100
-        neurona = exp.red.get_neurona("x5y5")
+        assert len(exp.brain.neuronas) == 100
+        neurona = exp.brain.get_neurona("x5y5")
         assert len(neurona.dendritas) == 9
 
     def test_setup_wide_hat(self) -> None:
         """Setup with wide_hat produces more inhibitory dendrites."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "wide_hat"})
-        neurona = exp.red.get_neurona("x7y7")
+        neurona = exp.brain.get_neurona("x7y7")
         assert len(neurona.dendritas) >= 9
 
     def test_setup_cross_center(self) -> None:
         """Setup with cross_center uses Von Neumann + 4 dendrites."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "cross_center"})
-        neurona = exp.red.get_neurona("x7y7")
+        neurona = exp.brain.get_neurona("x7y7")
         exc = [d for d in neurona.dendritas if d.peso > 0]
         assert len(exc[0].sinapsis) == 4
 
@@ -162,7 +162,7 @@ class TestDeamonsLabSetup:
         """Setup with one_dendrite: 1 exc + 1 inh."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "one_dendrite"})
-        neurona = exp.red.get_neurona("x5y5")
+        neurona = exp.brain.get_neurona("x5y5")
         assert len(neurona.dendritas) == 2
 
     def test_setup_with_balance_positive(self) -> None:
@@ -175,8 +175,8 @@ class TestDeamonsLabSetup:
         exp_bal = DeamonsLabExperiment()
         exp_bal.setup({"width": 10, "height": 10, "mask": "simple", "balance": 0.5, "balance_mode": "weight"})
 
-        n_no = exp_no.red.get_neurona("x5y5")
-        n_bal = exp_bal.red.get_neurona("x5y5")
+        n_no = exp_no.brain.get_neurona("x5y5")
+        n_bal = exp_bal.brain.get_neurona("x5y5")
 
         for d_no, d_bal in zip(n_no.dendritas, n_bal.dendritas):
             if d_no.peso < 0:
@@ -193,8 +193,8 @@ class TestDeamonsLabSetup:
         exp_bal = DeamonsLabExperiment()
         exp_bal.setup({"width": 10, "height": 10, "mask": "simple", "balance": 0.0})
 
-        n_no = exp_no.red.get_neurona("x5y5")
-        n_bal = exp_bal.red.get_neurona("x5y5")
+        n_no = exp_no.brain.get_neurona("x5y5")
+        n_bal = exp_bal.brain.get_neurona("x5y5")
 
         for d_no, d_bal in zip(n_no.dendritas, n_bal.dendritas):
             for s_no, s_bal in zip(d_no.sinapsis, d_bal.sinapsis):
@@ -204,7 +204,7 @@ class TestDeamonsLabSetup:
         """Setup without balance key does not apply balancing."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
-        assert exp.red_tensor is not None
+        assert exp.brain_tensor is not None
         assert exp._config.get("balance") is None
 
 
@@ -237,8 +237,8 @@ class TestDeamonsLabBalanceMode:
             "balance": 0.5, "balance_mode": "none",
         })
 
-        n_ref = exp_ref.red.get_neurona("x5y5")
-        n_test = exp.red.get_neurona("x5y5")
+        n_ref = exp_ref.brain.get_neurona("x5y5")
+        n_test = exp.brain.get_neurona("x5y5")
 
         for d_ref, d_test in zip(n_ref.dendritas, n_test.dendritas):
             assert len(d_ref.sinapsis) == len(d_test.sinapsis)
@@ -258,8 +258,8 @@ class TestDeamonsLabBalanceMode:
             "balance": 0.5, "balance_mode": "weight",
         })
 
-        n_ref = exp_ref.red.get_neurona("x5y5")
-        n_test = exp.red.get_neurona("x5y5")
+        n_ref = exp_ref.brain.get_neurona("x5y5")
+        n_test = exp.brain.get_neurona("x5y5")
 
         for d_ref, d_test in zip(n_ref.dendritas, n_test.dendritas):
             assert len(d_ref.sinapsis) == len(d_test.sinapsis)
@@ -280,8 +280,8 @@ class TestDeamonsLabBalanceMode:
             "balance": 0.5, "balance_mode": "synapse_count",
         })
 
-        n_ref = exp_ref.red.get_neurona("x5y5")
-        n_test = exp.red.get_neurona("x5y5")
+        n_ref = exp_ref.brain.get_neurona("x5y5")
+        n_test = exp.brain.get_neurona("x5y5")
 
         for d_ref, d_test in zip(n_ref.dendritas, n_test.dendritas):
             if d_ref.peso < 0:
@@ -300,7 +300,7 @@ class TestDeamonsLabBalanceMode:
             "balance_mode": "synapse_count",
         })
 
-        n = exp.red.get_neurona("x5y5")
+        n = exp.brain.get_neurona("x5y5")
         for d in n.dendritas:
             if d.peso < 0:
                 assert len(d.sinapsis) < 9  # simple mask has 9 inh per dendrite
@@ -326,11 +326,11 @@ class TestDeamonsLabReconnect:
         exp = DeamonsLabExperiment()
         exp.setup({"width": 15, "height": 15, "mask": "simple"})
 
-        n_before = len(exp.red.get_neurona("x7y7").dendritas)
+        n_before = len(exp.brain.get_neurona("x7y7").dendritas)
 
         exp.reconnect({"mask": "one_dendrite"})
 
-        n_after = len(exp.red.get_neurona("x7y7").dendritas)
+        n_after = len(exp.brain.get_neurona("x7y7").dendritas)
         assert n_before != n_after
 
     def test_reconnect_updates_config(self) -> None:
@@ -350,7 +350,7 @@ class TestDeamonsLabReconnect:
 
         random.seed(99)
         exp.reconnect({"mask": "simple", "balance": 0.0, "balance_mode": "weight"})
-        n_no = exp.red.get_neurona("x5y5")
+        n_no = exp.brain.get_neurona("x5y5")
         inh_weights_no = []
         for d in n_no.dendritas:
             if d.peso < 0:
@@ -358,7 +358,7 @@ class TestDeamonsLabReconnect:
 
         random.seed(99)
         exp.reconnect({"mask": "simple", "balance": 0.5, "balance_mode": "weight"})
-        n_bal = exp.red.get_neurona("x5y5")
+        n_bal = exp.brain.get_neurona("x5y5")
         inh_weights_bal = []
         for d in n_bal.dendritas:
             if d.peso < 0:
@@ -389,11 +389,11 @@ class TestDeamonsLabFunctionality:
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
         idx = 5 * 10 + 5
-        exp.red_tensor.set_valor(idx, 0.0)
+        exp.brain_tensor.set_valor(idx, 0.0)
         exp.click(5, 5)
-        assert exp.red_tensor.valores[idx].item() == 1.0
+        assert exp.brain_tensor.valores[idx].item() == 1.0
         exp.click(5, 5)
-        assert exp.red_tensor.valores[idx].item() == 0.0
+        assert exp.brain_tensor.valores[idx].item() == 0.0
 
     def test_reset_reinicializa(self) -> None:
         exp = DeamonsLabExperiment()
@@ -441,14 +441,14 @@ class TestToroidalTopology:
         random.seed(42)
         mask = get_mask(preset_id)
         constructor = Constructor()
-        red, _ = constructor.crear_grilla(
+        brain, _ = constructor.crear_grilla(
             width=15, height=15, filas_entrada=[], filas_salida=[], umbral=0.0
         )
-        constructor.aplicar_mascara_2d(red, 15, 15, mask)
+        constructor.aplicar_mascara_2d(brain, 15, 15, mask)
 
-        n_center = red.get_neurona("x7y7")
-        n_corner = red.get_neurona("x0y0")
-        n_edge = red.get_neurona("x0y7")
+        n_center = brain.get_neurona("x7y7")
+        n_corner = brain.get_neurona("x0y0")
+        n_edge = brain.get_neurona("x0y7")
 
         assert len(n_corner.dendritas) == len(n_center.dendritas), (
             f"{preset_id}: corner has {len(n_corner.dendritas)} dendritas "
@@ -472,13 +472,13 @@ class TestToroidalTopology:
         exp = DeamonsLabExperiment()
         exp.setup({"width": 5, "height": 3, "mask": "rule_110"})
 
-        for i in range(exp.red_tensor.n_real):
-            exp.red_tensor.set_valor(i, 0.0)
-        exp.red_tensor.set_valor(2 * 5 + 0, 1.0)  # x0y2
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
+        exp.brain_tensor.set_valor(2 * 5 + 0, 1.0)  # x0y2
 
-        exp.red_tensor.procesar()
+        exp.brain_tensor.procesar()
 
-        frame = exp.red_tensor.get_grid(5, 3)
+        frame = exp.brain_tensor.get_grid(5, 3)
         row1 = [int(round(v)) for v in frame[1]]
         assert row1[4] == 1, (
             f"Rightmost cell should fire from wrap-around; got row1={row1}"
@@ -507,8 +507,8 @@ class TestDaemonMetrics:
         """All-zero grid has zero daemons and zero noise."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 5, "height": 5, "mask": "simple"})
-        for i in range(exp.red_tensor.n_real):
-            exp.red_tensor.set_valor(i, 0.0)
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
         stats = exp.get_stats()
         assert stats["daemon_count"] == 0
         assert stats["noise_cells"] == 0
@@ -518,12 +518,12 @@ class TestDaemonMetrics:
         """A 3x3 contiguous active region counts as one daemon."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
-        for i in range(exp.red_tensor.n_real):
-            exp.red_tensor.set_valor(i, 0.0)
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
         for dy in range(3):
             for dx in range(3):
                 idx = (3 + dy) * 10 + (3 + dx)
-                exp.red_tensor.set_valor(idx, 1.0)
+                exp.brain_tensor.set_valor(idx, 1.0)
         stats = exp.get_stats()
         assert stats["daemon_count"] == 1
         assert stats["active_cells"] == 9
@@ -534,10 +534,10 @@ class TestDaemonMetrics:
         """Single isolated pixels count as noise, not daemons (min_size=3)."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
-        for i in range(exp.red_tensor.n_real):
-            exp.red_tensor.set_valor(i, 0.0)
-        exp.red_tensor.set_valor(0, 1.0)
-        exp.red_tensor.set_valor(9 * 10 + 9, 1.0)
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
+        exp.brain_tensor.set_valor(0, 1.0)
+        exp.brain_tensor.set_valor(9 * 10 + 9, 1.0)
         stats = exp.get_stats()
         assert stats["daemon_count"] == 0
         assert stats["noise_cells"] == 2
@@ -547,10 +547,10 @@ class TestDaemonMetrics:
         """A pair of adjacent neurons is noise (below min_size=3)."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
-        for i in range(exp.red_tensor.n_real):
-            exp.red_tensor.set_valor(i, 0.0)
-        exp.red_tensor.set_valor(0, 1.0)
-        exp.red_tensor.set_valor(1, 1.0)
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
+        exp.brain_tensor.set_valor(0, 1.0)
+        exp.brain_tensor.set_valor(1, 1.0)
         stats = exp.get_stats()
         assert stats["daemon_count"] == 0
         assert stats["noise_cells"] == 2
@@ -559,14 +559,14 @@ class TestDaemonMetrics:
         """Two 3-neuron clusters count as two daemons."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
-        for i in range(exp.red_tensor.n_real):
-            exp.red_tensor.set_valor(i, 0.0)
-        exp.red_tensor.set_valor(0, 1.0)
-        exp.red_tensor.set_valor(1, 1.0)
-        exp.red_tensor.set_valor(10, 1.0)
-        exp.red_tensor.set_valor(98, 1.0)
-        exp.red_tensor.set_valor(99, 1.0)
-        exp.red_tensor.set_valor(89, 1.0)
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
+        exp.brain_tensor.set_valor(0, 1.0)
+        exp.brain_tensor.set_valor(1, 1.0)
+        exp.brain_tensor.set_valor(10, 1.0)
+        exp.brain_tensor.set_valor(98, 1.0)
+        exp.brain_tensor.set_valor(99, 1.0)
+        exp.brain_tensor.set_valor(89, 1.0)
         stats = exp.get_stats()
         assert stats["daemon_count"] == 2
         assert stats["noise_cells"] == 0
@@ -576,12 +576,12 @@ class TestDaemonMetrics:
         """A grid with one real cluster and one isolated pixel."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
-        for i in range(exp.red_tensor.n_real):
-            exp.red_tensor.set_valor(i, 0.0)
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
         for dy in range(3):
             for dx in range(3):
-                exp.red_tensor.set_valor((dy) * 10 + dx, 1.0)
-        exp.red_tensor.set_valor(99, 1.0)
+                exp.brain_tensor.set_valor((dy) * 10 + dx, 1.0)
+        exp.brain_tensor.set_valor(99, 1.0)
         stats = exp.get_stats()
         assert stats["daemon_count"] == 1
         assert stats["noise_cells"] == 1
@@ -591,11 +591,11 @@ class TestDaemonMetrics:
         """Exclusion only considers daemon clusters, noise is 'outside'."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 10, "height": 10, "mask": "simple"})
-        for i in range(exp.red_tensor.n_real):
-            exp.red_tensor.set_valor(i, 0.0)
-        exp.red_tensor.set_valor(0, 1.0)
-        exp.red_tensor.set_valor(1, 1.0)
-        exp.red_tensor.set_valor(10, 1.0)
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
+        exp.brain_tensor.set_valor(0, 1.0)
+        exp.brain_tensor.set_valor(1, 1.0)
+        exp.brain_tensor.set_valor(10, 1.0)
         stats = exp.get_stats()
         assert stats["exclusion"] > 0.9
 
@@ -603,8 +603,8 @@ class TestDaemonMetrics:
         """Empty grid has exclusion=0."""
         exp = DeamonsLabExperiment()
         exp.setup({"width": 5, "height": 5, "mask": "simple"})
-        for i in range(exp.red_tensor.n_real):
-            exp.red_tensor.set_valor(i, 0.0)
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
         stats = exp.get_stats()
         assert stats["exclusion"] == 0.0
 

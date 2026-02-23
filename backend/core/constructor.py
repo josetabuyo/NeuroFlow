@@ -2,7 +2,7 @@
 
 Creates neurons, groups them into regions,
 builds connectivity (dendrites, synapses).
-The resulting Red is compiled to RedTensor for parallel processing.
+The resulting Brain is compiled to BrainTensor for parallel processing.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import random
 from .sinapsis import Sinapsis
 from .dendrita import Dendrita
 from .neurona import Neurona, NeuronaEntrada
-from .red import Red
+from .brain import Brain
 from .region import Region
 
 
@@ -31,7 +31,7 @@ class Constructor:
         filas_entrada: list[int],
         filas_salida: list[int],
         umbral: float = 0.0,
-    ) -> tuple[Red, dict[str, Region]]:
+    ) -> tuple[Brain, dict[str, Region]]:
         """Create a neuron grid with input, output, and internal regions.
 
         Args:
@@ -42,7 +42,7 @@ class Constructor:
             umbral: Activation threshold for internal and output neurons.
 
         Returns:
-            Tuple (Red, dict of Regions).
+            Tuple (Brain, dict of Regions).
         """
         neuronas: list[Neurona] = []
         region_entrada = Region(nombre="entrada")
@@ -65,17 +65,17 @@ class Constructor:
 
                 neuronas.append(neurona)
 
-        red = Red(neuronas=neuronas)
+        brain = Brain(neuronas=neuronas)
         regiones = {
             "entrada": region_entrada,
             "salida": region_salida,
             "interna": region_interna,
         }
-        return red, regiones
+        return brain, regiones
 
     def conectar_filas(
         self,
-        red: Red,
+        brain: Brain,
         fila_destino: int,
         width: int,
         height: int,
@@ -89,7 +89,7 @@ class Constructor:
         grid wrap to the opposite edge via modular arithmetic.
 
         Args:
-            red: The network containing the neurons.
+            brain: The network containing the neurons.
             fila_destino: Row index whose neurons will receive the connections.
             width: Grid width.
             height: Grid height.
@@ -99,7 +99,7 @@ class Constructor:
             peso_dendrita: Weight for each created dendrite.
         """
         for x in range(width):
-            neurona_destino = red.get_neurona(self.key_by_coord(x, fila_destino))
+            neurona_destino = brain.get_neurona(self.key_by_coord(x, fila_destino))
 
             for pesos_sinapsis in regla_pesos:
                 sinapsis_list: list[Sinapsis] = []
@@ -107,7 +107,7 @@ class Constructor:
                 for i, (dx, dy) in enumerate(mascara_relativa):
                     nx = (x + dx) % width
                     ny = (fila_destino + dy) % height
-                    neurona_fuente = red.get_neurona(self.key_by_coord(nx, ny))
+                    neurona_fuente = brain.get_neurona(self.key_by_coord(nx, ny))
 
                     peso_sinapsis = pesos_sinapsis[i] if i < len(pesos_sinapsis) else 0.0
                     sinapsis_list.append(
@@ -119,7 +119,7 @@ class Constructor:
 
     def aplicar_regla_wolfram(
         self,
-        red: Red,
+        brain: Brain,
         regla: int,
         fila_destino: int,
         width: int,
@@ -131,7 +131,7 @@ class Constructor:
         creates a dendrite with 3 synapses whose weights encode the pattern.
 
         Args:
-            red: The network with the neurons.
+            brain: The network with the neurons.
             regla: Wolfram rule number (0-255).
             fila_destino: Row to configure.
             width: Grid width.
@@ -149,7 +149,7 @@ class Constructor:
 
         mascara = [(-1, 1), (0, 1), (1, 1)]  # left, center, right from row below
         self.conectar_filas(
-            red=red,
+            brain=brain,
             fila_destino=fila_destino,
             width=width,
             height=height,
@@ -249,7 +249,7 @@ class Constructor:
 
     def aplicar_mascara_2d(
         self,
-        red: Red,
+        brain: Brain,
         width: int,
         height: int,
         mascara: list[dict[str, object]],
@@ -259,7 +259,7 @@ class Constructor:
         """Apply a connection mask to every neuron in the 2D grid.
 
         Args:
-            red: The network with the neurons.
+            brain: The network with the neurons.
             width: Grid width.
             height: Grid height.
             mascara: List of dendrite definitions. Each one:
@@ -274,7 +274,7 @@ class Constructor:
         """
         for y in range(height):
             for x in range(width):
-                neurona_destino = red.get_neurona(self.key_by_coord(x, y))
+                neurona_destino = brain.get_neurona(self.key_by_coord(x, y))
 
                 for def_dendrita in mascara:
                     peso_dendrita: float = def_dendrita["peso_dendrita"]  # type: ignore[assignment]
@@ -285,7 +285,7 @@ class Constructor:
                     for i, (dx, dy) in enumerate(offsets):
                         nx = (x + dx) % width
                         ny = (y + dy) % height
-                        neurona_fuente = red.get_neurona(
+                        neurona_fuente = brain.get_neurona(
                             self.key_by_coord(nx, ny)
                         )
 

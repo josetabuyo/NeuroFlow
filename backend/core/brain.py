@@ -1,7 +1,7 @@
-"""Red — neuron container and topology.
+"""Brain — neuron container and topology.
 
 Stores neurons and their connectivity (dendrites, synapses).
-The actual processing is done in RedTensor (parallel).
+The actual processing is done in BrainTensor (parallel).
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from .neurona import Neurona
 
 
-class Red:
+class Brain:
     """Neuron container — data structure for construction."""
 
     __slots__ = ("neuronas", "_neuronas_dict")
@@ -38,4 +38,4 @@ class Red:
         return len(self.neuronas)
 
     def __repr__(self) -> str:
-        return f"Red(neuronas={len(self.neuronas)})"
+        return f"Brain(neuronas={len(self.neuronas)})"

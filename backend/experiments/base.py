@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from core.constructor import Constructor
-from core.red import Red
+from core.brain import Brain
 from core.region import Region
 
 
@@ -27,7 +27,7 @@ class Experimento(ABC):
     """
 
     def __init__(self) -> None:
-        self.red: Red | None = None
+        self.brain: Brain | None = None
         self.regiones: dict[str, Region] = {}
         self.width: int = 0
         self.height: int = 0
@@ -35,7 +35,7 @@ class Experimento(ABC):
 
     @abstractmethod
     def setup(self, config: dict[str, Any]) -> None:
-        """Use Constructor to build Red + Regions."""
+        """Use Constructor to build Brain + Regions."""
         ...
 
     @abstractmethod
@@ -68,9 +68,9 @@ class Experimento(ABC):
 
     def get_frame(self) -> list[list[float]]:
         """Return the current grid as a value matrix."""
-        if self.red is None:
+        if self.brain is None:
             return []
-        return self.red.get_grid(self.width, self.height)
+        return self.brain.get_grid(self.width, self.height)
 
     def get_tension_frame(self) -> list[list[float]] | None:
         """Return the tension grid. None if not available."""
@@ -108,7 +108,7 @@ class Experimento(ABC):
             - None for unconnected cells
             - The inspected cell is marked with special value 999.
         """
-        if self.red is None:
+        if self.brain is None:
             return {
                 "type": "connections",
                 "x": x,
@@ -119,7 +119,7 @@ class Experimento(ABC):
             }
 
         key = Constructor.key_by_coord(x, y)
-        neurona = self.red.get_neurona(key)
+        neurona = self.brain.get_neurona(key)
 
         # Accumulate effective weights by source neuron
         pesos: dict[str, float] = {}

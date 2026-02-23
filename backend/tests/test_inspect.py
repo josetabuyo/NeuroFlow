@@ -20,7 +20,7 @@ from core.constructor import Constructor
 from core.sinapsis import Sinapsis
 from core.dendrita import Dendrita
 from core.neurona import Neurona, NeuronaEntrada
-from core.red import Red
+from core.brain import Brain
 from core.masks import MASK_SIMPLE
 from experiments.deamons_lab import DeamonsLabExperiment
 
@@ -130,7 +130,7 @@ class TestInspect:
 
         assert result["total_dendritas"] == 9
 
-        neurona = exp.red.get_neurona("x5y5")
+        neurona = exp.brain.get_neurona("x5y5")
         total_sinapsis = sum(len(d.sinapsis) for d in neurona.dendritas)
         assert result["total_sinapsis"] == total_sinapsis
 
@@ -151,12 +151,12 @@ class TestInspect:
     def test_neurona_fuente_multiples_dendritas_suma(self) -> None:
         """If a source neuron appears in multiple dendrites, weights are summed."""
         constructor = Constructor()
-        red, _ = constructor.crear_grilla(
+        brain, _ = constructor.crear_grilla(
             width=3, height=3, filas_entrada=[], filas_salida=[], umbral=0.0
         )
 
-        neurona_destino = red.get_neurona("x1y1")
-        neurona_fuente = red.get_neurona("x0y0")
+        neurona_destino = brain.get_neurona("x1y1")
+        neurona_fuente = brain.get_neurona("x0y0")
 
         s1 = Sinapsis(neurona_entrante=neurona_fuente, peso=0.8)
         d1 = Dendrita(sinapsis=[s1], peso=1.0)
@@ -167,7 +167,7 @@ class TestInspect:
         neurona_destino.dendritas.extend([d1, d2])
 
         exp = DeamonsLabExperiment()
-        exp.red = red
+        exp.brain = brain
         exp.width = 3
         exp.height = 3
         exp.regiones = {}

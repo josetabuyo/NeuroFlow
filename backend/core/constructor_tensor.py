@@ -1,6 +1,6 @@
-"""ConstructorTensor — compiles a sequential Red into a parallel RedTensor.
+"""ConstructorTensor — compiles a sequential Brain into a parallel BrainTensor.
 
-Traverses the Red ONCE and builds all the PyTorch tensors
+Traverses the Brain ONCE and builds all the PyTorch tensors
 needed for vectorized processing.
 
 This is a setup step (O(N*S)), not a processing step.
@@ -11,19 +11,19 @@ from __future__ import annotations
 
 import torch
 
-from .red import Red
+from .brain import Brain
 from .neurona import Neurona, NeuronaEntrada
-from .red_tensor import RedTensor
+from .brain_tensor import BrainTensor
 
 
 class ConstructorTensor:
-    """Compiles a sequential Red into a parallel RedTensor."""
+    """Compiles a sequential Brain into a parallel BrainTensor."""
 
     @staticmethod
-    def compilar(red: Red, device: str = "cpu") -> RedTensor:
-        """Convert a sequential Red into a parallel RedTensor.
+    def compilar(brain: Brain, device: str = "cpu") -> BrainTensor:
+        """Convert a sequential Brain into a parallel BrainTensor.
 
-        Traverses the Red ONCE and builds the tensors:
+        Traverses the Brain ONCE and builds the tensors:
         1. Extract values from all neurons → tensor V [N]
         2. Extract synaptic weights → tensor W [N, max_syn]
         3. Extract connectivity (source neuron indices) → tensor C [N, max_syn]
@@ -34,23 +34,23 @@ class ConstructorTensor:
         8. Extract NeuronaEntrada mask → tensor Em [N]
 
         Args:
-            red: The sequential Red with all neurons/dendrites/synapses configured.
+            brain: The sequential Brain with all neurons/dendrites/synapses configured.
             device: PyTorch device ("cpu" or "cuda").
 
         Returns:
-            A RedTensor ready for vectorized processing.
+            A BrainTensor ready for vectorized processing.
         """
-        N = len(red.neuronas)
+        N = len(brain.neuronas)
 
         # Build neuron ID → index mapping
         id_to_idx: dict[str, int] = {}
-        for i, neurona in enumerate(red.neuronas):
+        for i, neurona in enumerate(brain.neuronas):
             id_to_idx[neurona.id] = i
 
         # First pass: count max synapses per neuron and max dendrites
         max_syn = 0
         max_dend = 0
-        for neurona in red.neuronas:
+        for neurona in brain.neuronas:
             total_syn = sum(len(d.sinapsis) for d in neurona.dendritas)
             max_syn = max(max_syn, total_syn)
             max_dend = max(max_dend, len(neurona.dendritas))
@@ -72,7 +72,7 @@ class ConstructorTensor:
         mascara_entrada = torch.zeros(N, dtype=torch.bool)
 
         # Second pass: fill tensors
-        for i, neurona in enumerate(red.neuronas):
+        for i, neurona in enumerate(brain.neuronas):
             valores[i] = neurona.valor
             umbrales[i] = neurona.umbral
 
@@ -107,7 +107,7 @@ class ConstructorTensor:
             # Clamp any stray indices (shouldn't happen, but safety)
             indices_fuente = indices_fuente.clamp(0, N - 1)
 
-        return RedTensor(
+        return BrainTensor(
             valores=valores,
             pesos_sinapsis=pesos_sinapsis,
             indices_fuente=indices_fuente,

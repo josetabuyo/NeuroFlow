@@ -59,7 +59,7 @@ The decision unit. Contains dendrites and resolves the competition.
 **InputNeuron** (inherits from Neuron): no dendrites, its value is set
 externally. The Network processes it the same way but it does nothing internally.
 
-### Network (`red.py`)
+### Network (`brain.py`)
 
 "Dumb" container — knows nothing about organization, only processes.
 
@@ -89,7 +89,7 @@ the Network runs on its own.
 
 Tensorized version of the constructor for efficient matrix computation.
 
-### NetworkTensor (`red_tensor.py`)
+### NetworkTensor (`brain_tensor.py`)
 
 Tensorized version of the Network that operates with matrices instead of
 individual Python objects.

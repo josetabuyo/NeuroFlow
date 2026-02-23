@@ -15,8 +15,8 @@ are too slow for real-time frame rates.
 ## Decision
 
 Use PyTorch tensors for all neural computation. The OOP graph
-(Red → Neurona → Dendrita → Sinapsis) is compiled into flat tensors
-by `ConstructorTensor`, and `RedTensor.procesar()` executes all
+(Brain → Neurona → Dendrita → Sinapsis) is compiled into flat tensors
+by `ConstructorTensor`, and `BrainTensor.procesar()` executes all
 formulas as vectorized operations.
 
 ## Consequences

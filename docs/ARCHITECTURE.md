@@ -56,7 +56,7 @@ NeuroFlow/
 │   │   ├── sinapsis.py            # Synaptic connection
 │   │   ├── dendrita.py            # Dendritic branch
 │   │   ├── neurona.py             # Neuron + NeuronaEntrada
-│   │   ├── red.py                 # Neural network (dumb container)
+│   │   ├── brain.py               # Neural network (dumb container)
 │   │   ├── region.py              # Neuron grouping (organization)
 │   │   └── constructor.py        # Factory/builder for networks and regions
 │   ├── experiments/               # Experiments (plug-in)
@@ -72,11 +72,11 @@ NeuroFlow/
 │       ├── test_sinapsis.py
 │       ├── test_dendrita.py
 │       ├── test_neurona.py
-│       ├── test_red.py             # Red does NOT know about regions
+│       ├── test_brain.py           # Brain does NOT know about regions
 │       ├── test_region.py          # Region is just grouping
-│       ├── test_constructor.py     # Constructor assembles Red + Regions
+│       ├── test_constructor.py     # Constructor assembles Brain + Regions
 │       ├── test_deamons_lab.py
-│       └── test_red_tensor.py
+│       └── test_brain_tensor.py
 │
 ├── frontend/
 │   ├── package.json
@@ -117,12 +117,12 @@ NeuroFlow/
 
 ## 3. Neural Model (Core)
 
-Port of the RedJavaScript model to Python, with a key architectural improvement:
+Port of the original model to Python, with a key architectural improvement:
 **separation of responsibilities between processing and organization**.
 
 ### 3.0 Design Principle: Separation of Responsibilities
 
-In the original project (RedJavaScript), the `Red` class knew about regions
+In the original project (RedJavaScript), the `Brain` class knew about regions
 (INPUT, OUTPUT, INTERNAL) and decided which neurons to process. This couples
 organization with processing.
 
@@ -131,7 +131,7 @@ In NeuroFlow we separate these responsibilities:
 ```
 PROCESSING (does not know about organization)     ORGANIZATION (does not know about processing)
 ┌──────────────────────────────┐                  ┌──────────────────────────────┐
-│  Red                         │                  │  Region                      │
+│  Brain                       │                  │  Region                      │
 │  Only contains neurons.      │                  │  Named group of neurons.    │
 │  Only processes all of them.│                  │  References only, not owner.│
 │  Does not know input/output. │                  │  Useful for connecting,     │
@@ -157,7 +157,7 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
   It does not know if it is "input layer" or "output layer". That is decided by whoever composes.
 - **Martin Fowler (Domain Model + Factory/Builder)**: Factory for creating lightweight
   elements (neurons), Builder for complex configurations (regions + connectivity).
-- **Single Responsibility Principle**: Red processes. Constructor organizes.
+- **Single Responsibility Principle**: Brain processes. Constructor organizes.
   Experiment orchestrates.
 
 ### 3.1 Class Diagram
@@ -168,7 +168,7 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────────────────────────────────────────────┐
-│                        Red                          │
+│                       Brain                          │
 │─────────────────────────────────────────────────────│
 │  neuronas: list[Neurona]                            │
 │  _neuronas_dict: dict[str, Neurona]                 │
@@ -176,9 +176,9 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │  get_grid(w, h) → returns value matrix              │
 │  get_neurona(id) → returns neuron by id             │
 │─────────────────────────────────────────────────────│
-│  Red is a structure container — it holds neurons    │
+│  Brain is a structure container — it holds neurons  │
 │  but does NOT process them. Processing is done by   │
-│  RedTensor after compilation.                       │
+│  BrainTensor after compilation.                       │
 │  Does NOT have regions.                             │
 │  Does NOT know what is input or output.             │
 └────────────┬────────────────────────────────────────┘
@@ -196,13 +196,13 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │─────────────────────────────────────────────────────│
 │  Data container only. The processing formulas       │
 │  (fuzzy OR, tension, threshold) are implemented     │
-│  in RedTensor as vectorized tensor operations.      │
+│  in BrainTensor as vectorized tensor operations.      │
 │                                                     │
 │  ┌────────────────────────────────────────────┐     │
 │  │         NeuronaEntrada (inherits)           │     │
 │  │  No dendritas.                             │     │
 │  │  Value is set externally.                  │     │
-│  │  RedTensor skips it during processing      │     │
+│  │  BrainTensor skips it during processing      │     │
 │  │  via mascara_entrada.                      │     │
 │  └────────────────────────────────────────────┘     │
 └────────────┬────────────────────────────────────────┘
@@ -215,7 +215,7 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │  sinapsis: list[Sinapsis]                           │
 │─────────────────────────────────────────────────────│
 │  Data container. The fuzzy AND formula              │
-│  (avg(sinapsis) × peso) runs in RedTensor.          │
+│  (avg(sinapsis) × peso) runs in BrainTensor.          │
 │  Note: can have a SINGLE sinapsis if required.      │
 └────────────┬────────────────────────────────────────┘
              │ contains K
@@ -227,7 +227,7 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │  neurona_entrante: Neurona (reference to axon)      │
 │─────────────────────────────────────────────────────│
 │  Data container. The recognition formula            │
-│  (1 - |peso - entrada|) runs in RedTensor.          │
+│  (1 - |peso - entrada|) runs in BrainTensor.          │
 └─────────────────────────────────────────────────────┘
 
 
@@ -236,7 +236,7 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────────────────────────────────────────────┐
-│                   RedTensor                         │
+│                   BrainTensor                         │
 │─────────────────────────────────────────────────────│
 │  valores: Tensor          (neuron activations)      │
 │  tensiones: Tensor        (surface tensions)        │
@@ -256,17 +256,17 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │─────────────────────────────────────────────────────│
 │  This is the engine. All processing formulas run    │
 │  here as vectorized tensor operations on GPU/CPU.   │
-│  Compiled from Red by ConstructorTensor.            │
+│  Compiled from Brain by ConstructorTensor.           │
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐
 │                ConstructorTensor                    │
 │─────────────────────────────────────────────────────│
-│  compilar(red, device) → RedTensor        (static)  │
+│  compilar(brain, device) → BrainTensor      (static)  │
 │─────────────────────────────────────────────────────│
-│  Reads the OOP graph (Red → Neurona → Dendrita →   │
+│  Reads the OOP graph (Brain → Neurona → Dendrita → │
 │  Sinapsis) and compiles it into flat tensors for    │
-│  RedTensor. This is the bridge between structure    │
+│  BrainTensor. This is the bridge between structure    │
 │  and computation.                                   │
 └─────────────────────────────────────────────────────┘
 
@@ -287,7 +287,7 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │  get_neurona(id) → returns neuron by id             │
 │─────────────────────────────────────────────────────│
 │  Does NOT own the neurons (reference only).         │
-│  Red and RedTensor do not know regions exist.       │
+│  Brain and BrainTensor do not know regions exist.   │
 │  It is a tool for Constructor and Experiment.       │
 └─────────────────────────────────────────────────────┘
 
@@ -299,8 +299,8 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 │─────────────────────────────────────────────────────│
 │  key_by_coord(x, y) → neuron id         (static)   │
 │  crear_grilla(w, h, filas_entrada,                  │
-│    filas_salida, umbral) → Red + regions            │
-│  aplicar_mascara_2d(red, w, h, mascara,             │
+│    filas_salida, umbral) → Brain + regions           │
+│  aplicar_mascara_2d(brain, w, h, mascara,           │
 │    random_weights) → applies mask to all neurons    │
 │  balancear_pesos(neuronas, target)                  │
 │  balancear_sinapsis(neuronas, target)               │
@@ -318,7 +318,7 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 ┌─────────────────────────────────────────────────────┐
 │              Experimento (base)                     │
 │─────────────────────────────────────────────────────│
-│  red: Red                                           │
+│  brain: Brain                                       │
 │  regiones: dict[str, Region]                         │
 │  width: int, height: int, generation: int           │
 │─────────────────────────────────────────────────────│
@@ -338,14 +338,14 @@ PROCESSING (does not know about organization)     ORGANIZATION (does not know ab
 ┌─────────────────────────────────────────────────────┐
 │            DeamonsLabExperiment                     │
 │─────────────────────────────────────────────────────│
-│  red_tensor: RedTensor                              │
+│  brain_tensor: BrainTensor                              │
 │  _daemon_history: list                              │
 │─────────────────────────────────────────────────────│
 │  setup(config)    → Constructor + ConstructorTensor  │
-│  step()           → red_tensor.procesar()            │
+│  step()           → brain_tensor.procesar()            │
 │  reconnect(config)→ rewire without losing state     │
-│  get_frame()      → red_tensor.get_grid()            │
-│  get_tension_frame() → red_tensor.get_tension_grid() │
+│  get_frame()      → brain_tensor.get_grid()            │
+│  get_tension_frame() → brain_tensor.get_tension_grid() │
 │  get_stats()      → daemon count, size, exclusion,  │
 │                     stability, noise                │
 │  click(x, y)      → toggle neuron value             │
@@ -369,19 +369,19 @@ Constructor (builds structure)
   │  2. Creates neurons (Neurona and NeuronaEntrada)
   │  3. Groups them in regions
   │  4. Connects dendritas and sinapsis via aplicar_mascara_2d
-  │  5. Delivers: Red + dict of Regions
+  │  5. Delivers: Brain + dict of Regions
   │
   ▼
 ConstructorTensor (compiles)
   │
-  │  6. Reads the OOP graph (Red → Neurona → Dendrita → Sinapsis)
+  │  6. Reads the OOP graph (Brain → Neurona → Dendrita → Sinapsis)
   │  7. Flattens it into tensors (weights, indices, masks)
-  │  8. Delivers: RedTensor
+  │  8. Delivers: BrainTensor
   │
   ▼
-RedTensor (processes) — Red and Regions remain as references
+BrainTensor (processes) — Brain and Regions remain as references
   │
-  │  9. Experiment calls red_tensor.procesar():
+  │  9. Experiment calls brain_tensor.procesar():
   │     - Synapse:  1 - |peso - source_value|   (vectorized)
   │     - Dendrite: avg(synapses) × peso         (vectorized)
   │     - Neuron:   max(exc) + min(inh) → tension
@@ -389,14 +389,14 @@ RedTensor (processes) — Red and Regions remain as references
   │     - Input neurons skipped via mascara_entrada
   │
   ▼
-Experiment reads red_tensor.get_grid() → frame → WebSocket → Frontend
+Experiment reads brain_tensor.get_grid() → frame → WebSocket → Frontend
 ```
 
 ### 3.3 Processing Logic
 
-All formulas run inside `RedTensor.procesar()` as vectorized tensor
+All formulas run inside `BrainTensor.procesar()` as vectorized tensor
 operations. The OOP classes (Neurona, Dendrita, Sinapsis) define the
-structure; RedTensor executes the math.
+structure; BrainTensor executes the math.
 
 ```
 SYNAPSE:    value = 1 - |peso - source_neuron.valor|
@@ -418,7 +418,7 @@ NEURON:     max_exc = max(dendrites where peso > 0)
             But negative dendrites can inhibit
 
 INPUT NEURON (NeuronaEntrada):
-            Skipped by RedTensor via mascara_entrada.
+            Skipped by BrainTensor via mascara_entrada.
             Value is set externally via activar_external(valor).
 ```
 
@@ -441,11 +441,11 @@ DENDRITA.peso ∈ [-1, 1]    ← Can be negative
 ```
 PyTorch                          NeuroFlow
 ─────────────────────────────    ─────────────────────────────
-nn.Module (forward)          →   RedTensor (procesar)
+nn.Module (forward)          →   BrainTensor (procesar)
   Does not know if input/output    Does not know about regions
   Only computes                    Only processes tensors
 
-Model definition (layers)    →   Red + Constructor
+Model definition (layers)    →   Brain + Constructor
   Defines topology                 Builds the OOP structure
   Knows about connectivity         Defines connectivity
 
@@ -543,7 +543,7 @@ dependencies.
                                         (single center cell active)
 ```
 
-`RedTensor.procesar()` processes all neurons in parallel, but since
+`BrainTensor.procesar()` processes all neurons in parallel, but since
 each neuron reads from the row below and rows above the frontier
 have zero inputs, the automaton naturally fills one row per step.
 
@@ -664,17 +664,17 @@ Connection: ws://host/ws/experiment
 │  │   Sidebar      │──┼─────────►│  │   DeamonsLabExperiment     │  │
 │  │  (wiring menu) │  │          │  │                            │  │
 │  └────────────────┘  │          │  │  setup:                    │  │
-│                      │          │  │   Constructor → Red        │  │
+│                      │          │  │   Constructor → Brain      │  │
 │  ┌────────────────┐  │  click   │  │   ConstructorTensor →      │  │
-│  │  PixelCanvas   │──┼─────────►│  │     RedTensor              │  │
+│  │  PixelCanvas   │──┼─────────►│  │     BrainTensor              │  │
 │  │  (HTML5 Canvas)│  │          │  │                            │  │
 │  │  50×50 pixels  │  │          │  │  click(x,y):               │  │
-│  └────────▲───────┘  │          │  │   red_tensor.set_valor()   │  │
+│  └────────▲───────┘  │          │  │   brain_tensor.set_valor()   │  │
 │           │          │          │  │   (toggle neuron)          │  │
 │  ┌────────┴───────┐  │  frame   │  │                            │  │
 │  │  useExperiment │◄─┼──────────│  │  step:                     │  │
-│  │  (WebSocket)   │  │          │  │   red_tensor.procesar()    │  │
-│  └────────────────┘  │          │  │   red_tensor.get_grid()    │  │
+│  │  (WebSocket)   │  │          │  │   brain_tensor.procesar()    │  │
+│  └────────────────┘  │          │  │   brain_tensor.get_grid()    │  │
 │                      │          │  │     → frame                │  │
 │  ┌────────────────┐  │          │  │                            │  │
 │  │  Controls      │──┼─────────►│  │  reconnect:               │  │
