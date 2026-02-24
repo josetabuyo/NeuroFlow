@@ -143,6 +143,37 @@ class BrainTensor:
         # 7. Preserve NeuronaEntrada values
         self.valores[:NR] = torch.where(mascara_real, valores_real, nuevos_valores)
 
+    def aprender_input(
+        self,
+        input_start: int,
+        input_end: int,
+        lr: float,
+    ) -> None:
+        """Tension-modulated Hebbian learning on input dendrite synapses.
+
+        Rule: ΔW = lr × tension × (input_value − weight)
+          - Positive tension → weights move toward the input pattern
+          - Negative tension → weights move away from the input pattern
+          - Magnitude of tension scales the learning strength
+
+        Only updates synapses whose source neuron index falls in
+        [input_start, input_end). All other synapses are untouched.
+        """
+        NR = self.n_real
+
+        input_mask = (
+            (self.indices_fuente >= input_start)
+            & (self.indices_fuente < input_end)
+            & self.mascara_valida
+        )
+
+        entradas = self.valores[self.indices_fuente]  # [NR, max_syn]
+
+        tension = self.tensiones[:NR].unsqueeze(1)  # [NR, 1]
+
+        delta = lr * tension * (entradas - self.pesos_sinapsis)
+        self.pesos_sinapsis = (self.pesos_sinapsis + delta * input_mask).clamp(0.0, 1.0)
+
     def procesar_n(self, n: int) -> None:
         """N steps seguidos sin salir al Python loop."""
         for _ in range(n):

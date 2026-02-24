@@ -12,6 +12,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from experiments.base import Experimento
 from experiments.deamons_lab import DeamonsLabExperiment
+from experiments.dynamic_som import DynamicSOMExperiment
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ ws_router = APIRouter()
 
 EXPERIMENT_CLASSES: dict[str, type[Experimento]] = {
     "deamons_lab": DeamonsLabExperiment,
+    "dynamic_som": DynamicSOMExperiment,
 }
 
 
@@ -249,6 +251,12 @@ class ExperimentSession:
         if tension_frame is not None:
             msg["tension_grid"] = [
                 [round(v, 3) for v in row] for row in tension_frame
+            ]
+
+        input_frame = self.experiment.get_input_frame()
+        if input_frame is not None:
+            msg["input_frame"] = [
+                [round(v) for v in row] for row in input_frame
             ]
 
         if steps is not None and elapsed_s is not None and elapsed_s > 0:

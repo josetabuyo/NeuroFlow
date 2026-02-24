@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from core.masks import get_mask_info
+from core.ascii_renderer import get_available_fonts
 
 router = APIRouter(prefix="/api")
 
@@ -30,6 +31,36 @@ EXPERIMENTS = {
             "mask": "deamon_3_en_50",
             "balance": 0.0,
             "balance_mode": "none",
+        },
+    },
+    "dynamic_som": {
+        "id": "dynamic_som",
+        "name": "Dynamic SOM",
+        "description": (
+            "Self-organizing map with visual input streams. "
+            "Projects ASCII characters (with configurable noise) "
+            "into an input region connected to a daemon tissue."
+        ),
+        "masks": get_mask_info(),
+        "input_sources": [
+            {"id": "ascii", "name": "ASCII Images"},
+        ],
+        "fonts": get_available_fonts(),
+        "default_config": {
+            "width": 50,
+            "height": 50,
+            "mask": "deamon_3_en_50",
+            "input_text": "AB",
+            "input_resolution": 10,
+            "frames_per_char": 10,
+            "input_dendrite_weight": 0.7,
+            "white_noise": True,
+            "shift_noise": False,
+            "input_source": "ascii",
+            "font": "press_start_2p",
+            "font_size": 8,
+            "learning": True,
+            "learning_rate": 0.01,
         },
     },
 }

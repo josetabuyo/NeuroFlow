@@ -76,6 +76,10 @@ class Experimento(ABC):
         """Return the tension grid. None if not available."""
         return None
 
+    def get_input_frame(self) -> list[list[float]] | None:
+        """Return the current input image being projected. None if not available."""
+        return None
+
     def get_stats(self) -> dict[str, Any]:
         """Return statistics for the current state."""
         frame = self.get_frame()

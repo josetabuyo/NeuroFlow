@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { PixelCanvas } from "./components/PixelCanvas";
+import { MiniGrid } from "./components/MiniGrid";
 import { Sidebar } from "./components/Sidebar";
 import { Controls } from "./components/Controls";
 import { BrushPalette } from "./components/BrushPalette";
@@ -31,6 +32,34 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
     ],
     default_config: { width: 50, height: 50, balance: 0.0 },
   },
+  {
+    id: "dynamic_som",
+    name: "Dynamic SOM",
+    description: "Self-organizing map with visual input streams",
+    masks: [
+      { id: "simple", name: "Kohonen Simple", description: "Moore r=1, corona r=2-4, 8 inh. dendrites.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, 8 blocks 3x3", dendrites_inh: 8 },
+    ],
+    input_sources: [{ id: "ascii", name: "ASCII Images" }],
+    fonts: [
+      { id: "press_start_2p", name: "Press Start 2P", sizes: [7, 8, 9, 10, 12, 14], default_size: 8, description: "Pixel font — arcade style" },
+      { id: "silkscreen", name: "Silkscreen", sizes: [7, 8, 9, 10, 12, 14], default_size: 10, description: "Pixel font — small screen" },
+    ],
+    default_config: {
+      width: 50,
+      height: 50,
+      input_text: "AB",
+      input_resolution: 10,
+      frames_per_char: 10,
+      input_dendrite_weight: 0.7,
+      white_noise: true,
+      shift_noise: false,
+      input_source: "ascii",
+      font: "press_start_2p",
+      font_size: 8,
+      learning: true,
+      learning_rate: 0.01,
+    },
+  },
 ];
 
 const DEFAULT_SELECTED = "deamons_lab";
@@ -53,6 +82,9 @@ function App() {
     grid,
     tensionGrid,
     tensionMode,
+    inputFrame,
+    inputWeightGrid,
+    inputWeightDims,
     state,
     stats,
     perf,
@@ -190,6 +222,8 @@ function App() {
         selectedExperiment={selectedExp}
         config={config}
         state={state}
+        stats={stats}
+        inputFrame={inputFrame}
         onSelectExperiment={handleSelectExperiment}
         onConfigChange={setConfig}
         onStart={handleStart}
@@ -224,17 +258,49 @@ function App() {
         >
           {hasGrid ? (
             <>
-              <PixelCanvas
-                grid={grid}
-                tensionGrid={tensionGrid}
-                tensionMode={tensionMode}
-                width={config.width}
-                height={config.height}
-                connectionMap={connectionMap}
-                inspectedCell={inspectedCell}
-                onCellClick={handleCellClick}
-                onCellDrag={handleCellDrag}
-              />
+              <div style={{ display: "flex", gap: "16px", width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+                  <PixelCanvas
+                    grid={grid}
+                    tensionGrid={tensionGrid}
+                    tensionMode={tensionMode}
+                    width={config.width}
+                    height={config.height}
+                    connectionMap={connectionMap}
+                    inspectedCell={inspectedCell}
+                    onCellClick={handleCellClick}
+                    onCellDrag={handleCellDrag}
+                  />
+                </div>
+                {inputFrame && (
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                    alignItems: "center",
+                    minWidth: "120px",
+                    maxWidth: "200px",
+                  }}>
+                    <MiniGrid
+                      label="Input"
+                      grid={inputFrame}
+                      width={inputFrame[0]?.length ?? 0}
+                      height={inputFrame.length}
+                      subtitle={stats?.current_char ? `"${stats.current_char}" ${(stats.frame_in_char ?? 0) + 1}/${stats.frames_per_char ?? "?"}` : undefined}
+                    />
+                    {inputWeightGrid && inputWeightDims && (
+                      <MiniGrid
+                        label="Learned"
+                        grid={inputWeightGrid}
+                        width={inputWeightDims.width}
+                        height={inputWeightDims.height}
+                        colorMode="weight"
+                        subtitle={inspectedCell ? `Neuron (${inspectedCell.x}, ${inspectedCell.y})` : undefined}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
               <BrushPalette
                 brushSize={brushSize}
                 brushMode={brushMode}

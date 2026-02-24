@@ -24,6 +24,19 @@ export interface BalanceModeInfo {
   name: string;
 }
 
+export interface InputSourceInfo {
+  id: string;
+  name: string;
+}
+
+export interface FontInfo {
+  id: string;
+  name: string;
+  sizes: number[];
+  default_size: number;
+  description: string;
+}
+
 export interface ExperimentConfig {
   width: number;
   height: number;
@@ -31,6 +44,17 @@ export interface ExperimentConfig {
   balance?: number;
   balance_mode?: string;
   mask?: string;
+  input_text?: string;
+  input_resolution?: number;
+  frames_per_char?: number;
+  input_dendrite_weight?: number;
+  white_noise?: boolean;
+  shift_noise?: boolean;
+  input_source?: string;
+  font?: string;
+  font_size?: number;
+  learning?: boolean;
+  learning_rate?: number;
 }
 
 export interface ExperimentInfo {
@@ -40,6 +64,8 @@ export interface ExperimentInfo {
   rules?: number[];
   masks?: MaskPresetInfo[];
   balance_modes?: BalanceModeInfo[];
+  input_sources?: InputSourceInfo[];
+  fonts?: FontInfo[];
   default_config: ExperimentConfig;
 }
 
@@ -56,6 +82,7 @@ export interface FrameMessage {
   stats: ExperimentStats;
   perf?: PerfMetrics;
   tension_grid?: number[][];
+  input_frame?: number[][];
 }
 
 export interface StatusMessage {
@@ -75,6 +102,9 @@ export interface ConnectionsMessage {
   total_dendritas: number;
   total_sinapsis: number;
   weight_grid: (number | null)[][];
+  input_weight_grid?: number[][] | null;
+  input_weight_width?: number;
+  input_weight_height?: number;
 }
 
 export type ServerMessage = FrameMessage | StatusMessage | ErrorMessage | ConnectionsMessage;
@@ -88,6 +118,11 @@ export interface ExperimentStats {
   noise_cells?: number;
   stability?: number;
   exclusion?: number;
+  current_char?: string;
+  char_index?: number;
+  frame_in_char?: number;
+  frames_per_char?: number;
+  input_resolution?: number;
 }
 
 export type ExperimentState = "disconnected" | "initializing" | "ready" | "running" | "paused" | "complete";

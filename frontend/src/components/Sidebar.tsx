@@ -1,7 +1,7 @@
 /** Sidebar — experiment selector and configuration. */
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import type { ExperimentInfo, ExperimentConfig, ExperimentState } from "../types";
+import type { ExperimentInfo, ExperimentConfig, ExperimentState, ExperimentStats } from "../types";
 
 function weightToColor(weight: number | null): string {
   if (weight === null) return "#111111";
@@ -79,6 +79,82 @@ function MaskPreview({ grid }: { grid: (number | null)[][] }) {
   );
 }
 
+const INPUT_PREVIEW_PX = 120;
+
+function InputPreview({ grid }: { grid: number[][] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rows = grid.length;
+    const cols = rows > 0 ? grid[0].length : 0;
+    if (rows === 0 || cols === 0) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const cellPx = Math.max(1, Math.floor(INPUT_PREVIEW_PX / Math.max(rows, cols)));
+    canvas.width = cellPx * cols;
+    canvas.height = cellPx * rows;
+
+    ctx.fillStyle = "#0a0a0a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        ctx.fillStyle = grid[row][col] > 0.5 ? "#4cc9f0" : "#0a0a0a";
+        ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
+      }
+    }
+  }, [grid]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        width: `${INPUT_PREVIEW_PX}px`,
+        height: `${INPUT_PREVIEW_PX}px`,
+        display: "block",
+        imageRendering: "pixelated",
+        borderRadius: "4px",
+        border: "1px solid #2a2a3e",
+      }}
+    />
+  );
+}
+
+function CheckboxInput({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        fontSize: "0.8rem",
+        color: "#aaa",
+        cursor: "pointer",
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ accentColor: "#4cc9f0" }}
+      />
+      {label}
+    </label>
+  );
+}
+
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "8px",
@@ -143,6 +219,8 @@ interface SidebarProps {
   selectedExperiment: string;
   config: ExperimentConfig;
   state: ExperimentState;
+  stats: ExperimentStats | null;
+  inputFrame: number[][] | null;
   onSelectExperiment: (id: string) => void;
   onConfigChange: (config: ExperimentConfig) => void;
   onStart: () => void;
@@ -156,6 +234,8 @@ export function Sidebar({
   selectedExperiment,
   config,
   state,
+  stats,
+  inputFrame,
   onSelectExperiment,
   onConfigChange,
   onStart,
@@ -171,6 +251,11 @@ export function Sidebar({
   const masks = selectedExp?.masks ?? [];
   const activeMask = masks.length > 0
     ? (masks.find((m) => m.id === config.mask) ?? masks[0])
+    : null;
+
+  const fonts = selectedExp?.fonts ?? [];
+  const activeFont = fonts.length > 0
+    ? (fonts.find((f) => f.id === config.font) ?? fonts[0])
     : null;
 
   const balancedGrid = useMemo(() => {
@@ -538,6 +623,228 @@ export function Sidebar({
                 </span>
               </div>
             </div>
+          )}
+
+          {selectedExp.input_sources && selectedExp.input_sources.length > 0 && (
+            <>
+              <div
+                style={{
+                  borderTop: "1px solid #2a2a3e",
+                  paddingTop: "12px",
+                  marginTop: "4px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    color: "#888",
+                    margin: 0,
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  Input Stream
+                </h3>
+
+                <div>
+                  <label
+                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                  >
+                    Source
+                  </label>
+                  <select
+                    value={config.input_source ?? selectedExp.input_sources[0].id}
+                    onChange={(e) => onConfigChange({ ...config, input_source: e.target.value })}
+                    style={inputStyle}
+                  >
+                    {selectedExp.input_sources.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {fonts.length > 0 && activeFont && (
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <div style={{ flex: 2 }}>
+                      <label
+                        style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                      >
+                        Font
+                      </label>
+                      <select
+                        value={config.font ?? fonts[0].id}
+                        onChange={(e) => {
+                          const newFont = fonts.find((f) => f.id === e.target.value);
+                          onConfigChange({
+                            ...config,
+                            font: e.target.value,
+                            font_size: newFont?.default_size ?? config.font_size,
+                          });
+                        }}
+                        style={inputStyle}
+                      >
+                        {fonts.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label
+                        style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                      >
+                        Size
+                      </label>
+                      <select
+                        value={config.font_size ?? activeFont.default_size}
+                        onChange={(e) =>
+                          onConfigChange({ ...config, font_size: Number(e.target.value) })
+                        }
+                        style={inputStyle}
+                      >
+                        {activeFont.sizes.map((s) => (
+                          <option key={s} value={s}>{s}pt</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label
+                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                  >
+                    Input Text
+                  </label>
+                  <input
+                    type="text"
+                    value={config.input_text ?? "AB"}
+                    onChange={(e) => onConfigChange({ ...config, input_text: e.target.value })}
+                    style={inputStyle}
+                    placeholder="AB"
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ flex: 1 }}>
+                    <label
+                      style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                    >
+                      Resolution
+                    </label>
+                    <NumericInput
+                      value={config.input_resolution ?? 10}
+                      min={5}
+                      max={28}
+                      integer
+                      onChange={(v) => onConfigChange({ ...config, input_resolution: v })}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label
+                      style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                    >
+                      Frames/Char
+                    </label>
+                    <NumericInput
+                      value={config.frames_per_char ?? 10}
+                      min={1}
+                      max={200}
+                      integer
+                      onChange={(v) => onConfigChange({ ...config, frames_per_char: v })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                  >
+                    Input Dendrite Weight: {(config.input_dendrite_weight ?? 0.7).toFixed(2)}
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={config.input_dendrite_weight ?? 0.7}
+                    onChange={(e) =>
+                      onConfigChange({ ...config, input_dendrite_weight: parseFloat(e.target.value) })
+                    }
+                    style={{ width: "100%", accentColor: "#4cc9f0" }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <CheckboxInput
+                    label="White noise"
+                    checked={config.white_noise ?? true}
+                    onChange={(v) => onConfigChange({ ...config, white_noise: v })}
+                  />
+                  <CheckboxInput
+                    label="Shift noise (1px displacement)"
+                    checked={config.shift_noise ?? false}
+                    onChange={(v) => onConfigChange({ ...config, shift_noise: v })}
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <CheckboxInput
+                    label="Learning"
+                    checked={config.learning ?? true}
+                    onChange={(v) => onConfigChange({ ...config, learning: v })}
+                  />
+                  {(config.learning ?? true) && (
+                    <div>
+                      <label
+                        style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                      >
+                        Learning Rate: {(config.learning_rate ?? 0.01).toFixed(3)}
+                      </label>
+                      <input
+                        type="range"
+                        min={0.001}
+                        max={0.1}
+                        step={0.001}
+                        value={config.learning_rate ?? 0.01}
+                        onChange={(e) =>
+                          onConfigChange({ ...config, learning_rate: parseFloat(e.target.value) })
+                        }
+                        style={{ width: "100%", accentColor: "#4cc9f0" }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {inputFrame && experimentActive && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <label
+                      style={{
+                        fontSize: "0.75rem",
+                        textTransform: "uppercase",
+                        color: "#888",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      Input Preview
+                      {stats?.current_char && (
+                        <span style={{ color: "#4cc9f0", marginLeft: "6px", textTransform: "none" }}>
+                          "{stats.current_char}"
+                          {stats.frame_in_char !== undefined && stats.frames_per_char !== undefined && (
+                            <span style={{ color: "#555", marginLeft: "4px" }}>
+                              ({stats.frame_in_char + 1}/{stats.frames_per_char})
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </label>
+                    <InputPreview grid={inputFrame} />
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           <button

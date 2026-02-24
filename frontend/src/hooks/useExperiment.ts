@@ -20,6 +20,9 @@ interface UseExperimentReturn {
   grid: number[][];
   tensionGrid: number[][] | null;
   tensionMode: boolean;
+  inputFrame: number[][] | null;
+  inputWeightGrid: number[][] | null;
+  inputWeightDims: { width: number; height: number } | null;
   state: ExperimentState;
   stats: ExperimentStats | null;
   perf: PerfMetrics | null;
@@ -57,6 +60,9 @@ export function useExperiment(): UseExperimentReturn {
   const [perf, setPerf] = useState<PerfMetrics | null>(null);
   const [tensionGrid, setTensionGrid] = useState<number[][] | null>(null);
   const [tensionMode, setTensionMode] = useState(false);
+  const [inputFrame, setInputFrame] = useState<number[][] | null>(null);
+  const [inputWeightGrid, setInputWeightGrid] = useState<number[][] | null>(null);
+  const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
   const [activeExperiment, setActiveExperiment] = useState<string | null>(null);
   const [brushSize, setBrushSize] = useState(1);
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
@@ -87,10 +93,17 @@ export function useExperiment(): UseExperimentReturn {
           setStats(msg.stats);
           setPerf(msg.perf ?? null);
           setTensionGrid(msg.tension_grid ?? null);
+          setInputFrame(msg.input_frame ?? null);
           break;
         case "connections":
           setConnectionMap(msg.weight_grid);
           setInspectedCell({ x: msg.x, y: msg.y });
+          setInputWeightGrid(msg.input_weight_grid ?? null);
+          if (msg.input_weight_width && msg.input_weight_height) {
+            setInputWeightDims({ width: msg.input_weight_width, height: msg.input_weight_height });
+          } else {
+            setInputWeightDims(null);
+          }
           break;
         case "status":
           setState(msg.state);
@@ -194,6 +207,8 @@ export function useExperiment(): UseExperimentReturn {
       if (prev) {
         setConnectionMap(null);
         setInspectedCell(null);
+        setInputWeightGrid(null);
+        setInputWeightDims(null);
       }
       return !prev;
     });
@@ -207,6 +222,9 @@ export function useExperiment(): UseExperimentReturn {
     grid,
     tensionGrid,
     tensionMode,
+    inputFrame,
+    inputWeightGrid,
+    inputWeightDims,
     state,
     stats,
     perf,
