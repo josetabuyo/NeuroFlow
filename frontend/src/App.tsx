@@ -51,6 +51,8 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
       input_resolution: 10,
       frames_per_char: 10,
       input_dendrite_weight: 0.7,
+      deamon_exc_weight: 0.5,
+      deamon_inh_weight: -0.5,
       white_noise: true,
       shift_noise: false,
       input_source: "ascii",
@@ -245,6 +247,7 @@ function App() {
         <div
           style={{
             flex: 1,
+            minHeight: 0,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -258,8 +261,8 @@ function App() {
         >
           {hasGrid ? (
             <>
-              <div style={{ display: "flex", gap: "16px", width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+              <div style={{ display: "flex", gap: "16px", width: "100%", height: "100%", minHeight: 0, alignItems: "center", justifyContent: "center" }}>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", height: "100%", position: "relative" }}>
                   <PixelCanvas
                     grid={grid}
                     tensionGrid={tensionGrid}
@@ -271,6 +274,22 @@ function App() {
                     onCellClick={handleCellClick}
                     onCellDrag={handleCellDrag}
                   />
+                  <BrushPalette
+                    brushSize={brushSize}
+                    brushMode={brushMode}
+                    inspectMode={inspectMode}
+                    tensionMode={tensionMode}
+                    canInspect={
+                      state === "ready" ||
+                      state === "paused" ||
+                      state === "running"
+                    }
+                    onIncrease={increaseBrushSize}
+                    onDecrease={decreaseBrushSize}
+                    onToggleMode={toggleBrushMode}
+                    onToggleInspect={toggleInspectMode}
+                    onToggleTension={toggleTensionMode}
+                  />
                 </div>
                 {inputFrame && (
                   <div style={{
@@ -278,14 +297,16 @@ function App() {
                     flexDirection: "column",
                     gap: "12px",
                     alignItems: "center",
-                    minWidth: "120px",
-                    maxWidth: "200px",
+                    flexShrink: 0,
+                    maxHeight: "100%",
+                    overflow: "auto",
                   }}>
                     <MiniGrid
                       label="Input"
                       grid={inputFrame}
                       width={inputFrame[0]?.length ?? 0}
                       height={inputFrame.length}
+                      maxSize={140}
                       subtitle={stats?.current_char ? `"${stats.current_char}" ${(stats.frame_in_char ?? 0) + 1}/${stats.frames_per_char ?? "?"}` : undefined}
                     />
                     {inputWeightGrid && inputWeightDims && (
@@ -294,6 +315,7 @@ function App() {
                         grid={inputWeightGrid}
                         width={inputWeightDims.width}
                         height={inputWeightDims.height}
+                        maxSize={140}
                         colorMode="weight"
                         subtitle={inspectedCell ? `Neuron (${inspectedCell.x}, ${inspectedCell.y})` : undefined}
                       />
@@ -301,22 +323,6 @@ function App() {
                   </div>
                 )}
               </div>
-              <BrushPalette
-                brushSize={brushSize}
-                brushMode={brushMode}
-                inspectMode={inspectMode}
-                tensionMode={tensionMode}
-                canInspect={
-                  state === "ready" ||
-                  state === "paused" ||
-                  state === "running"
-                }
-                onIncrease={increaseBrushSize}
-                onDecrease={decreaseBrushSize}
-                onToggleMode={toggleBrushMode}
-                onToggleInspect={toggleInspectMode}
-                onToggleTension={toggleTensionMode}
-              />
               {isInitializing && (
                 <div
                   style={{
@@ -368,21 +374,24 @@ function App() {
           )}
         </div>
 
-        <Controls
-          state={state}
-          stats={stats}
-          perf={perf}
-          generation={generation}
-          stepsPerTick={stepsPerTick}
-          onPlay={handlePlay}
-          onPause={pause}
-          onStep={handleStep}
-          onReset={reset}
-          onStepsPerTickChange={setStepsPerTick}
-        />
+        <div style={{ flexShrink: 0 }}>
+          <Controls
+            state={state}
+            stats={stats}
+            perf={perf}
+            generation={generation}
+            stepsPerTick={stepsPerTick}
+            onPlay={handlePlay}
+            onPause={pause}
+            onStep={handleStep}
+            onReset={reset}
+            onStepsPerTickChange={setStepsPerTick}
+          />
+        </div>
 
         <div
           style={{
+            flexShrink: 0,
             display: "flex",
             gap: "16px",
             fontSize: "0.7rem",

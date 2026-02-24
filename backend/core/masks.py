@@ -120,231 +120,166 @@ MASK_ALL_INH: MaskDef = [
     {"peso_dendrita": -1.0, "offsets": _moore(1)},
 ]
 
-# simple — original Mexican hat mask (Moore r=1 exc, 8 inhibitory blocks r=2-4)
+# simple — Mexican hat mask (Moore r=1 exc, 12 inhibitory sectors r=2-4)
 MASK_SIMPLE: MaskDef = [
-    {
-        "peso_dendrita": 1.0,
-        "offsets": [
-            (-1, -1), (-1, 0), (-1, 1),
-            (0, -1),           (0, 1),
-            (1, -1),  (1, 0),  (1, 1),
-        ],
-    },
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (2, -4), (2, -3), (2, -2),
-            (3, -4), (3, -3), (3, -2),
-            (4, -4), (4, -3), (4, -2),
-        ],
-    },
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (2, -1), (2, 0), (2, 1),
-            (3, -1), (3, 0), (3, 1),
-            (4, -1), (4, 0), (4, 1),
-        ],
-    },
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (2, 2), (2, 3), (2, 4),
-            (3, 2), (3, 3), (3, 4),
-            (4, 2), (4, 3), (4, 4),
-        ],
-    },
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-1, 2), (-1, 3), (-1, 4),
-            (0, 2),  (0, 3),  (0, 4),
-            (1, 2),  (1, 3),  (1, 4),
-        ],
-    },
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-4, 2), (-4, 3), (-4, 4),
-            (-3, 2), (-3, 3), (-3, 4),
-            (-2, 2), (-2, 3), (-2, 4),
-        ],
-    },
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-4, -1), (-4, 0), (-4, 1),
-            (-3, -1), (-3, 0), (-3, 1),
-            (-2, -1), (-2, 0), (-2, 1),
-        ],
-    },
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-4, -4), (-4, -3), (-4, -2),
-            (-3, -4), (-3, -3), (-3, -2),
-            (-2, -4), (-2, -3), (-2, -2),
-        ],
-    },
-    {
-        "peso_dendrita": -1.0,
-        "offsets": [
-            (-1, -4), (-1, -3), (-1, -2),
-            (0, -4),  (0, -3),  (0, -2),
-            (1, -4),  (1, -3),  (1, -2),
-        ],
-    },
+    {"peso_dendrita": 1.0, "offsets": _moore(1)},
+    *_make_inhibitory(_ring(2, 4), -1.0, 12),
 ]
 
 MASK_WIDE_HAT: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(1)},
-    *_make_inhibitory(_ring(2, 7), -1.0, 8),
+    *_make_inhibitory(_ring(2, 7), -1.0, 12),
 ]
 
 MASK_NARROW_HAT: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(1)},
-    *_make_inhibitory(_ring(2, 3), -1.0, 8),
+    *_make_inhibitory(_ring(2, 3), -1.0, 12),
 ]
 
 MASK_BIG_CENTER: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(2)},
-    *_make_inhibitory(_ring(4, 7), -1.0, 8),
+    *_make_inhibitory(_ring(4, 7), -1.0, 12),
 ]
 
 MASK_BIG_CENTER_WIDE_INH: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(2)},
-    *_make_inhibitory(_ring(4, 10), -1.0, 8),
+    *_make_inhibitory(_ring(4, 10), -1.0, 12),
 ]
 
 MASK_SMALL_CENTER_GAP_WIDE_INH_X2: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(1)},
-    *_make_inhibitory(_ring(3, 13), -1.0, 8),
+    *_make_inhibitory(_ring(3, 13), -1.0, 12),
 ]
 
 MASK_BIG_CENTER_WIDE_INH_X2: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(2)},
-    *_make_inhibitory(_ring(4, 14), -1.0, 8),
+    *_make_inhibitory(_ring(4, 14), -1.0, 12),
 ]
 
 MASK_XL_CENTER_GAP_WIDE_INH_X2: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_ring(5, 15), -1.0, 8),
+    *_make_inhibitory(_ring(5, 15), -1.0, 12),
 ]
 
 MASK_DEAMON_3_EN_50: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_ring(5, 15), -1.0, 8),
+    *_make_inhibitory(_ring(5, 15), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_UP: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _shift(_moore(3), 0, 1)},
-    *_make_inhibitory(_shift(_ring(5, 15), 0, 1), -1.0, 8),
+    *_make_inhibitory(_shift(_ring(5, 15), 0, 1), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_DOWN: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _shift(_moore(3), 0, -1)},
-    *_make_inhibitory(_shift(_ring(5, 15), 0, -1), -1.0, 8),
+    *_make_inhibitory(_shift(_ring(5, 15), 0, -1), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_LEFT: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _shift(_moore(3), 1, 0)},
-    *_make_inhibitory(_shift(_ring(5, 15), 1, 0), -1.0, 8),
+    *_make_inhibitory(_shift(_ring(5, 15), 1, 0), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_RIGHT: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _shift(_moore(3), -1, 0)},
-    *_make_inhibitory(_shift(_ring(5, 15), -1, 0), -1.0, 8),
+    *_make_inhibitory(_shift(_ring(5, 15), -1, 0), -1.0, 12),
 ]
 
 MASK_DEAMON_1_EN_50: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_sparse_ring(5, 35, step=2), -1.0, 8),
+    *_make_inhibitory(_sparse_ring(5, 35, step=2), -1.0, 12),
 ]
 
 MASK_DEAMON_1_5_EN_50: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_ring(7, 17), -1.0, 8),
+    *_make_inhibitory(_ring(7, 17), -1.0, 12),
 ]
 
 MASK_DEAMON_1_5_EN_50_G6: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_ring(10, 20), -1.0, 8),
+    *_make_inhibitory(_ring(10, 20), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G12_I11: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_ring(16, 26), -1.0, 8),
+    *_make_inhibitory(_ring(16, 26), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G12_I5: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_ring(16, 20), -1.0, 8),
+    *_make_inhibitory(_ring(16, 20), -1.0, 12),
 ]
 
 MASK_DEAMON_E1_G12_I1: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(1)},
-    *_make_inhibitory(_ring(14, 14), -1.0, 8),
+    *_make_inhibitory(_ring(14, 14), -1.0, 12),
 ]
 
 MASK_DEAMON_E2_G12_I1: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(2)},
-    *_make_inhibitory(_ring(15, 15), -1.0, 8),
+    *_make_inhibitory(_ring(15, 15), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G12_I1: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_ring(16, 16), -1.0, 8),
+    *_make_inhibitory(_ring(16, 16), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G12_I3: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_ring(16, 18), -1.0, 8),
+    *_make_inhibitory(_ring(16, 18), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G12_I3_DE3_DI3: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _random_sparse(_moore(3), 1 / 3, seed=42)},
-    *_make_inhibitory(_random_sparse(_ring(16, 18), 1 / 3, seed=43), -1.0, 8),
+    *_make_inhibitory(_random_sparse(_ring(16, 18), 1 / 3, seed=43), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G12_I3_DE1_DI3: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_random_sparse(_ring(16, 18), 1 / 3, seed=43), -1.0, 8),
+    *_make_inhibitory(_random_sparse(_ring(16, 18), 1 / 3, seed=43), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G12_I3_DE3_DI1: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _random_sparse(_moore(3), 1 / 3, seed=42)},
-    *_make_inhibitory(_ring(16, 18), -1.0, 8),
+    *_make_inhibitory(_ring(16, 18), -1.0, 12),
 ]
 
 MASK_DEAMON_E2_G3_I3_DE1_5_DI1_5: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _random_sparse(_moore(2), 2 / 3, seed=44)},
-    *_make_inhibitory(_random_sparse(_ring(6, 8), 2 / 3, seed=45), -1.0, 8),
+    *_make_inhibitory(_random_sparse(_ring(6, 8), 2 / 3, seed=45), -1.0, 12),
 ]
 
 MASK_DEAMON_E2_G3_I3_DE1_DI1_5: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(2)},
-    *_make_inhibitory(_random_sparse(_ring(6, 8), 2 / 3, seed=45), -1.0, 8),
+    *_make_inhibitory(_random_sparse(_ring(6, 8), 2 / 3, seed=45), -1.0, 12),
 ]
 
 MASK_DEAMON_E2_G3_I3_DE1_DI1: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(2)},
-    *_make_inhibitory(_ring(6, 8), -1.0, 8),
+    *_make_inhibitory(_ring(6, 8), -1.0, 12),
 ]
 
 MASK_DEAMON_E2_G6_I3_DE1_DI1: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(2)},
-    *_make_inhibitory(_ring(9, 11), -1.0, 8),
+    *_make_inhibitory(_ring(9, 11), -1.0, 12),
 ]
 
 MASK_DEAMON_E3_G8_I3_DE1_DI1_1: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
-    *_make_inhibitory(_random_sparse(_ring(12, 14), 1 / 1.1, seed=43), -1.0, 8),
+    *_make_inhibitory(_random_sparse(_ring(12, 14), 1 / 1.1, seed=43), -1.0, 12),
+]
+
+MASK_DEAMON_E3_G2_I12_DE1_DI1: MaskDef = [
+    {"peso_dendrita": 1.0, "offsets": _moore(3)},
+    *_make_inhibitory(_ring(6, 17), -1.0, 12),
 ]
 
 MASK_BIG_CENTER_SOFT_WIDE_INH: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
     {"peso_dendrita": 0.7, "offsets": _ring(2, 2)},
-    *_make_inhibitory(_ring(4, 10), -1.0, 8),
+    *_make_inhibitory(_ring(4, 10), -1.0, 12),
 ]
 
 MASK_CROSS_CENTER: MaskDef = [
@@ -364,45 +299,45 @@ MASK_FINE_GRAIN: MaskDef = [
 
 MASK_DOUBLE_RING: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(1)},
-    *_make_inhibitory(_ring(2, 3), -1.0, 8),
-    *_make_inhibitory(_ring(5, 7), -0.5, 8),
+    *_make_inhibitory(_ring(2, 3), -1.0, 12),
+    *_make_inhibitory(_ring(5, 7), -0.5, 12),
 ]
 
 MASK_SOFT_INHIBIT: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(1)},
-    *_make_inhibitory(_ring(2, 4), -0.5, 8),
+    *_make_inhibitory(_ring(2, 4), -0.5, 12),
 ]
 
 MASK_STRONG_CENTER: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(1)},
     {"peso_dendrita": 1.0, "offsets": _moore(1)},
-    *_make_inhibitory(_ring(2, 4), -1.0, 8),
+    *_make_inhibitory(_ring(2, 4), -1.0, 12),
 ]
 
 MASK_GRADUAL_CENTER: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
     {"peso_dendrita": 0.6, "offsets": _ring(2, 2)},
     {"peso_dendrita": 0.3, "offsets": _ring(3, 3)},
-    *_make_inhibitory(_sparse_ring(6, 11), -1.0, 8),
+    *_make_inhibitory(_sparse_ring(6, 11), -1.0, 12),
 ]
 
 MASK_GRADUAL_BIG_INH: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
     {"peso_dendrita": 0.6, "offsets": _ring(2, 2)},
     {"peso_dendrita": 0.3, "offsets": _ring(3, 3)},
-    *_make_inhibitory(_sparse_ring(8, 19, step=3), -1.0, 8),
+    *_make_inhibitory(_sparse_ring(8, 19, step=3), -1.0, 12),
 ]
 
 MASK_GRADUAL_XXL_INH: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
     {"peso_dendrita": 0.6, "offsets": _ring(2, 2)},
     {"peso_dendrita": 0.3, "offsets": _ring(3, 3)},
-    *_make_inhibitory(_sparse_ring(8, 30, step=4), -1.0, 8),
+    *_make_inhibitory(_sparse_ring(8, 30, step=4), -1.0, 12),
 ]
 
 MASK_GRADUAL_XXL_INH_SMALL: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
-    *_make_inhibitory(_sparse_ring(5, 30, step=4), -1.0, 8),
+    *_make_inhibitory(_sparse_ring(5, 30, step=4), -1.0, 12),
 ]
 
 MASK_MEXICAN_HAT: MaskDef = [
@@ -410,10 +345,10 @@ MASK_MEXICAN_HAT: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
     {"peso_dendrita": 0.5, "offsets": _ring(2, 2)},
     # Inhibitory profile — strong near center, decays with distance
-    *_make_inhibitory(_ring(3, 5), -1.0, 8),
-    *_make_inhibitory(_sparse_ring(6, 12, step=2), -0.6, 8),
-    *_make_inhibitory(_sparse_ring(13, 20, step=3), -0.25, 8),
-    *_make_inhibitory(_sparse_ring(21, 30, step=5), -0.08, 8),
+    *_make_inhibitory(_ring(3, 5), -1.0, 12),
+    *_make_inhibitory(_sparse_ring(6, 12, step=2), -0.6, 12),
+    *_make_inhibitory(_sparse_ring(13, 20, step=3), -0.25, 12),
+    *_make_inhibitory(_sparse_ring(21, 30, step=5), -0.08, 12),
 ]
 
 
@@ -462,7 +397,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors), gap r=4, corona r=5-15 (same inh area as x2).",
         "center": "Moore r=3 (48 neighbors)",
         "corona": "r=5-15, gap r=4 silence",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_3_EN_50,
     },
@@ -472,7 +407,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors) shifted +1 dy, gap r=4, corona r=5-15 shifted +1 dy.",
         "center": "Moore r=3 (48 neighbors, shifted 1px down)",
         "corona": "r=5-15 shifted 1px down, gap r=4 silence",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_UP,
     },
@@ -482,7 +417,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors) shifted -1 dy, gap r=4, corona r=5-15 shifted -1 dy.",
         "center": "Moore r=3 (48 neighbors, shifted 1px up)",
         "corona": "r=5-15 shifted 1px up, gap r=4 silence",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_DOWN,
     },
@@ -492,7 +427,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors) shifted +1 dx, gap r=4, corona r=5-15 shifted +1 dx.",
         "center": "Moore r=3 (48 neighbors, shifted 1px right)",
         "corona": "r=5-15 shifted 1px right, gap r=4 silence",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_LEFT,
     },
@@ -502,7 +437,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors) shifted -1 dx, gap r=4, corona r=5-15 shifted -1 dx.",
         "center": "Moore r=3 (48 neighbors, shifted 1px left)",
         "corona": "r=5-15 shifted 1px left, gap r=4 silence",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G1_I11_DE1_DI1_MOVE_RIGHT,
     },
@@ -512,7 +447,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors), gap r=4, sparse corona r=5-35 (massive inhibition, ~1 deamon in 50x50).",
         "center": "Moore r=3 (48 neighbors)",
         "corona": "r=5-35 sparse step=2, gap r=4 silence",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_1_EN_50,
     },
@@ -522,7 +457,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors), gap x3 r=4-6, corona r=7-17. ~1.5 deamons in 50x50.",
         "center": "Moore r=3 (48 neighbors)",
         "corona": "r=7-17, gap r=4-6 silence (x3)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_1_5_EN_50,
     },
@@ -532,7 +467,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors), gap x6 r=4-9, corona r=10-20. ~1.5 deamons in 50x50.",
         "center": "Moore r=3 (48 neighbors)",
         "corona": "r=10-20, gap r=4-9 silence (x6)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_1_5_EN_50_G6,
     },
@@ -542,7 +477,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors), gap x12 r=4-15, corona r=16-26.",
         "center": "Moore r=3 (48 neighbors)",
         "corona": "r=16-26, gap r=4-15 silence (x12)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G12_I11,
     },
@@ -552,7 +487,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors), gap x12 r=4-15, corona r=16-20 (half of I11).",
         "center": "Moore r=3 (48 neighbors)",
         "corona": "r=16-20, gap r=4-15 silence (x12)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G12_I5,
     },
@@ -562,7 +497,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=1 (8 neighbors), gap x12 r=2-13, corona r=14 (1 ring).",
         "center": "Moore r=1 (8 neighbors)",
         "corona": "r=14, gap r=2-13 silence (x12)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E1_G12_I1,
     },
@@ -572,7 +507,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=2 (24 neighbors), gap x12 r=3-14, corona r=15 (1 ring).",
         "center": "Moore r=2 (24 neighbors)",
         "corona": "r=15, gap r=3-14 silence (x12)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E2_G12_I1,
     },
@@ -582,7 +517,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors), gap x12 r=4-15, corona r=16 (1 ring).",
         "center": "Moore r=3 (48 neighbors)",
         "corona": "r=16, gap r=4-15 silence (x12)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G12_I1,
     },
@@ -592,7 +527,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors), gap x12 r=4-15, corona r=16-18 (3 rings).",
         "center": "Moore r=3 (48 neighbors)",
         "corona": "r=16-18, gap r=4-15 silence (x12)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G12_I3,
     },
@@ -602,7 +537,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "E3 G12 I3 with 1/3 density in exc. and inh.: ~33% random synapses in both zones.",
         "center": "Moore r=3 sparse ~33% (~16 neighbors)",
         "corona": "r=16-18 sparse ~33%, gap r=4-15 silence (x12)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G12_I3_DE3_DI3,
     },
@@ -612,7 +547,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "E3 G12 I3 with full exc. (48 neighbors) and sparse inh. ~33%.",
         "center": "Moore r=3 (48 neighbors, full density)",
         "corona": "r=16-18 sparse ~33%, gap r=4-15 silence (x12)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G12_I3_DE1_DI3,
     },
@@ -622,7 +557,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "E3 G12 I3 with sparse exc. ~33% and full inh. (3 rings).",
         "center": "Moore r=3 sparse ~33% (~16 neighbors)",
         "corona": "r=16-18 full, gap r=4-15 silence (x12)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G12_I3_DE3_DI1,
     },
@@ -632,7 +567,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=2 sparse ~67%, gap r=3-5, corona r=6-8 sparse ~67%.",
         "center": "Moore r=2 sparse ~67% (~16 neighbors)",
         "corona": "r=6-8 sparse ~67%, gap r=3-5 silence (x3)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E2_G3_I3_DE1_5_DI1_5,
     },
@@ -642,7 +577,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=2 full (24 neighbors), gap r=3-5, corona r=6-8 sparse ~67%.",
         "center": "Moore r=2 (24 neighbors, full density)",
         "corona": "r=6-8 sparse ~67%, gap r=3-5 silence (x3)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E2_G3_I3_DE1_DI1_5,
     },
@@ -652,7 +587,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=2 full (24 neighbors), gap r=3-5, corona r=6-8 full.",
         "center": "Moore r=2 (24 neighbors, full density)",
         "corona": "r=6-8 full, gap r=3-5 silence (x3)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E2_G3_I3_DE1_DI1,
     },
@@ -662,7 +597,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=2 full (24 neighbors), gap r=3-8, corona r=9-11 full.",
         "center": "Moore r=2 (24 neighbors, full density)",
         "corona": "r=9-11 full, gap r=3-8 silence (x6)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E2_G6_I3_DE1_DI1,
     },
@@ -672,9 +607,19 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 full (48 neighbors), gap r=4-11, corona r=12-14 sparse ~91%.",
         "center": "Moore r=3 (48 neighbors, full density)",
         "corona": "r=12-14 sparse ~91%, gap r=4-11 silence (x8)",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G8_I3_DE1_DI1_1,
+    },
+    "deamon_e3_g2_i12_de1_di1": {
+        "id": "deamon_e3_g2_i12_de1_di1",
+        "name": "Deamon (E3 G2 I12 DE1 DI1)",
+        "description": "Moore r=3 full (48 neighbors), gap r=4-5, corona r=6-17 full.",
+        "center": "Moore r=3 (48 neighbors, full density)",
+        "corona": "r=6-17 full, gap r=4-5 silence (x2)",
+        "dendrites_inh": 12,
+        "random_weights": True,
+        "mask": MASK_DEAMON_E3_G2_I12_DE1_DI1,
     },
     "all_exc": {
         "id": "all_exc",
@@ -702,7 +647,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=1, corona r=2-4, 8 inh. dendrites.",
         "center": "Moore r=1 (8 neighbors)",
         "corona": "r=2-4, 8 blocks 3x3",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_SIMPLE,
     },
@@ -712,7 +657,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=1, corona r=2-7, 8 inh. dendrites.",
         "center": "Moore r=1 (8 neighbors)",
         "corona": "r=2-7, large corona",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_WIDE_HAT,
     },
@@ -722,7 +667,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=1, corona r=2-3, 8 inh. dendrites.",
         "center": "Moore r=1 (8 neighbors)",
         "corona": "r=2-3, close corona",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_NARROW_HAT,
     },
@@ -732,7 +677,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=2 (24 neighbors), corona r=4-7, 8 inh. dendrites.",
         "center": "Moore r=2 (24 neighbors)",
         "corona": "r=4-7, far corona",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_BIG_CENTER,
     },
@@ -742,7 +687,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=2 (24 neighbors), corona r=4-10 (2x inh area).",
         "center": "Moore r=2 (24 neighbors)",
         "corona": "r=4-10, extended corona",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_BIG_CENTER_WIDE_INH,
     },
@@ -752,7 +697,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=1 (8 neighbors), gap r=2, corona r=3-13 (same inh area as x2).",
         "center": "Moore r=1 (8 neighbors)",
         "corona": "r=3-13, gap r=2 silence",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_SMALL_CENTER_GAP_WIDE_INH_X2,
     },
@@ -762,7 +707,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=2 (24 neighbors), corona r=4-14 (4x original inh area).",
         "center": "Moore r=2 (24 neighbors)",
         "corona": "r=4-14, very extended corona",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_BIG_CENTER_WIDE_INH_X2,
     },
@@ -772,7 +717,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=3 (48 neighbors), gap r=4, corona r=5-15 (same inh area as x2).",
         "center": "Moore r=3 (48 neighbors)",
         "corona": "r=5-15, gap r=4 silence",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_XL_CENTER_GAP_WIDE_INH_X2,
     },
@@ -782,7 +727,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Exc. r=1(1.0) r=2(0.7) soft edge, corona r=4-10.",
         "center": "r=1→1.0, r=2→0.7 (soft edge)",
         "corona": "r=4-10, extended corona",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_BIG_CENTER_SOFT_WIDE_INH,
     },
@@ -822,7 +767,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=1, ring r=2-3 (-1) + ring r=5-7 (-0.5).",
         "center": "Moore r=1 (8 neighbors)",
         "corona": "r=2-3 (-1) + r=5-7 (-0.5)",
-        "dendrites_inh": 16,
+        "dendrites_inh": 24,
         "random_weights": True,
         "mask": MASK_DOUBLE_RING,
     },
@@ -832,7 +777,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=1, corona r=2-4, inh. weight -0.5.",
         "center": "Moore r=1 (8 neighbors)",
         "corona": "r=2-4, weight -0.5",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_SOFT_INHIBIT,
     },
@@ -842,7 +787,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Moore r=1 x2 exc. dendrites, corona r=2-4.",
         "center": "Moore r=1 (2 exc. dendrites)",
         "corona": "r=2-4, weight -1",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_STRONG_CENTER,
     },
@@ -852,7 +797,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Gradual exc. r=1(1.0) r=2(0.6) r=3(0.3), gap 2px, sparse inh. r=6-11.",
         "center": "Gradual r=1→1.0, r=2→0.6, r=3→0.3",
         "corona": "r=6-11, checkerboard sparse",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_GRADUAL_CENTER,
     },
@@ -862,7 +807,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Gradual exc. r=1-3, gap 4px, sparse inh. r=8-19.",
         "center": "Gradual r=1→1.0, r=2→0.6, r=3→0.3",
         "corona": "r=8-19, sparse step=3",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_GRADUAL_BIG_INH,
     },
@@ -872,7 +817,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Gradual exc. r=1-3, gap 4px, sparse inh. r=8-30.",
         "center": "Gradual r=1→1.0, r=2→0.6, r=3→0.3",
         "corona": "r=8-30, sparse step=4",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_GRADUAL_XXL_INH,
     },
@@ -882,7 +827,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Exc. r=1 only, gap 3px, sparse inh. r=5-30.",
         "center": "r=1→1.0 (immediate neighbors only)",
         "corona": "r=5-30, sparse step=4",
-        "dendrites_inh": 8,
+        "dendrites_inh": 12,
         "random_weights": True,
         "mask": MASK_GRADUAL_XXL_INH_SMALL,
     },
@@ -892,7 +837,7 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "description": "Theoretical DoG: exc. r=1-2, gradual inh. r=3-30 (weight decays with distance).",
         "center": "Gradual r=1→1.0, r=2→0.5",
         "corona": "r=3-5(-1) → r=6-12(-0.6) → r=13-20(-0.25) → r=21-30(-0.08)",
-        "dendrites_inh": 32,
+        "dendrites_inh": 48,
         "random_weights": True,
         "mask": MASK_MEXICAN_HAT,
     },

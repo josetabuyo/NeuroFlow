@@ -81,7 +81,7 @@ class TestMaskPresets:
 
     def test_get_mask_info_excludes_mask_data(self) -> None:
         info = get_mask_info()
-        assert len(info) == 46
+        assert len(info) == 47
         for entry in info:
             assert "mask" not in entry
             assert "id" in entry
@@ -141,7 +141,7 @@ class TestDeamonsLabSetup:
         exp.setup({"width": 10, "height": 10})
         assert len(exp.brain.neuronas) == 100
         neurona = exp.brain.get_neurona("x5y5")
-        assert len(neurona.dendritas) == 9
+        assert len(neurona.dendritas) == 13
 
     def test_setup_wide_hat(self) -> None:
         """Setup with wide_hat produces more inhibitory dendrites."""

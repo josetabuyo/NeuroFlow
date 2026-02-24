@@ -54,6 +54,8 @@ EXPERIMENTS = {
             "input_resolution": 10,
             "frames_per_char": 10,
             "input_dendrite_weight": 0.7,
+            "deamon_exc_weight": 0.5,
+            "deamon_inh_weight": -0.5,
             "white_noise": True,
             "shift_noise": False,
             "input_source": "ascii",

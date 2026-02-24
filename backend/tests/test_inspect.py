@@ -128,7 +128,7 @@ class TestInspect:
 
         result = exp.inspect(5, 5)
 
-        assert result["total_dendritas"] == 9
+        assert result["total_dendritas"] == 13
 
         neurona = exp.brain.get_neurona("x5y5")
         total_sinapsis = sum(len(d.sinapsis) for d in neurona.dendritas)

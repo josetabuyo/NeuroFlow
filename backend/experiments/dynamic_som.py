@@ -39,6 +39,8 @@ class DynamicSOMExperiment(Experimento):
         self.input_text: str = "AB"
         self.frames_per_char: int = 10
         self.input_dendrite_weight: float = 0.7
+        self.deamon_exc_weight: float = 0.5
+        self.deamon_inh_weight: float = -0.5
         self.white_noise_enabled: bool = True
         self.shift_noise_enabled: bool = False
         self.learning_enabled: bool = True
@@ -63,6 +65,8 @@ class DynamicSOMExperiment(Experimento):
             input_resolution (int): Input image size, square (default 10).
             frames_per_char (int): Frames per character (default 10).
             input_dendrite_weight (float): Weight of input dendrite (default 0.7).
+            deamon_exc_weight (float): Weight for excitatory dendrites in mask (default 0.5).
+            deamon_inh_weight (float): Weight for inhibitory dendrites in mask (default -0.5).
             white_noise (bool): Enable white noise (default True).
             shift_noise (bool): Enable shift noise (default False).
             font (str): Font ID from the registry (default "press_start_2p").
@@ -78,6 +82,8 @@ class DynamicSOMExperiment(Experimento):
         self.input_resolution = config.get("input_resolution", 10)
         self.frames_per_char = max(1, config.get("frames_per_char", 10))
         self.input_dendrite_weight = config.get("input_dendrite_weight", 0.7)
+        self.deamon_exc_weight = config.get("deamon_exc_weight", 0.5)
+        self.deamon_inh_weight = config.get("deamon_inh_weight", -0.5)
         self.white_noise_enabled = config.get("white_noise", True)
         self.shift_noise_enabled = config.get("shift_noise", False)
         self.learning_enabled = config.get("learning", True)
@@ -87,7 +93,18 @@ class DynamicSOMExperiment(Experimento):
 
         self._mask_type = get_mask_type(mask_id)
         self._random_weights = get_random_weights(mask_id)
-        mask = get_mask(mask_id)
+        raw_mask = get_mask(mask_id)
+
+        # Override mask dendrite weights with configurable values
+        mask = []
+        for d in raw_mask:
+            peso = d["peso_dendrita"]
+            if peso > 0:
+                mask.append({**d, "peso_dendrita": self.deamon_exc_weight})
+            elif peso < 0:
+                mask.append({**d, "peso_dendrita": self.deamon_inh_weight})
+            else:
+                mask.append(d)
 
         n_input = self.input_resolution * self.input_resolution
         self._input_start_idx = self.width * self.height

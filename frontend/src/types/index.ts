@@ -48,6 +48,8 @@ export interface ExperimentConfig {
   input_resolution?: number;
   frames_per_char?: number;
   input_dendrite_weight?: number;
+  deamon_exc_weight?: number;
+  deamon_inh_weight?: number;
   white_noise?: boolean;
   shift_noise?: boolean;
   input_source?: string;

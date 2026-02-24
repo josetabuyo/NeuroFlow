@@ -9,6 +9,7 @@ interface MiniGridProps {
   height: number;
   subtitle?: string;
   colorMode?: "activation" | "weight";
+  maxSize?: number;
 }
 
 function weightColor(w: number): string {
@@ -24,6 +25,7 @@ export function MiniGrid({
   height,
   subtitle,
   colorMode = "activation",
+  maxSize,
 }: MiniGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -33,8 +35,8 @@ export function MiniGrid({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const containerSize = canvas.parentElement?.clientWidth ?? 120;
-    const cellSize = Math.max(2, Math.floor(containerSize / Math.max(width, height)));
+    const limit = maxSize ?? canvas.parentElement?.clientWidth ?? 120;
+    const cellSize = Math.max(2, Math.floor(limit / Math.max(width, height)));
     const canvasW = cellSize * width;
     const canvasH = cellSize * height;
 
@@ -55,7 +57,7 @@ export function MiniGrid({
         ctx.fillRect(col * cellSize, row * cellSize, cellSize - 1, cellSize - 1);
       }
     }
-  }, [grid, width, height, colorMode]);
+  }, [grid, width, height, colorMode, maxSize]);
 
   useEffect(() => {
     draw();

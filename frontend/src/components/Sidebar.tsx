@@ -777,6 +777,44 @@ export function Sidebar({
                   />
                 </div>
 
+                <div>
+                  <label
+                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                  >
+                    Deamon Exc Weight: {(config.deamon_exc_weight ?? 0.5).toFixed(2)}
+                  </label>
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="1"
+                    step="0.05"
+                    value={config.deamon_exc_weight ?? 0.5}
+                    onChange={(e) =>
+                      onConfigChange({ ...config, deamon_exc_weight: parseFloat(e.target.value) })
+                    }
+                    style={{ width: "100%", accentColor: "#06d6a0" }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                  >
+                    Deamon Inh Weight: {(config.deamon_inh_weight ?? -0.5).toFixed(2)}
+                  </label>
+                  <input
+                    type="range"
+                    min="-1"
+                    max="-0.05"
+                    step="0.05"
+                    value={config.deamon_inh_weight ?? -0.5}
+                    onChange={(e) =>
+                      onConfigChange({ ...config, deamon_inh_weight: parseFloat(e.target.value) })
+                    }
+                    style={{ width: "100%", accentColor: "#ef476f" }}
+                  />
+                </div>
+
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   <CheckboxInput
                     label="White noise"
