@@ -761,14 +761,14 @@ export function Sidebar({
                   <label
                     style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
                   >
-                    Input Dendrite Weight: {(config.input_dendrite_weight ?? 0.7).toFixed(2)}
+                    Input Dendrite Weight: {(config.input_dendrite_weight ?? 0.2).toFixed(2)}
                   </label>
                   <input
                     type="range"
                     min="0"
                     max="1"
                     step="0.05"
-                    value={config.input_dendrite_weight ?? 0.7}
+                    value={config.input_dendrite_weight ?? 0.2}
                     onChange={(e) =>
                       onConfigChange({ ...config, input_dendrite_weight: parseFloat(e.target.value) })
                     }
@@ -803,12 +803,12 @@ export function Sidebar({
                   </label>
                   <input
                     type="range"
-                    min="-1"
-                    max="-0.05"
+                    min="0"
+                    max="1"
                     step="0.05"
-                    value={config.deamon_inh_weight ?? -0.5}
+                    value={Math.abs(config.deamon_inh_weight ?? -0.5)}
                     onChange={(e) =>
-                      onConfigChange({ ...config, deamon_inh_weight: parseFloat(e.target.value) })
+                      onConfigChange({ ...config, deamon_inh_weight: -parseFloat(e.target.value) })
                     }
                     style={{ width: "100%", accentColor: "#ef476f" }}
                   />
@@ -890,10 +890,10 @@ export function Sidebar({
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   <CheckboxInput
                     label="Spike adaptation"
-                    checked={config.spike_adaptation ?? true}
+                    checked={config.spike_adaptation ?? false}
                     onChange={(v) => onConfigChange({ ...config, spike_adaptation: v })}
                   />
-                  {(config.spike_adaptation ?? true) && (
+                  {(config.spike_adaptation ?? false) && (
                     <>
                       <div style={{ display: "flex", gap: "8px" }}>
                         <div style={{ flex: 1 }}>

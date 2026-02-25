@@ -38,7 +38,7 @@ class DynamicSOMExperiment(Experimento):
         self.input_resolution: int = 20
         self.input_text: str = "AB"
         self.frames_per_char: int = 10
-        self.input_dendrite_weight: float = 0.7
+        self.input_dendrite_weight: float = 0.2
         self.deamon_exc_weight: float = 0.5
         self.deamon_inh_weight: float = -0.5
         self.white_noise_enabled: bool = True
@@ -71,7 +71,7 @@ class DynamicSOMExperiment(Experimento):
                 Empty string means pure white noise with no character rendering.
             input_resolution (int): Input image size, square (default 20).
             frames_per_char (int): Frames per character (default 10).
-            input_dendrite_weight (float): Weight of input dendrite (default 0.7).
+            input_dendrite_weight (float): Weight of input dendrite (default 0.2).
             deamon_exc_weight (float): Weight for excitatory dendrites in mask (default 0.5).
             deamon_inh_weight (float): Weight for inhibitory dendrites in mask (default -0.5).
             white_noise (bool): Enable white noise (default True).
@@ -90,7 +90,7 @@ class DynamicSOMExperiment(Experimento):
         self.input_text = config.get("input_text", "AB") or ""
         self.input_resolution = config.get("input_resolution", 20)
         self.frames_per_char = max(1, config.get("frames_per_char", 10))
-        self.input_dendrite_weight = config.get("input_dendrite_weight", 0.7)
+        self.input_dendrite_weight = config.get("input_dendrite_weight", 0.2)
         self.deamon_exc_weight = config.get("deamon_exc_weight", 0.5)
         self.deamon_inh_weight = config.get("deamon_inh_weight", -0.5)
         self.white_noise_enabled = config.get("white_noise", True)
@@ -99,7 +99,7 @@ class DynamicSOMExperiment(Experimento):
         self.inter_char_noise = config.get("inter_char_noise", True)
         self.learning_enabled = config.get("learning", True)
         self.learning_rate = config.get("learning_rate", 0.01)
-        self.adaptation_enabled = config.get("spike_adaptation", True)
+        self.adaptation_enabled = config.get("spike_adaptation", False)
         self.max_active_steps = config.get("max_active_steps", 5)
         self.refractory_steps = config.get("refractory_steps", 5)
         self._font_id = config.get("font", "press_start_2p")
