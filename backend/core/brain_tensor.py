@@ -37,6 +37,7 @@ class BrainTensor:
         device: str = "cpu",
         max_active_steps: int = 5,
         refractory_steps: int = 5,
+        adaptation_enabled: bool = True,
     ) -> None:
         self.device = device
         # n_real = number of actual neurons from the Brain
@@ -57,11 +58,11 @@ class BrainTensor:
         # Spike frequency adaptation: ON/OFF cycle
         #   active_counts tracks consecutive active steps (ON phase)
         #   refractory_remaining counts down forced-off steps (OFF phase, >0 = in refractory)
+        self.adaptation_enabled = adaptation_enabled
         self.max_active_steps = max_active_steps
         self.refractory_steps = refractory_steps
         self.active_counts = torch.zeros(self.N, dtype=torch.long, device=device)
         self.refractory_remaining = torch.zeros(self.N, dtype=torch.long, device=device)
-        self.fatigued_count = 0
 
         # Safe dendrite IDs: invalid synapses point to a trash column (max_dendritas)
         # so they don't corrupt valid dendrite data during scatter operations.
@@ -155,7 +156,7 @@ class BrainTensor:
         self.valores[:NR] = torch.where(mascara_real, valores_real, nuevos_valores)
 
         # 8. Spike frequency adaptation: ON/OFF cycle
-        if self.max_active_steps > 0:
+        if self.adaptation_enabled and self.max_active_steps > 0:
             procesables = ~mascara_real
             refr = self.refractory_remaining[:NR]
             ac = self.active_counts[:NR]
@@ -183,7 +184,7 @@ class BrainTensor:
                 torch.full((1,), self.refractory_steps, dtype=torch.long, device=self.device),
                 self.refractory_remaining[:NR],
             )
-            self.fatigued_count = int((in_refractory | hit_limit).sum().item())
+        
 
     def learn(self, lr: float) -> None:
         """Tension-modulated Hebbian learning on all valid synapses.

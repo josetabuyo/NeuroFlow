@@ -62,6 +62,7 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
       font_size: 10,
       learning: true,
       learning_rate: 0.01,
+      spike_adaptation: true,
       max_active_steps: 5,
       refractory_steps: 5,
     },
@@ -141,7 +142,7 @@ function App() {
   const SOFT_KEYS: (keyof ExperimentConfig)[] = [
     "learning", "learning_rate", "white_noise", "noise_prob", "shift_noise",
     "inter_char_noise", "frames_per_char", "input_text", "font", "font_size",
-    "max_active_steps", "refractory_steps",
+    "spike_adaptation", "max_active_steps", "refractory_steps",
   ];
 
   const experimentActiveRef = useRef(false);

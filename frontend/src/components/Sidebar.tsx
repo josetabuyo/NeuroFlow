@@ -887,45 +887,54 @@ export function Sidebar({
                   )}
                 </div>
 
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <div style={{ flex: 1 }}>
-                    <label
-                      style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                    >
-                      ON steps
-                    </label>
-                    <NumericInput
-                      value={config.max_active_steps ?? 5}
-                      min={0}
-                      max={50}
-                      step={1}
-                      integer
-                      onChange={(v) => onConfigChange({ ...config, max_active_steps: v })}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label
-                      style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                    >
-                      OFF steps
-                    </label>
-                    <NumericInput
-                      value={config.refractory_steps ?? 5}
-                      min={0}
-                      max={50}
-                      step={1}
-                      integer
-                      onChange={(v) => onConfigChange({ ...config, refractory_steps: v })}
-                    />
-                  </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <CheckboxInput
+                    label="Spike adaptation"
+                    checked={config.spike_adaptation ?? true}
+                    onChange={(v) => onConfigChange({ ...config, spike_adaptation: v })}
+                  />
+                  {(config.spike_adaptation ?? true) && (
+                    <>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <div style={{ flex: 1 }}>
+                          <label
+                            style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                          >
+                            ON steps
+                          </label>
+                          <NumericInput
+                            value={config.max_active_steps ?? 5}
+                            min={1}
+                            max={50}
+                            step={1}
+                            integer
+                            onChange={(v) => onConfigChange({ ...config, max_active_steps: v })}
+                          />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label
+                            style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                          >
+                            OFF steps
+                          </label>
+                          <NumericInput
+                            value={config.refractory_steps ?? 5}
+                            min={1}
+                            max={50}
+                            step={1}
+                            integer
+                            onChange={(v) => onConfigChange({ ...config, refractory_steps: v })}
+                          />
+                        </div>
+                      </div>
+                      <span
+                        style={{ fontSize: "0.6rem", color: "#555", marginTop: "-6px", display: "block" }}
+                      >
+                        {`Active ${config.max_active_steps ?? 5} → forced off ${config.refractory_steps ?? 5} steps`}
+                      </span>
+                    </>
+                  )}
                 </div>
-                <span
-                  style={{ fontSize: "0.6rem", color: "#555", marginTop: "-6px", display: "block" }}
-                >
-                  {(config.max_active_steps ?? 5) === 0
-                    ? "Fatigue disabled — neurons stay active indefinitely"
-                    : `Active ${config.max_active_steps ?? 5} → forced off ${config.refractory_steps ?? 5} steps`}
-                </span>
 
                 {inputFrame && experimentActive && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>

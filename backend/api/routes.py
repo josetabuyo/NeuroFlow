@@ -65,6 +65,7 @@ EXPERIMENTS = {
             "font_size": 10,
             "learning": True,
             "learning_rate": 0.01,
+            "spike_adaptation": True,
             "max_active_steps": 5,
             "refractory_steps": 5,
         },

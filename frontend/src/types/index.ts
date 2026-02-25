@@ -59,6 +59,7 @@ export interface ExperimentConfig {
   font_size?: number;
   learning?: boolean;
   learning_rate?: number;
+  spike_adaptation?: boolean;
   max_active_steps?: number;
   refractory_steps?: number;
 }
@@ -130,7 +131,6 @@ export interface ExperimentStats {
   frame_in_char?: number;
   frames_per_char?: number;
   input_resolution?: number;
-  fatigued_cells?: number;
 }
 
 export type ExperimentState = "disconnected" | "initializing" | "ready" | "running" | "paused" | "complete";

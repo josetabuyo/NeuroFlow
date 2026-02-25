@@ -47,6 +47,7 @@ class DynamicSOMExperiment(Experimento):
         self.inter_char_noise: bool = True
         self.learning_enabled: bool = True
         self.learning_rate: float = 0.01
+        self.adaptation_enabled: bool = True
         self.max_active_steps: int = 5
         self.refractory_steps: int = 5
         self._font_id: str = "press_start_2p"
@@ -98,6 +99,7 @@ class DynamicSOMExperiment(Experimento):
         self.inter_char_noise = config.get("inter_char_noise", True)
         self.learning_enabled = config.get("learning", True)
         self.learning_rate = config.get("learning_rate", 0.01)
+        self.adaptation_enabled = config.get("spike_adaptation", True)
         self.max_active_steps = config.get("max_active_steps", 5)
         self.refractory_steps = config.get("refractory_steps", 5)
         self._font_id = config.get("font", "press_start_2p")
@@ -182,6 +184,7 @@ class DynamicSOMExperiment(Experimento):
             self.brain,
             max_active_steps=self.max_active_steps,
             refractory_steps=self.refractory_steps,
+            adaptation_enabled=self.adaptation_enabled,
         )
 
         # --- Pre-render characters ---
@@ -305,11 +308,8 @@ class DynamicSOMExperiment(Experimento):
         else:
             current_char = self.input_text[self._char_index]
 
-        fatigued = self.brain_tensor.fatigued_count if self.brain_tensor else 0
-
         return {
             "active_cells": active,
-            "fatigued_cells": fatigued,
             "steps": self.generation,
             "current_char": current_char,
             "char_index": self._char_index,
@@ -430,6 +430,10 @@ class DynamicSOMExperiment(Experimento):
             self.learning_enabled = config["learning"]
         if "learning_rate" in config:
             self.learning_rate = config["learning_rate"]
+        if "spike_adaptation" in config:
+            self.adaptation_enabled = config["spike_adaptation"]
+            if self.brain_tensor is not None:
+                self.brain_tensor.adaptation_enabled = self.adaptation_enabled
         if "max_active_steps" in config:
             self.max_active_steps = config["max_active_steps"]
             if self.brain_tensor is not None:
