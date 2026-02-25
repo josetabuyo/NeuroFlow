@@ -51,12 +51,16 @@ export interface ExperimentConfig {
   deamon_exc_weight?: number;
   deamon_inh_weight?: number;
   white_noise?: boolean;
+  noise_prob?: number;
   shift_noise?: boolean;
+  inter_char_noise?: boolean;
   input_source?: string;
   font?: string;
   font_size?: number;
   learning?: boolean;
   learning_rate?: number;
+  max_active_steps?: number;
+  refractory_steps?: number;
 }
 
 export interface ExperimentInfo {
@@ -85,6 +89,7 @@ export interface FrameMessage {
   perf?: PerfMetrics;
   tension_grid?: number[][];
   input_frame?: number[][];
+  inspect?: ConnectionsMessage;
 }
 
 export interface StatusMessage {
@@ -125,6 +130,7 @@ export interface ExperimentStats {
   frame_in_char?: number;
   frames_per_char?: number;
   input_resolution?: number;
+  fatigued_cells?: number;
 }
 
 export type ExperimentState = "disconnected" | "initializing" | "ready" | "running" | "paused" | "complete";

@@ -34,6 +34,8 @@ class ExperimentSession:
         self._playing: bool = False
         self.fps: int = 10
         self.steps_per_tick: int = 1
+        self._inspect_x: int | None = None
+        self._inspect_y: int | None = None
 
     async def send(self, data: dict[str, Any]) -> None:
         """Send JSON data to the client."""
@@ -52,7 +54,9 @@ class ExperimentSession:
             "pause": self._handle_pause,
             "reset": self._handle_reset,
             "inspect": self._handle_inspect,
+            "uninspect": self._handle_uninspect,
             "reconnect": self._handle_reconnect,
+            "update_config": self._handle_update_config,
         }
 
         handler = handlers.get(action)
@@ -72,6 +76,8 @@ class ExperimentSession:
             return
 
         await self._stop_play_loop()
+        self._inspect_x = None
+        self._inspect_y = None
 
         await self.send({"type": "status", "state": "initializing"})
         await asyncio.sleep(0)
@@ -161,15 +167,26 @@ class ExperimentSession:
         await self._stop_play_loop()
 
     async def _handle_inspect(self, message: dict[str, Any]) -> None:
-        """Return connection weights for a neuron without stopping the simulation."""
+        """Start live inspection of a neuron's connections.
+
+        Sends the full inspect data immediately and remembers the cell
+        so that subsequent frames include updated weights.
+        """
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
 
         x = message.get("x", 0)
         y = message.get("y", 0)
+        self._inspect_x = x
+        self._inspect_y = y
         result = self.experiment.inspect(x, y)
         await self.send(result)
+
+    async def _handle_uninspect(self, _message: dict[str, Any]) -> None:
+        """Stop live inspection."""
+        self._inspect_x = None
+        self._inspect_y = None
 
     async def _handle_reconnect(self, message: dict[str, Any]) -> None:
         """Reconnect with new mask/balance, preserving neuron state."""
@@ -191,6 +208,41 @@ class ExperimentSession:
         await self.send({"type": "status", "state": "ready"})
         await self._send_frame()
 
+    async def _handle_update_config(self, message: dict[str, Any]) -> None:
+        """Apply config changes to a running experiment.
+
+        Soft params (learning, noise, text) are applied in-place without
+        interrupting playback.  Hard params trigger a reconnect with
+        automatic play-loop restart.
+        """
+        if not self.experiment:
+            await self.send({"type": "error", "message": "No experiment started"})
+            return
+
+        config = message.get("config", {})
+
+        if hasattr(self.experiment, "update_config"):
+            soft_only = self.experiment.update_config(config)
+            if soft_only:
+                return
+
+        elif hasattr(self.experiment, "reconnect"):
+            self.experiment.reconnect(config)
+        else:
+            return
+
+        was_playing = self._playing
+        if was_playing:
+            await self._stop_play_loop()
+
+        await self.send({"type": "status", "state": "ready"})
+        await self._send_frame()
+
+        if was_playing:
+            self._playing = True
+            await self.send({"type": "status", "state": "running"})
+            self._play_task = asyncio.create_task(self._play_loop())
+
     async def _handle_reset(self, _message: dict[str, Any]) -> None:
         """Reset the experiment."""
         if not self.experiment:
@@ -198,6 +250,8 @@ class ExperimentSession:
             return
 
         await self._stop_play_loop()
+        self._inspect_x = None
+        self._inspect_y = None
 
         await self.send({"type": "status", "state": "initializing"})
         await asyncio.sleep(0)
@@ -231,7 +285,11 @@ class ExperimentSession:
         steps: int | None = None,
         elapsed_s: float | None = None,
     ) -> None:
-        """Send the current frame to the client, with optional timing metrics."""
+        """Send the current frame to the client, with optional timing metrics.
+
+        When a neuron is being inspected, the frame includes live-updated
+        inspect data so the client can visualize synapse changes in real time.
+        """
         if not self.experiment:
             return
 
@@ -265,6 +323,12 @@ class ExperimentSession:
                 "elapsed_ms": round(elapsed_s * 1000, 2),
                 "steps_per_second": round(steps / elapsed_s, 1),
             }
+
+        if self._inspect_x is not None and self._inspect_y is not None:
+            inspect_data = self.experiment.inspect(
+                self._inspect_x, self._inspect_y,
+            )
+            msg["inspect"] = inspect_data
 
         await self.send(msg)
 

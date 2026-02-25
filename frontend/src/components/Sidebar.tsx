@@ -224,7 +224,7 @@ interface SidebarProps {
   onSelectExperiment: (id: string) => void;
   onConfigChange: (config: ExperimentConfig) => void;
   onStart: () => void;
-  onReconnect?: () => void;
+  onRefresh?: () => void;
   connected: boolean;
   experimentActive?: boolean;
 }
@@ -239,14 +239,13 @@ export function Sidebar({
   onSelectExperiment,
   onConfigChange,
   onStart,
-  onReconnect,
+  onRefresh,
   connected,
   experimentActive,
 }: SidebarProps) {
   const selectedExp = experiments.find((e) => e.id === selectedExperiment);
   const hasMasks = selectedExp?.masks && selectedExp.masks.length > 0;
   const isInitializing = state === "initializing";
-  const canReconnect = experimentActive && hasMasks && !isInitializing;
 
   const masks = selectedExp?.masks ?? [];
   const activeMask = masks.length > 0
@@ -735,7 +734,7 @@ export function Sidebar({
                       Resolution
                     </label>
                     <NumericInput
-                      value={config.input_resolution ?? 10}
+                      value={config.input_resolution ?? 20}
                       min={5}
                       max={28}
                       integer
@@ -821,11 +820,43 @@ export function Sidebar({
                     checked={config.white_noise ?? true}
                     onChange={(v) => onConfigChange({ ...config, white_noise: v })}
                   />
+                  {(config.white_noise ?? true) && (
+                    <div style={{ marginLeft: "24px" }}>
+                      <label
+                        style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                      >
+                        Noise prob: {(config.noise_prob ?? 0.05).toFixed(2)}
+                      </label>
+                      <input
+                        type="range"
+                        min="0.01"
+                        max="0.30"
+                        step="0.01"
+                        value={config.noise_prob ?? 0.05}
+                        onChange={(e) =>
+                          onConfigChange({ ...config, noise_prob: parseFloat(e.target.value) })
+                        }
+                        style={{ width: "100%", accentColor: "#4cc9f0" }}
+                      />
+                    </div>
+                  )}
                   <CheckboxInput
                     label="Shift noise (1px displacement)"
                     checked={config.shift_noise ?? false}
                     onChange={(v) => onConfigChange({ ...config, shift_noise: v })}
                   />
+                  <CheckboxInput
+                    label="Inter-char noise"
+                    checked={config.inter_char_noise ?? true}
+                    onChange={(v) => onConfigChange({ ...config, inter_char_noise: v })}
+                  />
+                  <span
+                    style={{ fontSize: "0.6rem", color: "#555", marginTop: "-4px", marginLeft: "24px" }}
+                  >
+                    {(config.inter_char_noise ?? true)
+                      ? "White noise between characters"
+                      : "Black image between characters"}
+                  </span>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -855,6 +886,46 @@ export function Sidebar({
                     </div>
                   )}
                 </div>
+
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ flex: 1 }}>
+                    <label
+                      style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                    >
+                      ON steps
+                    </label>
+                    <NumericInput
+                      value={config.max_active_steps ?? 5}
+                      min={0}
+                      max={50}
+                      step={1}
+                      integer
+                      onChange={(v) => onConfigChange({ ...config, max_active_steps: v })}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label
+                      style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                    >
+                      OFF steps
+                    </label>
+                    <NumericInput
+                      value={config.refractory_steps ?? 5}
+                      min={0}
+                      max={50}
+                      step={1}
+                      integer
+                      onChange={(v) => onConfigChange({ ...config, refractory_steps: v })}
+                    />
+                  </div>
+                </div>
+                <span
+                  style={{ fontSize: "0.6rem", color: "#555", marginTop: "-6px", display: "block" }}
+                >
+                  {(config.max_active_steps ?? 5) === 0
+                    ? "Fatigue disabled — neurons stay active indefinitely"
+                    : `Active ${config.max_active_steps ?? 5} → forced off ${config.refractory_steps ?? 5} steps`}
+                </span>
 
                 {inputFrame && experimentActive && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -886,11 +957,11 @@ export function Sidebar({
           )}
 
           <button
-            onClick={onStart}
+            onClick={experimentActive && onRefresh ? onRefresh : onStart}
             disabled={!connected || isInitializing}
             style={{
               padding: "10px",
-              background: isInitializing ? "#2a2a3e" : connected ? "#4cc9f0" : "#333",
+              background: isInitializing ? "#2a2a3e" : connected ? (experimentActive ? "#06d6a0" : "#4cc9f0") : "#333",
               color: isInitializing ? "#888" : connected ? "#0a0a0a" : "#666",
               border: "none",
               borderRadius: "6px",
@@ -905,27 +976,8 @@ export function Sidebar({
             }}
           >
             {isInitializing && <span className="neuro-spinner-sm" />}
-            {isInitializing ? "Initializing..." : connected ? "Start Experiment" : "Connecting..."}
+            {isInitializing ? "Initializing..." : !connected ? "Connecting..." : experimentActive ? "Refresh Experiment" : "Start Experiment"}
           </button>
-
-          {canReconnect && onReconnect && (
-            <button
-              onClick={onReconnect}
-              style={{
-                padding: "8px",
-                background: "transparent",
-                color: "#f72585",
-                border: "1px solid #f72585",
-                borderRadius: "6px",
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              Reconnect
-            </button>
-          )}
         </div>
       )}
 

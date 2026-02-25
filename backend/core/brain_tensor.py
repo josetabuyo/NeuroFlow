@@ -35,6 +35,8 @@ class BrainTensor:
         mascara_entrada: torch.BoolTensor,
         n_real: int,
         device: str = "cpu",
+        max_active_steps: int = 5,
+        refractory_steps: int = 5,
     ) -> None:
         self.device = device
         # n_real = number of actual neurons from the Brain
@@ -51,6 +53,15 @@ class BrainTensor:
         self.max_dendritas = max_dendritas
         self.umbrales = umbrales.to(device)
         self.mascara_entrada = mascara_entrada.to(device)
+
+        # Spike frequency adaptation: ON/OFF cycle
+        #   active_counts tracks consecutive active steps (ON phase)
+        #   refractory_remaining counts down forced-off steps (OFF phase, >0 = in refractory)
+        self.max_active_steps = max_active_steps
+        self.refractory_steps = refractory_steps
+        self.active_counts = torch.zeros(self.N, dtype=torch.long, device=device)
+        self.refractory_remaining = torch.zeros(self.N, dtype=torch.long, device=device)
+        self.fatigued_count = 0
 
         # Safe dendrite IDs: invalid synapses point to a trash column (max_dendritas)
         # so they don't corrupt valid dendrite data during scatter operations.
@@ -143,36 +154,51 @@ class BrainTensor:
         # 7. Preserve NeuronaEntrada values
         self.valores[:NR] = torch.where(mascara_real, valores_real, nuevos_valores)
 
-    def aprender_input(
-        self,
-        input_start: int,
-        input_end: int,
-        lr: float,
-    ) -> None:
-        """Tension-modulated Hebbian learning on input dendrite synapses.
+        # 8. Spike frequency adaptation: ON/OFF cycle
+        if self.max_active_steps > 0:
+            procesables = ~mascara_real
+            refr = self.refractory_remaining[:NR]
+            ac = self.active_counts[:NR]
+            zero_l = torch.zeros(1, dtype=torch.long, device=self.device)
+            zero_f = torch.zeros(1, device=self.device)
 
-        Rule: ΔW = lr × tension × (input_value − weight)
-          - Positive tension → weights move toward the input pattern
-          - Negative tension → weights move away from the input pattern
-          - Magnitude of tension scales the learning strength
+            # Neurons in refractory period: force off, decrement counter
+            in_refractory = procesables & (refr > 0)
+            self.valores[:NR] = torch.where(in_refractory, zero_f, self.valores[:NR])
+            self.refractory_remaining[:NR] = torch.where(in_refractory, refr - 1, refr)
 
-        Only updates synapses whose source neuron index falls in
-        [input_start, input_end). All other synapses are untouched.
+            # For non-refractory processable neurons: track active streaks
+            not_refr = procesables & (refr <= 0)
+            activas = not_refr & (self.valores[:NR] > 0.5)
+            inactivas = not_refr & (self.valores[:NR] <= 0.5)
+
+            self.active_counts[:NR] = torch.where(activas, ac + 1, torch.where(inactivas, zero_l, ac))
+
+            # Neurons that hit the limit: enter refractory period
+            hit_limit = not_refr & (self.active_counts[:NR] >= self.max_active_steps)
+            self.valores[:NR] = torch.where(hit_limit, zero_f, self.valores[:NR])
+            self.active_counts[:NR] = torch.where(hit_limit, zero_l, self.active_counts[:NR])
+            self.refractory_remaining[:NR] = torch.where(
+                hit_limit,
+                torch.full((1,), self.refractory_steps, dtype=torch.long, device=self.device),
+                self.refractory_remaining[:NR],
+            )
+            self.fatigued_count = int((in_refractory | hit_limit).sum().item())
+
+    def learn(self, lr: float) -> None:
+        """Tension-modulated Hebbian learning on all valid synapses.
+
+        Rule: dW = lr * tension * (source_value - weight)
+          - Positive tension: weights move toward source values
+          - Negative tension: weights move away from source values
         """
         NR = self.n_real
 
-        input_mask = (
-            (self.indices_fuente >= input_start)
-            & (self.indices_fuente < input_end)
-            & self.mascara_valida
-        )
+        source_vals = self.valores[self.indices_fuente]  # [NR, max_syn]
+        tension = self.tensiones[:NR].unsqueeze(1)       # [NR, 1]
 
-        entradas = self.valores[self.indices_fuente]  # [NR, max_syn]
-
-        tension = self.tensiones[:NR].unsqueeze(1)  # [NR, 1]
-
-        delta = lr * tension * (entradas - self.pesos_sinapsis)
-        self.pesos_sinapsis = (self.pesos_sinapsis + delta * input_mask).clamp(0.0, 1.0)
+        delta = lr * tension * (source_vals - self.pesos_sinapsis)
+        self.pesos_sinapsis = (self.pesos_sinapsis + delta * self.mascara_valida).clamp(0.0, 1.0)
 
     def procesar_n(self, n: int) -> None:
         """N steps seguidos sin salir al Python loop."""

@@ -1,6 +1,6 @@
 /** NeuroFlow — Main Application Layout. */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { PixelCanvas } from "./components/PixelCanvas";
 import { MiniGrid } from "./components/MiniGrid";
 import { Sidebar } from "./components/Sidebar";
@@ -48,18 +48,22 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
       width: 50,
       height: 50,
       input_text: "AB",
-      input_resolution: 10,
+      input_resolution: 20,
       frames_per_char: 10,
       input_dendrite_weight: 0.7,
       deamon_exc_weight: 0.5,
       deamon_inh_weight: -0.5,
       white_noise: true,
+      noise_prob: 0.05,
       shift_noise: false,
+      inter_char_noise: true,
       input_source: "ascii",
       font: "press_start_2p",
-      font_size: 8,
+      font_size: 10,
       learning: true,
       learning_rate: 0.01,
+      max_active_steps: 5,
+      refractory_steps: 5,
     },
   },
 ];
@@ -99,6 +103,7 @@ function App() {
     brushMode,
     start,
     reconnect,
+    updateConfig,
     paint,
     step,
     play,
@@ -128,7 +133,41 @@ function App() {
       });
   }, []);
 
-  // WebSocket auto-connects via useExperiment hook
+  const hasGrid = grid.length > 0;
+
+  // Auto-sync soft config changes to the backend in real-time.
+  // Hard params (width, height, mask, resolution, dendrite weights) are
+  // excluded — those only apply when pressing Start/Refresh.
+  const SOFT_KEYS: (keyof ExperimentConfig)[] = [
+    "learning", "learning_rate", "white_noise", "noise_prob", "shift_noise",
+    "inter_char_noise", "frames_per_char", "input_text", "font", "font_size",
+    "max_active_steps", "refractory_steps",
+  ];
+
+  const experimentActiveRef = useRef(false);
+  experimentActiveRef.current = hasGrid && activeExperiment === selectedExp;
+
+  const prevConfigRef = useRef(config);
+  const liveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    const prev = prevConfigRef.current;
+    prevConfigRef.current = config;
+
+    if (!experimentActiveRef.current) return;
+
+    const changed = SOFT_KEYS.some((k) => config[k] !== prev[k]);
+    if (!changed) return;
+
+    const softPatch: Partial<ExperimentConfig> = {};
+    for (const k of SOFT_KEYS) {
+      if (config[k] !== undefined) (softPatch as Record<string, unknown>)[k] = config[k];
+    }
+
+    clearTimeout(liveTimerRef.current);
+    liveTimerRef.current = setTimeout(() => updateConfig(softPatch), 80);
+    return () => clearTimeout(liveTimerRef.current);
+  }, [config, updateConfig]);
 
   const handleSelectExperiment = useCallback(
     (id: string) => {
@@ -143,7 +182,7 @@ function App() {
     start(selectedExp, config);
   }, [start, selectedExp, config]);
 
-  const handleReconnect = useCallback(() => {
+  const handleRefresh = useCallback(() => {
     reconnect(config);
   }, [reconnect, config]);
 
@@ -194,7 +233,6 @@ function App() {
 
   const connected = state !== "disconnected";
   const isInitializing = state === "initializing";
-  const hasGrid = grid.length > 0;
   const hasConnectionMap = connectionMap != null;
 
   const colorSwatch = (bg: string, border?: string): React.CSSProperties => ({
@@ -229,7 +267,7 @@ function App() {
         onSelectExperiment={handleSelectExperiment}
         onConfigChange={setConfig}
         onStart={handleStart}
-        onReconnect={handleReconnect}
+        onRefresh={handleRefresh}
         connected={connected}
         experimentActive={hasGrid && activeExperiment === selectedExp}
       />

@@ -35,6 +35,7 @@ interface UseExperimentReturn {
   brushMode: "activate" | "deactivate";
   start: (experiment: string, config: ExperimentConfig) => void;
   reconnect: (config: ExperimentConfig) => void;
+  updateConfig: (config: Partial<ExperimentConfig>) => void;
   click: (x: number, y: number) => void;
   paint: (cells: { x: number; y: number }[], value: number) => void;
   step: (count?: number) => void;
@@ -94,6 +95,14 @@ export function useExperiment(): UseExperimentReturn {
           setPerf(msg.perf ?? null);
           setTensionGrid(msg.tension_grid ?? null);
           setInputFrame(msg.input_frame ?? null);
+          if (msg.inspect) {
+            setConnectionMap(msg.inspect.weight_grid);
+            setInspectedCell({ x: msg.inspect.x, y: msg.inspect.y });
+            setInputWeightGrid(msg.inspect.input_weight_grid ?? null);
+            if (msg.inspect.input_weight_width && msg.inspect.input_weight_height) {
+              setInputWeightDims({ width: msg.inspect.input_weight_width, height: msg.inspect.input_weight_height });
+            }
+          }
           break;
         case "connections":
           setConnectionMap(msg.weight_grid);
@@ -148,6 +157,13 @@ export function useExperiment(): UseExperimentReturn {
     (config: ExperimentConfig) => {
       setState("initializing");
       send({ action: "reconnect", config });
+    },
+    [send]
+  );
+
+  const updateConfig = useCallback(
+    (config: Partial<ExperimentConfig>) => {
+      send({ action: "update_config", config });
     },
     [send]
   );
@@ -209,10 +225,11 @@ export function useExperiment(): UseExperimentReturn {
         setInspectedCell(null);
         setInputWeightGrid(null);
         setInputWeightDims(null);
+        send({ action: "uninspect" });
       }
       return !prev;
     });
-  }, []);
+  }, [send]);
 
   const toggleTensionMode = useCallback(() => {
     setTensionMode((prev) => !prev);
@@ -237,6 +254,7 @@ export function useExperiment(): UseExperimentReturn {
     brushMode,
     start,
     reconnect,
+    updateConfig,
     click,
     paint,
     step,
