@@ -624,6 +624,31 @@ export function Sidebar({
             </div>
           )}
 
+          {selectedExp.default_config.process_mode !== undefined && (
+            <div>
+              <label
+                style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+              >
+                Process Mode
+              </label>
+              <select
+                value={config.process_mode ?? "min_vs_max"}
+                onChange={(e) => onConfigChange({ ...config, process_mode: e.target.value })}
+                style={inputStyle}
+              >
+                <option value="min_vs_max">Min vs Max</option>
+                <option value="sum">Sum</option>
+              </select>
+              <span
+                style={{ fontSize: "0.6rem", color: "#555", marginTop: "2px", display: "block" }}
+              >
+                {(config.process_mode ?? "min_vs_max") === "sum"
+                  ? "All dendrites added: coincidence wins"
+                  : "Best excitatory vs best inhibitory"}
+              </span>
+            </div>
+          )}
+
           {selectedExp.input_sources && selectedExp.input_sources.length > 0 && (
             <>
               <div

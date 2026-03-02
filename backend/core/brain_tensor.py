@@ -38,8 +38,10 @@ class BrainTensor:
         max_active_steps: int = 5,
         refractory_steps: int = 5,
         adaptation_enabled: bool = True,
+        process_mode: str = "min_vs_max",
     ) -> None:
         self.device = device
+        self.process_mode = process_mode
         # n_real = number of actual neurons from the Brain
         # N = total including possible border zero neuron
         self.n_real = n_real
@@ -103,7 +105,7 @@ class BrainTensor:
         2. Synapse: 1 - |weight - input|
         3. Average per dendrite (segment mean with scatter_add_)
         4. Multiply by dendrite weight
-        5. Fuzzy OR: max(0, dendrites) + min(0, dendrites) → tension
+        5. Combine dendrites (process_mode: min_vs_max or sum) → tension
         6. Activate: tension > threshold
         7. Preserve NeuronaEntrada (do not touch their values)
         """
@@ -133,15 +135,17 @@ class BrainTensor:
         # 4. Multiply by dendrite weight
         dendrita_valores = promedios * self._dend_pesos  # [NR, max_dend]
 
-        # 5. Fuzzy OR: max(0, dendritas) + min(0, dendritas)
-        # max is clamped to >=0, min to <=0, so no-dendrite neurons get tension=0.
-        # Invalid dendrites are set to 0 (neutral for both max and min).
+        # 5. Combine dendrites (mode-dependent).
+        # Invalid dendrites → 0 (neutral for both modes).
         dendrita_para_calc = dendrita_valores.where(self._dendrita_mascara, torch.zeros(1, device=self.device))
 
-        max_vals = dendrita_para_calc.max(dim=1).values.clamp(min=0.0)  # [NR]
-        min_vals = dendrita_para_calc.min(dim=1).values.clamp(max=0.0)  # [NR]
-
-        tension = (max_vals + min_vals).clamp(-1.0, 1.0)  # [NR]
+        if self.process_mode == "sum":
+            tension = dendrita_para_calc.sum(dim=1).clamp(-1.0, 1.0)  # [NR]
+        else:
+            # min_vs_max: max(0, positives) + min(0, negatives)
+            max_vals = dendrita_para_calc.max(dim=1).values.clamp(min=0.0)  # [NR]
+            min_vals = dendrita_para_calc.min(dim=1).values.clamp(max=0.0)  # [NR]
+            tension = (max_vals + min_vals).clamp(-1.0, 1.0)  # [NR]
 
         self.tensiones[:NR] = tension
 

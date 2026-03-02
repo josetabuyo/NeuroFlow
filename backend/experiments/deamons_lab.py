@@ -103,6 +103,7 @@ class DeamonsLabExperiment(Experimento):
         super().__init__()
         self._config: dict[str, Any] = {}
         self.brain_tensor = None
+        self.process_mode: str = "min_vs_max"
         self._daemon_history: deque[int] = deque(maxlen=_STABILITY_WINDOW)
         self._last_history_gen: int = -1
 
@@ -127,6 +128,7 @@ class DeamonsLabExperiment(Experimento):
         mask_id: str = config.get("mask", "simple")
         balance = config.get("balance", None)
         balance_mode: str = config.get("balance_mode", "none")
+        self.process_mode = config.get("process_mode", "min_vs_max")
         mask = get_mask(mask_id)
         self._mask_type = get_mask_type(mask_id)
         self._random_weights = get_random_weights(mask_id)
@@ -169,7 +171,9 @@ class DeamonsLabExperiment(Experimento):
             for neurona in self.brain.neuronas:
                 neurona.activar_external(random.random())
 
-        self.brain_tensor = ConstructorTensor.compilar(self.brain)
+        self.brain_tensor = ConstructorTensor.compilar(
+            self.brain, process_mode=self.process_mode,
+        )
 
         self._daemon_history.clear()
         self._last_history_gen = -1
@@ -230,10 +234,14 @@ class DeamonsLabExperiment(Experimento):
                 list(self.brain.neuronas), target=balance
             )
 
+        self.process_mode = config.get("process_mode", self._config.get("process_mode", "min_vs_max"))
+
         for i, neurona in enumerate(self.brain.neuronas):
             neurona.activar_external(saved_values[i].item())
 
-        self.brain_tensor = ConstructorTensor.compilar(self.brain)
+        self.brain_tensor = ConstructorTensor.compilar(
+            self.brain, process_mode=self.process_mode,
+        )
 
         self._daemon_history.clear()
         self._last_history_gen = -1

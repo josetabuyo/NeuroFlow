@@ -50,6 +50,7 @@ class DynamicSOMExperiment(Experimento):
         self.adaptation_enabled: bool = True
         self.max_active_steps: int = 5
         self.refractory_steps: int = 5
+        self.process_mode: str = "min_vs_max"
         self._font_id: str = "press_start_2p"
         self._font_size: int = 10
         self._char_images: dict[str, np.ndarray] = {}
@@ -102,6 +103,7 @@ class DynamicSOMExperiment(Experimento):
         self.adaptation_enabled = config.get("spike_adaptation", False)
         self.max_active_steps = config.get("max_active_steps", 5)
         self.refractory_steps = config.get("refractory_steps", 5)
+        self.process_mode = config.get("process_mode", "min_vs_max")
         self._font_id = config.get("font", "press_start_2p")
         self._font_size = config.get("font_size", 10)
 
@@ -185,6 +187,7 @@ class DynamicSOMExperiment(Experimento):
             max_active_steps=self.max_active_steps,
             refractory_steps=self.refractory_steps,
             adaptation_enabled=self.adaptation_enabled,
+            process_mode=self.process_mode,
         )
 
         # --- Pre-render characters ---
@@ -430,6 +433,10 @@ class DynamicSOMExperiment(Experimento):
             self.learning_enabled = config["learning"]
         if "learning_rate" in config:
             self.learning_rate = config["learning_rate"]
+        if "process_mode" in config:
+            self.process_mode = config["process_mode"]
+            if self.brain_tensor is not None:
+                self.brain_tensor.process_mode = self.process_mode
         if "spike_adaptation" in config:
             self.adaptation_enabled = config["spike_adaptation"]
             if self.brain_tensor is not None:

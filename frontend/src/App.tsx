@@ -30,7 +30,7 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
       { id: "soft_inhibit", name: "Soft Inhibition", description: "Moore r=1, corona r=2-4, inh. weight -0.5.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, weight -0.5", dendrites_inh: 8 },
       { id: "strong_center", name: "Strong Center", description: "Moore r=1 x2 exc. dendrites, corona r=2-4.", center: "Moore r=1 (2 exc. dendrites)", corona: "r=2-4, weight -1", dendrites_inh: 8 },
     ],
-    default_config: { width: 50, height: 50, balance: 0.0 },
+    default_config: { width: 50, height: 50, balance: 0.0, process_mode: "min_vs_max" },
   },
   {
     id: "dynamic_som",
@@ -65,6 +65,7 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
       spike_adaptation: false,
       max_active_steps: 5,
       refractory_steps: 5,
+      process_mode: "min_vs_max",
     },
   },
 ];
@@ -143,6 +144,7 @@ function App() {
     "learning", "learning_rate", "white_noise", "noise_prob", "shift_noise",
     "inter_char_noise", "frames_per_char", "input_text", "font", "font_size",
     "spike_adaptation", "max_active_steps", "refractory_steps",
+    "process_mode",
   ];
 
   const experimentActiveRef = useRef(false);

@@ -62,6 +62,7 @@ export interface ExperimentConfig {
   spike_adaptation?: boolean;
   max_active_steps?: number;
   refractory_steps?: number;
+  process_mode?: string;
 }
 
 export interface ExperimentInfo {

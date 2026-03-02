@@ -31,6 +31,7 @@ EXPERIMENTS = {
             "mask": "deamon_3_en_50",
             "balance": 0.0,
             "balance_mode": "none",
+            "process_mode": "min_vs_max",
         },
     },
     "dynamic_som": {
@@ -68,6 +69,7 @@ EXPERIMENTS = {
             "spike_adaptation": False,
             "max_active_steps": 5,
             "refractory_steps": 5,
+            "process_mode": "min_vs_max",
         },
     },
 }
