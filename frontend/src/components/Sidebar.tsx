@@ -1,7 +1,8 @@
-/** Sidebar — experiment selector and configuration. */
+/** Sidebar — experiment selector, JSON config editor, previews, and start button. */
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import type { ExperimentInfo, ExperimentConfig, ExperimentState, ExperimentStats } from "../types";
+import { JsonConfigEditor } from "./JsonConfigEditor";
 
 function weightToColor(weight: number | null): string {
   if (weight === null) return "#111111";
@@ -20,7 +21,6 @@ function weightToColor(weight: number | null): string {
   return "#000000";
 }
 
-/** Apply weight-based balance scaling to a preview grid (approximation). */
 function applyBalance(
   grid: (number | null)[][],
   balance: number,
@@ -124,96 +124,6 @@ function InputPreview({ grid }: { grid: number[][] }) {
   );
 }
 
-function CheckboxInput({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        fontSize: "0.8rem",
-        color: "#aaa",
-        cursor: "pointer",
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ accentColor: "#4cc9f0" }}
-      />
-      {label}
-    </label>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px",
-  background: "#1a1a2e",
-  border: "1px solid #2a2a3e",
-  borderRadius: "4px",
-  color: "#e0e0ff",
-  fontSize: "0.9rem",
-};
-
-/** Numeric input that allows empty field while editing and normalizes , to . */
-function NumericInput({
-  value,
-  onChange,
-  min,
-  max,
-  step,
-  integer,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  min?: number;
-  max?: number;
-  step?: number;
-  integer?: boolean;
-}) {
-  const [text, setText] = useState(String(value));
-
-  useEffect(() => {
-    setText(String(value));
-  }, [value]);
-
-  const commit = (raw: string) => {
-    const normalized = raw.replace(",", ".");
-    const parsed = integer ? parseInt(normalized, 10) : parseFloat(normalized);
-    if (Number.isNaN(parsed)) return;
-    let clamped = parsed;
-    if (min !== undefined && clamped < min) clamped = min;
-    if (max !== undefined && clamped > max) clamped = max;
-    onChange(clamped);
-    setText(String(clamped));
-  };
-
-  return (
-    <input
-      type="text"
-      inputMode={integer ? "numeric" : "decimal"}
-      value={text}
-      step={step}
-      onChange={(e) => setText(e.target.value.replace(",", "."))}
-      onBlur={() => commit(text)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") commit(text);
-      }}
-      style={inputStyle}
-    />
-  );
-}
-
 interface SidebarProps {
   experiments: ExperimentInfo[];
   selectedExperiment: string;
@@ -244,7 +154,6 @@ export function Sidebar({
   experimentActive,
 }: SidebarProps) {
   const selectedExp = experiments.find((e) => e.id === selectedExperiment);
-  const hasMasks = selectedExp?.masks && selectedExp.masks.length > 0;
   const isInitializing = state === "initializing";
 
   const masks = selectedExp?.masks ?? [];
@@ -252,10 +161,7 @@ export function Sidebar({
     ? (masks.find((m) => m.id === config.mask) ?? masks[0])
     : null;
 
-  const fonts = selectedExp?.fonts ?? [];
-  const activeFont = fonts.length > 0
-    ? (fonts.find((f) => f.id === config.font) ?? fonts[0])
-    : null;
+  const hasMasks = masks.length > 0;
 
   const balancedGrid = useMemo(() => {
     if (!activeMask?.preview_grid) return null;
@@ -267,17 +173,18 @@ export function Sidebar({
   return (
     <aside
       style={{
-        width: "260px",
-        minWidth: "260px",
+        width: "320px",
+        minWidth: "320px",
         background: "#12121a",
         borderRight: "1px solid #2a2a3e",
-        padding: "20px",
+        padding: "16px",
         display: "flex",
         flexDirection: "column",
-        gap: "20px",
+        gap: "16px",
         overflowY: "auto",
       }}
     >
+      {/* Header */}
       <div>
         <h1
           style={{
@@ -301,6 +208,7 @@ export function Sidebar({
         </span>
       </div>
 
+      {/* Experiment selector */}
       <div>
         <h3
           style={{
@@ -343,226 +251,10 @@ export function Sidebar({
 
       {selectedExp && (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {selectedExp.rules && selectedExp.rules.length > 0 && (
-            <div>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#888",
-                  display: "block",
-                  marginBottom: "4px",
-                }}
-              >
-                Rule
-              </label>
-              <select
-                value={config.rule ?? ""}
-                onChange={(e) =>
-                  onConfigChange({ ...config, rule: Number(e.target.value) })
-                }
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  background: "#1a1a2e",
-                  border: "1px solid #2a2a3e",
-                  borderRadius: "4px",
-                  color: "#e0e0ff",
-                  fontSize: "0.9rem",
-                }}
-              >
-                {selectedExp.rules.map((r) => (
-                  <option key={r} value={r}>
-                    Rule {r}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* JSON Config Editor */}
+          <JsonConfigEditor config={config} onChange={onConfigChange} />
 
-          <div style={{ display: "flex", gap: "8px" }}>
-            <div style={{ flex: 1 }}>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#888",
-                  display: "block",
-                  marginBottom: "4px",
-                }}
-              >
-                Width
-              </label>
-              <NumericInput
-                value={config.width}
-                min={5}
-                max={200}
-                integer
-                onChange={(v) => onConfigChange({ ...config, width: v })}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#888",
-                  display: "block",
-                  marginBottom: "4px",
-                }}
-              >
-                Height
-              </label>
-              <NumericInput
-                value={config.height}
-                min={5}
-                max={200}
-                integer
-                onChange={(v) => onConfigChange({ ...config, height: v })}
-              />
-            </div>
-          </div>
-
-          {hasMasks && activeMask && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  textTransform: "uppercase",
-                  color: "#888",
-                  display: "block",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                Wiring
-              </label>
-              <select
-                value={config.mask ?? masks[0].id}
-                onChange={(e) => onConfigChange({ ...config, mask: e.target.value })}
-                style={inputStyle}
-              >
-                {masks.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-              <span
-                style={{
-                  fontSize: "0.65rem",
-                  color: "#555",
-                  display: "block",
-                }}
-              >
-                {activeMask.description}
-              </span>
-            </div>
-          )}
-
-          {selectedExp.balance_modes && selectedExp.balance_modes.length > 0 && (
-            <div>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#888",
-                  display: "block",
-                  marginBottom: "4px",
-                }}
-              >
-                Balance mode
-              </label>
-              <select
-                value={config.balance_mode ?? "none"}
-                onChange={(e) =>
-                  onConfigChange({ ...config, balance_mode: e.target.value })
-                }
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  background: "#1a1a2e",
-                  border: "1px solid #2a2a3e",
-                  borderRadius: "4px",
-                  color: "#e0e0ff",
-                  fontSize: "0.9rem",
-                }}
-              >
-                {selectedExp.balance_modes.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {selectedExp.default_config.balance !== undefined &&
-            config.balance_mode !== undefined &&
-            config.balance_mode !== "none" && (
-            <div>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#888",
-                  display: "block",
-                  marginBottom: "4px",
-                }}
-              >
-                Balance
-              </label>
-              <NumericInput
-                value={config.balance ?? 0}
-                min={-1}
-                max={1}
-                step={0.1}
-                onChange={(v) =>
-                  onConfigChange({ ...config, balance: v })
-                }
-              />
-              <span
-                style={{
-                  fontSize: "0.65rem",
-                  color: "#555",
-                  marginTop: "2px",
-                  display: "block",
-                }}
-              >
-                0 = no change, + excitatory, - inhibitory
-              </span>
-            </div>
-          )}
-
-          {selectedExp.default_config.balance !== undefined &&
-            !selectedExp.balance_modes && (
-            <div>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#888",
-                  display: "block",
-                  marginBottom: "4px",
-                }}
-              >
-                Balance
-              </label>
-              <NumericInput
-                value={config.balance ?? 0}
-                min={-1}
-                max={1}
-                step={0.1}
-                onChange={(v) =>
-                  onConfigChange({ ...config, balance: v })
-                }
-              />
-              <span
-                style={{
-                  fontSize: "0.65rem",
-                  color: "#555",
-                  marginTop: "2px",
-                  display: "block",
-                }}
-              >
-                0 = no change, + excitatory, - inhibitory
-              </span>
-            </div>
-          )}
-
+          {/* Mask preview (reactive to config.mask and config.balance) */}
           {hasMasks && balancedGrid && (
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <label
@@ -580,6 +272,7 @@ export function Sidebar({
             </div>
           )}
 
+          {/* Synapse stats */}
           {activeMask?.mask_stats && (
             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
               <label
@@ -624,372 +317,34 @@ export function Sidebar({
             </div>
           )}
 
-          {selectedExp.default_config.process_mode !== undefined && (
-            <div>
+          {/* Input preview (live, only when experiment is running) */}
+          {inputFrame && experimentActive && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <label
-                style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
+                style={{
+                  fontSize: "0.75rem",
+                  textTransform: "uppercase",
+                  color: "#888",
+                  letterSpacing: "0.1em",
+                }}
               >
-                Process Mode
+                Input Preview
+                {stats?.current_char && (
+                  <span style={{ color: "#4cc9f0", marginLeft: "6px", textTransform: "none" }}>
+                    "{stats.current_char}"
+                    {stats.frame_in_char !== undefined && stats.frames_per_char !== undefined && (
+                      <span style={{ color: "#555", marginLeft: "4px" }}>
+                        ({stats.frame_in_char + 1}/{stats.frames_per_char})
+                      </span>
+                    )}
+                  </span>
+                )}
               </label>
-              <select
-                value={config.process_mode ?? "min_vs_max"}
-                onChange={(e) => onConfigChange({ ...config, process_mode: e.target.value })}
-                style={inputStyle}
-              >
-                <option value="min_vs_max">Min vs Max</option>
-                <option value="sum">Sum</option>
-              </select>
-              <span
-                style={{ fontSize: "0.6rem", color: "#555", marginTop: "2px", display: "block" }}
-              >
-                {(config.process_mode ?? "min_vs_max") === "sum"
-                  ? "All dendrites added: coincidence wins"
-                  : "Best excitatory vs best inhibitory"}
-              </span>
+              <InputPreview grid={inputFrame} />
             </div>
           )}
 
-          {selectedExp.input_sources && selectedExp.input_sources.length > 0 && (
-            <>
-              <div
-                style={{
-                  borderTop: "1px solid #2a2a3e",
-                  paddingTop: "12px",
-                  marginTop: "4px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                }}
-              >
-                <h3
-                  style={{
-                    fontSize: "0.75rem",
-                    textTransform: "uppercase",
-                    color: "#888",
-                    margin: 0,
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  Input Stream
-                </h3>
-
-                <div>
-                  <label
-                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                  >
-                    Source
-                  </label>
-                  <select
-                    value={config.input_source ?? selectedExp.input_sources[0].id}
-                    onChange={(e) => onConfigChange({ ...config, input_source: e.target.value })}
-                    style={inputStyle}
-                  >
-                    {selectedExp.input_sources.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {fonts.length > 0 && activeFont && (
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <div style={{ flex: 2 }}>
-                      <label
-                        style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                      >
-                        Font
-                      </label>
-                      <select
-                        value={config.font ?? fonts[0].id}
-                        onChange={(e) => {
-                          const newFont = fonts.find((f) => f.id === e.target.value);
-                          onConfigChange({
-                            ...config,
-                            font: e.target.value,
-                            font_size: newFont?.default_size ?? config.font_size,
-                          });
-                        }}
-                        style={inputStyle}
-                      >
-                        {fonts.map((f) => (
-                          <option key={f.id} value={f.id}>{f.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <label
-                        style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                      >
-                        Size
-                      </label>
-                      <select
-                        value={config.font_size ?? activeFont.default_size}
-                        onChange={(e) =>
-                          onConfigChange({ ...config, font_size: Number(e.target.value) })
-                        }
-                        style={inputStyle}
-                      >
-                        {activeFont.sizes.map((s) => (
-                          <option key={s} value={s}>{s}pt</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label
-                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                  >
-                    Input Text
-                  </label>
-                  <input
-                    type="text"
-                    value={config.input_text ?? "AB"}
-                    onChange={(e) => onConfigChange({ ...config, input_text: e.target.value })}
-                    style={inputStyle}
-                    placeholder="AB"
-                  />
-                </div>
-
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <div style={{ flex: 1 }}>
-                    <label
-                      style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                    >
-                      Resolution
-                    </label>
-                    <NumericInput
-                      value={config.input_resolution ?? 20}
-                      min={5}
-                      max={28}
-                      integer
-                      onChange={(v) => onConfigChange({ ...config, input_resolution: v })}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label
-                      style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                    >
-                      Frames/Char
-                    </label>
-                    <NumericInput
-                      value={config.frames_per_char ?? 10}
-                      min={1}
-                      max={200}
-                      integer
-                      onChange={(v) => onConfigChange({ ...config, frames_per_char: v })}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                  >
-                    Input Dendrite Weight: {(config.input_dendrite_weight ?? 0.2).toFixed(2)}
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={config.input_dendrite_weight ?? 0.2}
-                    onChange={(e) =>
-                      onConfigChange({ ...config, input_dendrite_weight: parseFloat(e.target.value) })
-                    }
-                    style={{ width: "100%", accentColor: "#4cc9f0" }}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                  >
-                    Deamon Exc Weight: {(config.deamon_exc_weight ?? 0.5).toFixed(2)}
-                  </label>
-                  <input
-                    type="range"
-                    min="0.05"
-                    max="1"
-                    step="0.05"
-                    value={config.deamon_exc_weight ?? 0.5}
-                    onChange={(e) =>
-                      onConfigChange({ ...config, deamon_exc_weight: parseFloat(e.target.value) })
-                    }
-                    style={{ width: "100%", accentColor: "#06d6a0" }}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                  >
-                    Deamon Inh Weight: {(config.deamon_inh_weight ?? -0.5).toFixed(2)}
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={Math.abs(config.deamon_inh_weight ?? -0.5)}
-                    onChange={(e) =>
-                      onConfigChange({ ...config, deamon_inh_weight: -parseFloat(e.target.value) })
-                    }
-                    style={{ width: "100%", accentColor: "#ef476f" }}
-                  />
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <CheckboxInput
-                    label="White noise"
-                    checked={config.white_noise ?? true}
-                    onChange={(v) => onConfigChange({ ...config, white_noise: v })}
-                  />
-                  {(config.white_noise ?? true) && (
-                    <div style={{ marginLeft: "24px" }}>
-                      <label
-                        style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                      >
-                        Noise prob: {(config.noise_prob ?? 0.05).toFixed(2)}
-                      </label>
-                      <input
-                        type="range"
-                        min="0.01"
-                        max="0.30"
-                        step="0.01"
-                        value={config.noise_prob ?? 0.05}
-                        onChange={(e) =>
-                          onConfigChange({ ...config, noise_prob: parseFloat(e.target.value) })
-                        }
-                        style={{ width: "100%", accentColor: "#4cc9f0" }}
-                      />
-                    </div>
-                  )}
-                  <CheckboxInput
-                    label="Shift noise (1px displacement)"
-                    checked={config.shift_noise ?? false}
-                    onChange={(v) => onConfigChange({ ...config, shift_noise: v })}
-                  />
-                  <CheckboxInput
-                    label="Inter-char noise"
-                    checked={config.inter_char_noise ?? true}
-                    onChange={(v) => onConfigChange({ ...config, inter_char_noise: v })}
-                  />
-                  <span
-                    style={{ fontSize: "0.6rem", color: "#555", marginTop: "-4px", marginLeft: "24px" }}
-                  >
-                    {(config.inter_char_noise ?? true)
-                      ? "White noise between characters"
-                      : "Black image between characters"}
-                  </span>
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <CheckboxInput
-                    label="Learning"
-                    checked={config.learning ?? true}
-                    onChange={(v) => onConfigChange({ ...config, learning: v })}
-                  />
-                  {(config.learning ?? true) && (
-                    <div>
-                      <label
-                        style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                      >
-                        Learning Rate: {(config.learning_rate ?? 0.01).toFixed(3)}
-                      </label>
-                      <input
-                        type="range"
-                        min={0.001}
-                        max={0.1}
-                        step={0.001}
-                        value={config.learning_rate ?? 0.01}
-                        onChange={(e) =>
-                          onConfigChange({ ...config, learning_rate: parseFloat(e.target.value) })
-                        }
-                        style={{ width: "100%", accentColor: "#4cc9f0" }}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <CheckboxInput
-                    label="Spike adaptation"
-                    checked={config.spike_adaptation ?? false}
-                    onChange={(v) => onConfigChange({ ...config, spike_adaptation: v })}
-                  />
-                  {(config.spike_adaptation ?? false) && (
-                    <>
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <div style={{ flex: 1 }}>
-                          <label
-                            style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                          >
-                            ON steps
-                          </label>
-                          <NumericInput
-                            value={config.max_active_steps ?? 5}
-                            min={1}
-                            max={50}
-                            step={1}
-                            integer
-                            onChange={(v) => onConfigChange({ ...config, max_active_steps: v })}
-                          />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <label
-                            style={{ fontSize: "0.75rem", color: "#888", display: "block", marginBottom: "4px" }}
-                          >
-                            OFF steps
-                          </label>
-                          <NumericInput
-                            value={config.refractory_steps ?? 5}
-                            min={1}
-                            max={50}
-                            step={1}
-                            integer
-                            onChange={(v) => onConfigChange({ ...config, refractory_steps: v })}
-                          />
-                        </div>
-                      </div>
-                      <span
-                        style={{ fontSize: "0.6rem", color: "#555", marginTop: "-6px", display: "block" }}
-                      >
-                        {`Active ${config.max_active_steps ?? 5} → forced off ${config.refractory_steps ?? 5} steps`}
-                      </span>
-                    </>
-                  )}
-                </div>
-
-                {inputFrame && experimentActive && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label
-                      style={{
-                        fontSize: "0.75rem",
-                        textTransform: "uppercase",
-                        color: "#888",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      Input Preview
-                      {stats?.current_char && (
-                        <span style={{ color: "#4cc9f0", marginLeft: "6px", textTransform: "none" }}>
-                          "{stats.current_char}"
-                          {stats.frame_in_char !== undefined && stats.frames_per_char !== undefined && (
-                            <span style={{ color: "#555", marginLeft: "4px" }}>
-                              ({stats.frame_in_char + 1}/{stats.frames_per_char})
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </label>
-                    <InputPreview grid={inputFrame} />
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
+          {/* Start / Refresh button */}
           <button
             onClick={experimentActive && onRefresh ? onRefresh : onStart}
             disabled={!connected || isInitializing}
