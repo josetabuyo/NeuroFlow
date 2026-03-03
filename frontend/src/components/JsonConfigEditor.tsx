@@ -2,15 +2,20 @@
  *
  * Displays the flat ExperimentConfig as a nested JSON structure for readability,
  * and converts back to flat on edit. Zero backend changes required.
+ *
+ * Provides context-aware autocomplete for fields with known options
+ * (masks, fonts, process_mode, etc.) derived from the ExperimentInfo.
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { EditorView } from "@codemirror/view";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
+import { autocompletion } from "@codemirror/autocomplete";
+import type { CompletionContext, CompletionResult } from "@codemirror/autocomplete";
 import { tags } from "@lezer/highlight";
-import type { ExperimentConfig } from "../types";
+import type { ExperimentConfig, ExperimentInfo } from "../types";
 
 /* ── Nested config type (display only) ──────────────────────────── */
 
@@ -19,6 +24,7 @@ interface NestedConfig {
   wiring: {
     mask?: string;
     process_mode?: string;
+    dendrite_weight?: number;
     deamon_exc_weight?: number;
     deamon_inh_weight?: number;
     balance?: number;
@@ -27,7 +33,6 @@ interface NestedConfig {
   };
   input?: {
     source?: string;
-    dendrite_weight?: number;
     ascii?: {
       font?: string;
       font_size?: number;
@@ -63,18 +68,18 @@ function toNested(c: ExperimentConfig): NestedConfig {
 
   if (c.mask !== undefined) n.wiring.mask = c.mask;
   if (c.process_mode !== undefined) n.wiring.process_mode = c.process_mode;
+  if (c.input_dendrite_weight !== undefined) n.wiring.dendrite_weight = c.input_dendrite_weight;
   if (c.deamon_exc_weight !== undefined) n.wiring.deamon_exc_weight = c.deamon_exc_weight;
   if (c.deamon_inh_weight !== undefined) n.wiring.deamon_inh_weight = c.deamon_inh_weight;
   if (c.balance !== undefined) n.wiring.balance = c.balance;
   if (c.balance_mode !== undefined) n.wiring.balance_mode = c.balance_mode;
   if (c.rule !== undefined) n.wiring.rule = c.rule;
 
-  const hasInput = c.input_source !== undefined || c.input_dendrite_weight !== undefined
+  const hasInput = c.input_source !== undefined
     || c.font !== undefined || c.input_text !== undefined || c.input_resolution !== undefined;
   if (hasInput) {
     n.input = {};
     if (c.input_source !== undefined) n.input.source = c.input_source;
-    if (c.input_dendrite_weight !== undefined) n.input.dendrite_weight = c.input_dendrite_weight;
 
     const hasAscii = c.font !== undefined || c.font_size !== undefined
       || c.input_text !== undefined || c.input_resolution !== undefined || c.frames_per_char !== undefined;
@@ -125,6 +130,7 @@ function toFlat(n: NestedConfig): ExperimentConfig {
 
   if (n.wiring.mask !== undefined) c.mask = n.wiring.mask;
   if (n.wiring.process_mode !== undefined) c.process_mode = n.wiring.process_mode;
+  if (n.wiring.dendrite_weight !== undefined) c.input_dendrite_weight = n.wiring.dendrite_weight;
   if (n.wiring.deamon_exc_weight !== undefined) c.deamon_exc_weight = n.wiring.deamon_exc_weight;
   if (n.wiring.deamon_inh_weight !== undefined) c.deamon_inh_weight = n.wiring.deamon_inh_weight;
   if (n.wiring.balance !== undefined) c.balance = n.wiring.balance;
@@ -133,7 +139,6 @@ function toFlat(n: NestedConfig): ExperimentConfig {
 
   if (n.input) {
     if (n.input.source !== undefined) c.input_source = n.input.source;
-    if (n.input.dendrite_weight !== undefined) c.input_dendrite_weight = n.input.dendrite_weight;
     if (n.input.ascii) {
       if (n.input.ascii.font !== undefined) c.font = n.input.ascii.font;
       if (n.input.ascii.font_size !== undefined) c.font_size = n.input.ascii.font_size;
@@ -168,6 +173,109 @@ function toFlat(n: NestedConfig): ExperimentConfig {
 
 function nestedStringify(config: ExperimentConfig): string {
   return JSON.stringify(toNested(config), null, 2);
+}
+
+/* ── Autocomplete: JSON path detection + options ────────────────── */
+
+interface OptionItem {
+  value: string;
+  label: string;
+  detail?: string;
+}
+
+type OptionsMap = Record<string, OptionItem[]>;
+
+function buildOptionsMap(exp: ExperimentInfo | undefined): OptionsMap {
+  const map: OptionsMap = {};
+
+  map["wiring.process_mode"] = [
+    { value: "avg_vs_avg", label: "avg_vs_avg", detail: "Avg excitatory vs avg inhibitory" },
+    { value: "min_vs_max", label: "min_vs_max", detail: "Best exc vs best inh" },
+    { value: "sum", label: "sum", detail: "All dendrites summed" },
+  ];
+
+  if (exp?.masks) {
+    map["wiring.mask"] = exp.masks.map((m) => ({
+      value: m.id,
+      label: m.id,
+      detail: m.name,
+    }));
+  }
+
+  if (exp?.balance_modes) {
+    map["wiring.balance_mode"] = exp.balance_modes.map((m) => ({
+      value: m.id,
+      label: m.id,
+      detail: m.name,
+    }));
+  }
+
+  if (exp?.input_sources) {
+    map["input.source"] = exp.input_sources.map((s) => ({
+      value: s.id,
+      label: s.id,
+      detail: s.name,
+    }));
+  }
+
+  if (exp?.fonts) {
+    map["input.ascii.font"] = exp.fonts.map((f) => ({
+      value: f.id,
+      label: f.id,
+      detail: `${f.name} — ${f.description}`,
+    }));
+  }
+
+  return map;
+}
+
+function getJsonPath(context: CompletionContext): string[] {
+  const tree = syntaxTree(context.state);
+  const path: string[] = [];
+  let node = tree.resolveInner(context.pos, -1);
+
+  if (node.type.name === "PropertyName") return [];
+
+  while (node.parent) {
+    node = node.parent;
+    if (node.type.name === "Property") {
+      const nameNode = node.getChild("PropertyName");
+      if (nameNode) {
+        const raw = context.state.doc.sliceString(nameNode.from, nameNode.to);
+        path.unshift(raw.replace(/^"|"$/g, ""));
+      }
+    }
+  }
+
+  return path;
+}
+
+function makeCompletionSource(optionsMap: OptionsMap) {
+  return (context: CompletionContext): CompletionResult | null => {
+    const tree = syntaxTree(context.state);
+    const node = tree.resolveInner(context.pos, -1);
+
+    if (node.type.name !== "String") return null;
+
+    const path = getJsonPath(context);
+    const pathKey = path.join(".");
+    const available = optionsMap[pathKey];
+    if (!available || available.length === 0) return null;
+
+    const from = node.from + 1;
+    const to = node.to - 1;
+
+    return {
+      from,
+      to,
+      filter: true,
+      options: available.map((opt) => ({
+        label: opt.value,
+        detail: opt.detail,
+        type: "enum",
+      })),
+    };
+  };
 }
 
 /* ── CodeMirror theme ───────────────────────────────────────────── */
@@ -221,24 +329,70 @@ const neuroTheme = EditorView.theme({
     backgroundColor: "#1e3a5f",
     outline: "1px solid #4cc9f0",
   },
+  ".cm-tooltip": {
+    backgroundColor: "#1a1a2e",
+    border: "1px solid #2a2a3e",
+    borderRadius: "4px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+  },
+  ".cm-tooltip-autocomplete": {
+    "& > ul": {
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
+      fontSize: "0.78rem",
+    },
+    "& > ul > li": {
+      padding: "4px 8px",
+      color: "#e0e0ff",
+    },
+    "& > ul > li[aria-selected]": {
+      backgroundColor: "#1e3a5f",
+      color: "#4cc9f0",
+    },
+  },
+  ".cm-completionLabel": {
+    color: "#4cc9f0",
+  },
+  ".cm-completionDetail": {
+    color: "#666",
+    fontStyle: "normal",
+    marginLeft: "8px",
+  },
+  ".cm-completionIcon-enum": {
+    "&::after": { content: "'◇'" },
+    color: "#06d6a0",
+  },
 });
 
-const extensions = [json(), neuroTheme, syntaxHighlighting(neuroHighlight)];
+const baseExtensions = [json(), neuroTheme, syntaxHighlighting(neuroHighlight)];
 
 /* ── Component ──────────────────────────────────────────────────── */
 
 interface JsonConfigEditorProps {
   config: ExperimentConfig;
   onChange: (config: ExperimentConfig) => void;
+  experimentInfo?: ExperimentInfo;
 }
 
-export function JsonConfigEditor({ config, onChange }: JsonConfigEditorProps) {
+export function JsonConfigEditor({ config, onChange, experimentInfo }: JsonConfigEditorProps) {
   const [text, setText] = useState(() => nestedStringify(config));
   const [parseError, setParseError] = useState<string | null>(null);
   const lastExternalConfig = useRef(config);
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const configJson = useMemo(() => nestedStringify(config), [config]);
+
+  const extensions = useMemo(() => {
+    const optionsMap = buildOptionsMap(experimentInfo);
+    const completionSource = makeCompletionSource(optionsMap);
+    return [
+      ...baseExtensions,
+      autocompletion({
+        override: [completionSource],
+        activateOnTyping: true,
+        icons: true,
+      }),
+    ];
+  }, [experimentInfo]);
 
   useEffect(() => {
     if (configJson !== nestedStringify(lastExternalConfig.current)) {

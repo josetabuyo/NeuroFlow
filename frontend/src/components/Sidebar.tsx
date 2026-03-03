@@ -252,7 +252,7 @@ export function Sidebar({
       {selectedExp && (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {/* JSON Config Editor */}
-          <JsonConfigEditor config={config} onChange={onConfigChange} />
+          <JsonConfigEditor config={config} onChange={onConfigChange} experimentInfo={selectedExp} />
 
           {/* Mask preview (reactive to config.mask and config.balance) */}
           {hasMasks && balancedGrid && (

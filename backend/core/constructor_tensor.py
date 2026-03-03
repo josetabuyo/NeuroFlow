@@ -20,7 +20,7 @@ class ConstructorTensor:
     """Compiles a sequential Brain into a parallel BrainTensor."""
 
     @staticmethod
-    def compilar(brain: Brain, device: str = "cpu", max_active_steps: int = 5, refractory_steps: int = 5, adaptation_enabled: bool = True, process_mode: str = "min_vs_max") -> BrainTensor:
+    def compilar(brain: Brain, device: str = "cpu", max_active_steps: int = 5, refractory_steps: int = 5, adaptation_enabled: bool = False, process_mode: str = "min_vs_max") -> BrainTensor:
         """Convert a sequential Brain into a parallel BrainTensor.
 
         Traverses the Brain ONCE and builds the tensors:

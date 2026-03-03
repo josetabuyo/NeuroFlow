@@ -37,7 +37,7 @@ class BrainTensor:
         device: str = "cpu",
         max_active_steps: int = 5,
         refractory_steps: int = 5,
-        adaptation_enabled: bool = True,
+        adaptation_enabled: bool = False,
         process_mode: str = "min_vs_max",
     ) -> None:
         self.device = device
@@ -141,6 +141,14 @@ class BrainTensor:
 
         if self.process_mode == "sum":
             tension = dendrita_para_calc.sum(dim=1).clamp(-1.0, 1.0)  # [NR]
+        elif self.process_mode == "avg_vs_avg":
+            pos_mask = dendrita_para_calc > 0
+            neg_mask = dendrita_para_calc < 0
+            pos_sum = (dendrita_para_calc * pos_mask).sum(dim=1)
+            pos_cnt = pos_mask.sum(dim=1).clamp(min=1.0)
+            neg_sum = (dendrita_para_calc * neg_mask).sum(dim=1)
+            neg_cnt = neg_mask.sum(dim=1).clamp(min=1.0)
+            tension = (pos_sum / pos_cnt + neg_sum / neg_cnt).clamp(-1.0, 1.0)  # [NR]
         else:
             # min_vs_max: max(0, positives) + min(0, negatives)
             max_vals = dendrita_para_calc.max(dim=1).values.clamp(min=0.0)  # [NR]
