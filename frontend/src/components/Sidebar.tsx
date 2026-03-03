@@ -137,6 +137,7 @@ interface SidebarProps {
   onRefresh?: () => void;
   connected: boolean;
   experimentActive?: boolean;
+  width?: number;
 }
 
 export function Sidebar({
@@ -152,6 +153,7 @@ export function Sidebar({
   onRefresh,
   connected,
   experimentActive,
+  width = 380,
 }: SidebarProps) {
   const selectedExp = experiments.find((e) => e.id === selectedExperiment);
   const isInitializing = state === "initializing";
@@ -173,10 +175,10 @@ export function Sidebar({
   return (
     <aside
       style={{
-        width: "320px",
-        minWidth: "320px",
+        width: `${width}px`,
+        minWidth: `${width}px`,
         background: "#12121a",
-        borderRight: "1px solid #2a2a3e",
+        borderRight: "none",
         padding: "16px",
         display: "flex",
         flexDirection: "column",

@@ -1,6 +1,6 @@
 /** NeuroFlow — Main Application Layout. */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { PixelCanvas } from "./components/PixelCanvas";
 import { MiniGrid } from "./components/MiniGrid";
 import { Sidebar } from "./components/Sidebar";
@@ -77,6 +77,10 @@ function resolveConfig(exp: ExperimentInfo): ExperimentConfig {
   return cfg;
 }
 
+const SIDEBAR_DEFAULT = 380;
+const SIDEBAR_MIN = 280;
+const SIDEBAR_MAX = 700;
+
 function App() {
   const [experiments, setExperiments] = useState<ExperimentInfo[]>(DEFAULT_EXPERIMENTS);
   const [selectedExp, setSelectedExp] = useState(DEFAULT_SELECTED);
@@ -84,6 +88,28 @@ function App() {
     resolveConfig(DEFAULT_EXPERIMENTS.find((e) => e.id === DEFAULT_SELECTED) ?? DEFAULT_EXPERIMENTS[0])
   );
   const [stepsPerTick, setStepsPerTick] = useState(1);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleResizePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+    const onMove = (e: globalThis.PointerEvent) => {
+      setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX)));
+    };
+    const onUp = () => setIsResizing(false);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [isResizing]);
 
   const {
     grid,
@@ -257,6 +283,7 @@ function App() {
         color: "#e0e0ff",
         fontFamily:
           "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        userSelect: isResizing ? "none" : undefined,
       }}
     >
       <Sidebar
@@ -272,6 +299,27 @@ function App() {
         onRefresh={handleRefresh}
         connected={connected}
         experimentActive={hasGrid && activeExperiment === selectedExp}
+        width={sidebarWidth}
+      />
+
+      {/* Resize handle */}
+      <div
+        onPointerDown={handleResizePointerDown}
+        style={{
+          width: "6px",
+          cursor: "col-resize",
+          background: isResizing ? "#4cc9f0" : "#2a2a3e",
+          transition: isResizing ? "none" : "background 0.15s",
+          flexShrink: 0,
+          position: "relative",
+          zIndex: 20,
+        }}
+        onMouseEnter={(e) => {
+          if (!isResizing) (e.currentTarget as HTMLElement).style.background = "#4cc9f080";
+        }}
+        onMouseLeave={(e) => {
+          if (!isResizing) (e.currentTarget as HTMLElement).style.background = "#2a2a3e";
+        }}
       />
 
       <main
