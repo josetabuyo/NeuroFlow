@@ -16,10 +16,10 @@ generate_and_project() -> procesar() -> learn() -> avanzar frame
 
 El `learn()` se ejecuta en **cada step**, incluyendo durante la fase de gap entre caracteres. Esto es devastador:
 
-- **Con `inter_char_noise=True` (default):** durante el gap se proyecta ruido blanco puro. Las neuronas aprenden hacia patrones aleatorios, deshaciendo parcialmente lo aprendido del caracter anterior.
-- **Con `inter_char_noise=False`:** se proyecta imagen negra (todos ceros). Las neuronas con tension positiva mueven sus pesos de entrada hacia 0.0, que tampoco es el patron deseado.
+- **Con `noise_inter_char=True` (default):** durante el gap se proyecta ruido blanco puro. Las neuronas aprenden hacia patrones aleatorios, deshaciendo parcialmente lo aprendido del caracter anterior.
+- **Con `noise_inter_char=False`:** se salta el gap por completo — no hay pausa entre caracteres, se pasa directamente al siguiente.
 
-En ambos casos, el gap **corrompe los pesos** en vez de ser un momento de descanso.
+Con `noise_inter_char=True`, el gap **corrompe los pesos** en vez de ser un momento de descanso.
 
 ### Analogia biologica: Supresion sacadica
 

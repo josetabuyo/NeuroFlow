@@ -50,10 +50,9 @@ export interface ExperimentConfig {
   input_dendrite_weight?: number;
   deamon_exc_weight?: number;
   deamon_inh_weight?: number;
-  white_noise?: boolean;
-  noise_prob?: number;
+  background_white_noise?: number;
   shift_noise?: boolean;
-  inter_char_noise?: boolean;
+  noise_inter_char?: boolean;
   input_source?: string;
   font?: string;
   font_size?: number;

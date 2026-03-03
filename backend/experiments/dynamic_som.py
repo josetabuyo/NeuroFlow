@@ -41,10 +41,9 @@ class DynamicSOMExperiment(Experimento):
         self.input_dendrite_weight: float = 0.2
         self.deamon_exc_weight: float = 0.5
         self.deamon_inh_weight: float = -0.5
-        self.white_noise_enabled: bool = True
-        self.noise_prob: float = 0.05
+        self.background_white_noise: float = 0.05
         self.shift_noise_enabled: bool = False
-        self.inter_char_noise: bool = True
+        self.noise_inter_char: bool = True
         self.learning_enabled: bool = True
         self.learning_rate: float = 0.01
         self.adaptation_enabled: bool = True
@@ -75,10 +74,11 @@ class DynamicSOMExperiment(Experimento):
             input_dendrite_weight (float): Weight of input dendrite (default 0.2).
             deamon_exc_weight (float): Weight for excitatory dendrites in mask (default 0.5).
             deamon_inh_weight (float): Weight for inhibitory dendrites in mask (default -0.5).
-            white_noise (bool): Enable white noise (default True).
+            background_white_noise (float): White noise probability per pixel (default 0.05).
+                0 disables white noise entirely.
             shift_noise (bool): Enable shift noise (default False).
-            inter_char_noise (bool): White noise between characters (default True).
-                When False, a black image is projected between characters.
+            noise_inter_char (bool): White noise between characters (default True).
+                When False, the gap between characters is skipped entirely.
             font (str): Font ID from the registry (default "press_start_2p").
             font_size (int): Font size in target-res pixels (default 10).
         """
@@ -94,10 +94,9 @@ class DynamicSOMExperiment(Experimento):
         self.input_dendrite_weight = config.get("input_dendrite_weight", 0.2)
         self.deamon_exc_weight = config.get("deamon_exc_weight", 0.5)
         self.deamon_inh_weight = config.get("deamon_inh_weight", -0.5)
-        self.white_noise_enabled = config.get("white_noise", True)
-        self.noise_prob = config.get("noise_prob", 0.05)
+        self.background_white_noise = float(config.get("background_white_noise", 0.05))
         self.shift_noise_enabled = config.get("shift_noise", False)
-        self.inter_char_noise = config.get("inter_char_noise", True)
+        self.noise_inter_char = config.get("noise_inter_char", True)
         self.learning_enabled = config.get("learning", True)
         self.learning_rate = config.get("learning_rate", 0.01)
         self.adaptation_enabled = config.get("spike_adaptation", False)
@@ -214,10 +213,7 @@ class DynamicSOMExperiment(Experimento):
         if not self.input_text:
             frame = self._rng.integers(0, 2, size=(res, res)).astype(np.float64)
         elif self._in_gap:
-            if self.inter_char_noise:
-                frame = self._rng.integers(0, 2, size=(res, res)).astype(np.float64)
-            else:
-                frame = np.zeros((res, res), dtype=np.float64)
+            frame = self._rng.integers(0, 2, size=(res, res)).astype(np.float64)
         else:
             char = self.input_text[self._char_index]
             base = self._char_images[char]
@@ -225,8 +221,8 @@ class DynamicSOMExperiment(Experimento):
 
             if self.shift_noise_enabled:
                 frame = apply_shift_noise(frame, self._rng)
-            if self.white_noise_enabled:
-                frame = apply_white_noise(frame, noise_prob=self.noise_prob, rng=self._rng)
+            if self.background_white_noise > 0:
+                frame = apply_white_noise(frame, noise_prob=self.background_white_noise, rng=self._rng)
 
         self._current_input_frame = frame
 
@@ -254,8 +250,12 @@ class DynamicSOMExperiment(Experimento):
                     self._frame_in_char = 0
                     self._char_index = (self._char_index + 1) % len(self.input_text)
             elif self._frame_in_char >= self.frames_per_char:
-                self._in_gap = True
-                self._frame_in_char = 0
+                if self.noise_inter_char:
+                    self._in_gap = True
+                    self._frame_in_char = 0
+                else:
+                    self._frame_in_char = 0
+                    self._char_index = (self._char_index + 1) % len(self.input_text)
 
         return {
             "type": "frame",
@@ -449,14 +449,12 @@ class DynamicSOMExperiment(Experimento):
             self.refractory_steps = config["refractory_steps"]
             if self.brain_tensor is not None:
                 self.brain_tensor.refractory_steps = self.refractory_steps
-        if "white_noise" in config:
-            self.white_noise_enabled = config["white_noise"]
-        if "noise_prob" in config:
-            self.noise_prob = config["noise_prob"]
+        if "background_white_noise" in config:
+            self.background_white_noise = float(config["background_white_noise"])
         if "shift_noise" in config:
             self.shift_noise_enabled = config["shift_noise"]
-        if "inter_char_noise" in config:
-            self.inter_char_noise = config["inter_char_noise"]
+        if "noise_inter_char" in config:
+            self.noise_inter_char = config["noise_inter_char"]
         if "frames_per_char" in config:
             self.frames_per_char = max(1, config["frames_per_char"])
 

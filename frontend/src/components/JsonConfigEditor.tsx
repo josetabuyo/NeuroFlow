@@ -42,10 +42,9 @@ interface NestedConfig {
     };
   };
   noise?: {
-    white?: boolean;
-    prob?: number;
+    background_white_noise?: number;
     shift?: boolean;
-    inter_char?: boolean;
+    noise_inter_char?: boolean;
   };
   learning?: {
     enabled?: boolean;
@@ -93,14 +92,13 @@ function toNested(c: ExperimentConfig): NestedConfig {
     }
   }
 
-  const hasNoise = c.white_noise !== undefined || c.noise_prob !== undefined
-    || c.shift_noise !== undefined || c.inter_char_noise !== undefined;
+  const hasNoise = c.background_white_noise !== undefined
+    || c.shift_noise !== undefined || c.noise_inter_char !== undefined;
   if (hasNoise) {
     n.noise = {};
-    if (c.white_noise !== undefined) n.noise.white = c.white_noise;
-    if (c.noise_prob !== undefined) n.noise.prob = c.noise_prob;
+    if (c.background_white_noise !== undefined) n.noise.background_white_noise = c.background_white_noise;
     if (c.shift_noise !== undefined) n.noise.shift = c.shift_noise;
-    if (c.inter_char_noise !== undefined) n.noise.inter_char = c.inter_char_noise;
+    if (c.noise_inter_char !== undefined) n.noise.noise_inter_char = c.noise_inter_char;
   }
 
   const hasLearning = c.learning !== undefined || c.learning_rate !== undefined;
@@ -149,10 +147,9 @@ function toFlat(n: NestedConfig): ExperimentConfig {
   }
 
   if (n.noise) {
-    if (n.noise.white !== undefined) c.white_noise = n.noise.white;
-    if (n.noise.prob !== undefined) c.noise_prob = n.noise.prob;
+    if (n.noise.background_white_noise !== undefined) c.background_white_noise = n.noise.background_white_noise;
     if (n.noise.shift !== undefined) c.shift_noise = n.noise.shift;
-    if (n.noise.inter_char !== undefined) c.inter_char_noise = n.noise.inter_char;
+    if (n.noise.noise_inter_char !== undefined) c.noise_inter_char = n.noise.noise_inter_char;
   }
 
   if (n.learning) {

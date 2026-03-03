@@ -53,10 +53,9 @@ const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
       input_dendrite_weight: 0.2,
       deamon_exc_weight: 0.5,
       deamon_inh_weight: -0.5,
-      white_noise: true,
-      noise_prob: 0.05,
+      background_white_noise: 0.05,
       shift_noise: false,
-      inter_char_noise: true,
+      noise_inter_char: true,
       input_source: "ascii",
       font: "press_start_2p",
       font_size: 10,
@@ -141,8 +140,8 @@ function App() {
   // Hard params (width, height, mask, resolution, dendrite weights) are
   // excluded — those only apply when pressing Start/Refresh.
   const SOFT_KEYS: (keyof ExperimentConfig)[] = [
-    "learning", "learning_rate", "white_noise", "noise_prob", "shift_noise",
-    "inter_char_noise", "frames_per_char", "input_text", "font", "font_size",
+    "learning", "learning_rate", "background_white_noise", "shift_noise",
+    "noise_inter_char", "frames_per_char", "input_text", "font", "font_size",
     "spike_adaptation", "max_active_steps", "refractory_steps",
     "process_mode",
   ];
