@@ -4,6 +4,17 @@ import { useEffect, useRef, useMemo } from "react";
 import type { ExperimentInfo, ExperimentConfig, ExperimentState, ExperimentStats } from "../types";
 import { JsonConfigEditor } from "./JsonConfigEditor";
 
+function configMatches(a: ExperimentConfig, b: ExperimentConfig): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof ExperimentConfig>;
+  for (const k of keys) {
+    if (k === "description") continue;
+    const va = a[k];
+    const vb = b[k];
+    if (JSON.stringify(va) !== JSON.stringify(vb)) return false;
+  }
+  return true;
+}
+
 function weightToColor(weight: number | null): string {
   if (weight === null) return "#111111";
   if (weight === 999) return "#ffff00";
@@ -157,6 +168,17 @@ export function Sidebar({
 }: SidebarProps) {
   const selectedExp = experiments.find((e) => e.id === selectedExperiment);
   const isInitializing = state === "initializing";
+  const configPresets = useMemo(
+    () => selectedExp?.config_presets ?? [],
+    [selectedExp?.config_presets]
+  );
+
+  // Derive selected preset from config (clears when user edits JSON)
+  const selectedPresetId = useMemo(() => {
+    if (!configPresets.length) return "";
+    const match = configPresets.find((p) => configMatches(p.config, config));
+    return match ? match.id : "";
+  }, [config, configPresets]);
 
   const masks = selectedExp?.masks ?? [];
   const activeMask = masks.length > 0
@@ -253,6 +275,49 @@ export function Sidebar({
 
       {selectedExp && (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {/* Config preset dropdown (Dynamic SOM only) */}
+          {configPresets.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  textTransform: "uppercase",
+                  color: "#888",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                Configuration Preset
+              </label>
+              <select
+                value={selectedPresetId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (id) {
+                    const preset = configPresets.find((p) => p.id === id);
+                    if (preset) onConfigChange(preset.config);
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  background: "#0d0d14",
+                  border: "1px solid #2a2a3e",
+                  borderRadius: "6px",
+                  color: "#e0e0ff",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="">-- Select preset --</option>
+                {configPresets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* JSON Config Editor */}
           <JsonConfigEditor config={config} onChange={onConfigChange} experimentInfo={selectedExp} />
 

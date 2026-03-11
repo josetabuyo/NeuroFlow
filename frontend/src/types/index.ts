@@ -38,6 +38,7 @@ export interface FontInfo {
 }
 
 export interface ExperimentConfig {
+  description?: string;
   width: number;
   height: number;
   rule?: number;
@@ -62,6 +63,14 @@ export interface ExperimentConfig {
   max_active_steps?: number;
   refractory_steps?: number;
   process_mode?: string;
+  tension_function?: Record<string, number>;
+}
+
+export interface ConfigPreset {
+  id: string;
+  name: string;
+  description: string;
+  config: ExperimentConfig;
 }
 
 export interface ExperimentInfo {
@@ -74,6 +83,7 @@ export interface ExperimentInfo {
   input_sources?: InputSourceInfo[];
   fonts?: FontInfo[];
   default_config: ExperimentConfig;
+  config_presets?: ConfigPreset[];
 }
 
 export interface PerfMetrics {

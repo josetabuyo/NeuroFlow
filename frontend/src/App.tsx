@@ -169,7 +169,7 @@ function App() {
     "learning", "learning_rate", "background_white_noise", "shift_noise",
     "noise_inter_char", "frames_per_char", "input_text", "font", "font_size",
     "spike_adaptation", "max_active_steps", "refractory_steps",
-    "process_mode",
+    "process_mode", "tension_function",
   ];
 
   const experimentActiveRef = useRef(false);

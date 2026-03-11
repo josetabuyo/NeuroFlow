@@ -50,6 +50,8 @@ class DynamicSOMExperiment(Experimento):
         self.max_active_steps: int = 5
         self.refractory_steps: int = 5
         self.process_mode: str = "min_vs_max"
+        self._tension_fn: str = ""
+        self._tension_fn_param: float = 1.0
         self._font_id: str = "press_start_2p"
         self._font_size: int = 10
         self._char_images: dict[str, np.ndarray] = {}
@@ -103,6 +105,16 @@ class DynamicSOMExperiment(Experimento):
         self.max_active_steps = config.get("max_active_steps", 5)
         self.refractory_steps = config.get("refractory_steps", 5)
         self.process_mode = config.get("process_mode", "min_vs_max")
+
+        tf = config.get("tension_function", {})
+        if tf and isinstance(tf, dict):
+            fn_name = next(iter(tf))
+            self._tension_fn = fn_name
+            self._tension_fn_param = float(tf[fn_name])
+        else:
+            self._tension_fn = ""
+            self._tension_fn_param = 1.0
+
         self._font_id = config.get("font", "press_start_2p")
         self._font_size = config.get("font_size", 10)
 
@@ -187,15 +199,18 @@ class DynamicSOMExperiment(Experimento):
             refractory_steps=self.refractory_steps,
             adaptation_enabled=self.adaptation_enabled,
             process_mode=self.process_mode,
+            tension_fn=self._tension_fn,
+            tension_fn_param=self._tension_fn_param,
         )
 
-        # --- Pre-render characters ---
+        # --- Pre-render characters (skip for synthetic patterns) ---
         self._char_images = {}
-        for char in set(self.input_text):
-            self._char_images[char] = render_char(
-                char, self.input_resolution,
-                font_id=self._font_id, font_size=self._font_size,
-            )
+        if not self._is_synthetic_input():
+            for char in set(self.input_text):
+                self._char_images[char] = render_char(
+                    char, self.input_resolution,
+                    font_id=self._font_id, font_size=self._font_size,
+                )
 
         # --- Frame tracking ---
         self._char_index = 0
@@ -206,6 +221,45 @@ class DynamicSOMExperiment(Experimento):
         # --- Project initial frame ---
         self._generate_and_project()
 
+    _SYNTHETIC_PATTERNS = {
+        "HALF_TOP", "HALF_BOT", "BARS_H", "BARS_V", "DOT_TL", "DOT_BR",
+    }
+
+    @staticmethod
+    def _make_synthetic(name: str, res: int) -> np.ndarray:
+        """Generate a synthetic binary pattern of shape (res, res)."""
+        frame = np.zeros((res, res), dtype=np.float64)
+        if name == "HALF_TOP":
+            frame[: res // 2, :] = 1.0
+        elif name == "HALF_BOT":
+            frame[res // 2 :, :] = 1.0
+        elif name == "BARS_H":
+            for i in range(3):
+                y = int(res * (i + 1) / 4)
+                y0 = max(0, y - 1)
+                y1 = min(res, y + 2)
+                frame[y0:y1, :] = 1.0
+        elif name == "BARS_V":
+            for i in range(3):
+                x = int(res * (i + 1) / 4)
+                x0 = max(0, x - 1)
+                x1 = min(res, x + 2)
+                frame[:, x0:x1] = 1.0
+        elif name == "DOT_TL":
+            frame[:5, :5] = 1.0
+        elif name == "DOT_BR":
+            frame[-5:, -5:] = 1.0
+        return frame
+
+    def _is_synthetic_input(self) -> bool:
+        """True when input_text is a comma-separated list of synthetic pattern names."""
+        if not self.input_text:
+            return False
+        return all(
+            tok.strip() in self._SYNTHETIC_PATTERNS
+            for tok in self.input_text.split(",")
+        )
+
     def _generate_and_project(self) -> None:
         """Generate the current input frame with noise and project onto input neurons."""
         res = self.input_resolution
@@ -214,6 +268,12 @@ class DynamicSOMExperiment(Experimento):
             frame = self._rng.integers(0, 2, size=(res, res)).astype(np.float64)
         elif self._in_gap:
             frame = self._rng.integers(0, 2, size=(res, res)).astype(np.float64)
+        elif self._is_synthetic_input():
+            tokens = [t.strip() for t in self.input_text.split(",")]
+            pattern_name = tokens[self._char_index % len(tokens)]
+            frame = self._make_synthetic(pattern_name, res)
+            if self.background_white_noise > 0:
+                frame = apply_white_noise(frame, noise_prob=self.background_white_noise, rng=self._rng)
         else:
             char = self.input_text[self._char_index]
             base = self._char_images[char]
@@ -243,19 +303,24 @@ class DynamicSOMExperiment(Experimento):
         self.generation += 1
 
         if self.input_text:
+            n_items = (
+                len([t.strip() for t in self.input_text.split(",")])
+                if self._is_synthetic_input()
+                else len(self.input_text)
+            )
             self._frame_in_char += 1
             if self._in_gap:
                 if self._frame_in_char >= self.frames_per_char:
                     self._in_gap = False
                     self._frame_in_char = 0
-                    self._char_index = (self._char_index + 1) % len(self.input_text)
+                    self._char_index = (self._char_index + 1) % n_items
             elif self._frame_in_char >= self.frames_per_char:
                 if self.noise_inter_char:
                     self._in_gap = True
                     self._frame_in_char = 0
                 else:
                     self._frame_in_char = 0
-                    self._char_index = (self._char_index + 1) % len(self.input_text)
+                    self._char_index = (self._char_index + 1) % n_items
 
         return {
             "type": "frame",
@@ -308,6 +373,9 @@ class DynamicSOMExperiment(Experimento):
             current_char = ""
         elif self._in_gap:
             current_char = "gap"
+        elif self._is_synthetic_input():
+            tokens = [t.strip() for t in self.input_text.split(",")]
+            current_char = tokens[self._char_index % len(tokens)]
         else:
             current_char = self.input_text[self._char_index]
 
@@ -449,6 +517,18 @@ class DynamicSOMExperiment(Experimento):
             self.refractory_steps = config["refractory_steps"]
             if self.brain_tensor is not None:
                 self.brain_tensor.refractory_steps = self.refractory_steps
+        if "tension_function" in config:
+            tf = config["tension_function"]
+            if tf and isinstance(tf, dict):
+                fn_name = next(iter(tf))
+                self._tension_fn = fn_name
+                self._tension_fn_param = float(tf[fn_name])
+            else:
+                self._tension_fn = ""
+                self._tension_fn_param = 1.0
+            if self.brain_tensor is not None:
+                self.brain_tensor.tension_fn = self._tension_fn
+                self.brain_tensor.tension_fn_param = self._tension_fn_param
         if "background_white_noise" in config:
             self.background_white_noise = float(config["background_white_noise"])
         if "shift_noise" in config:
@@ -476,7 +556,7 @@ class DynamicSOMExperiment(Experimento):
                 self._frame_in_char = 0
                 self._in_gap = False
 
-        if font_changed or text_changed:
+        if (font_changed or text_changed) and not self._is_synthetic_input():
             self._char_images = {}
             for char in set(self.input_text):
                 self._char_images[char] = render_char(

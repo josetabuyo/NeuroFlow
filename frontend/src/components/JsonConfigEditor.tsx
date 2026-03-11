@@ -20,6 +20,7 @@ import type { ExperimentConfig, ExperimentInfo } from "../types";
 /* ── Nested config type (display only) ──────────────────────────── */
 
 interface NestedConfig {
+  description?: string;
   grid: { width: number; height: number };
   wiring: {
     mask?: string;
@@ -30,6 +31,7 @@ interface NestedConfig {
     balance?: number;
     balance_mode?: string;
     rule?: number;
+    tension_function?: Record<string, number>;
   };
   input?: {
     source?: string;
@@ -61,6 +63,7 @@ interface NestedConfig {
 
 function toNested(c: ExperimentConfig): NestedConfig {
   const n: NestedConfig = {
+    ...(c.description !== undefined ? { description: c.description } : {}),
     grid: { width: c.width, height: c.height },
     wiring: {},
   };
@@ -73,9 +76,12 @@ function toNested(c: ExperimentConfig): NestedConfig {
   if (c.balance !== undefined) n.wiring.balance = c.balance;
   if (c.balance_mode !== undefined) n.wiring.balance_mode = c.balance_mode;
   if (c.rule !== undefined) n.wiring.rule = c.rule;
+  if (c.tension_function !== undefined) n.wiring.tension_function = c.tension_function;
 
   const hasInput = c.input_source !== undefined
-    || c.font !== undefined || c.input_text !== undefined || c.input_resolution !== undefined;
+    || c.font !== undefined
+    || (c.input_text !== undefined && c.input_text !== "")
+    || c.input_resolution !== undefined;
   if (hasInput) {
     n.input = {};
     if (c.input_source !== undefined) n.input.source = c.input_source;
@@ -122,6 +128,7 @@ function toNested(c: ExperimentConfig): NestedConfig {
 
 function toFlat(n: NestedConfig): ExperimentConfig {
   const c: ExperimentConfig = {
+    ...(n.description !== undefined ? { description: n.description } : {}),
     width: n.grid.width,
     height: n.grid.height,
   };
@@ -134,6 +141,7 @@ function toFlat(n: NestedConfig): ExperimentConfig {
   if (n.wiring.balance !== undefined) c.balance = n.wiring.balance;
   if (n.wiring.balance_mode !== undefined) c.balance_mode = n.wiring.balance_mode;
   if (n.wiring.rule !== undefined) c.rule = n.wiring.rule;
+  if (n.wiring.tension_function !== undefined) c.tension_function = n.wiring.tension_function;
 
   if (n.input) {
     if (n.input.source !== undefined) c.input_source = n.input.source;
@@ -144,6 +152,8 @@ function toFlat(n: NestedConfig): ExperimentConfig {
       if (n.input.ascii.resolution !== undefined) c.input_resolution = n.input.ascii.resolution;
       if (n.input.ascii.frames_per_char !== undefined) c.frames_per_char = n.input.ascii.frames_per_char;
     }
+  } else {
+    c.input_text = "";
   }
 
   if (n.noise) {
@@ -360,7 +370,7 @@ const neuroTheme = EditorView.theme({
   },
 });
 
-const baseExtensions = [json(), neuroTheme, syntaxHighlighting(neuroHighlight)];
+const baseExtensions = [json(), neuroTheme, syntaxHighlighting(neuroHighlight), EditorView.lineWrapping];
 
 /* ── Component ──────────────────────────────────────────────────── */
 

@@ -39,9 +39,13 @@ class BrainTensor:
         refractory_steps: int = 5,
         adaptation_enabled: bool = False,
         process_mode: str = "min_vs_max",
+        tension_fn: str = "",
+        tension_fn_param: float = 1.0,
     ) -> None:
         self.device = device
         self.process_mode = process_mode
+        self.tension_fn = tension_fn
+        self.tension_fn_param = tension_fn_param
         # n_real = number of actual neurons from the Brain
         # N = total including possible border zero neuron
         self.n_real = n_real
@@ -154,6 +158,9 @@ class BrainTensor:
             max_vals = dendrita_para_calc.max(dim=1).values.clamp(min=0.0)  # [NR]
             min_vals = dendrita_para_calc.min(dim=1).values.clamp(max=0.0)  # [NR]
             tension = (max_vals + min_vals).clamp(-1.0, 1.0)  # [NR]
+
+        if self.tension_fn == "pow" and self.tension_fn_param != 1.0:
+            tension = tension.sign() * tension.abs().pow(self.tension_fn_param)
 
         self.tensiones[:NR] = tension
 
