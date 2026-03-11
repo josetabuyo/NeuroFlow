@@ -149,6 +149,12 @@ interface SidebarProps {
   connected: boolean;
   experimentActive?: boolean;
   width?: number;
+  onPrevRun?: () => void;
+  onNextRun?: () => void;
+  canGoPrev?: boolean;
+  canGoNext?: boolean;
+  runPosition?: number;
+  runTotal?: number;
 }
 
 export function Sidebar({
@@ -165,6 +171,12 @@ export function Sidebar({
   connected,
   experimentActive,
   width = 380,
+  onPrevRun,
+  onNextRun,
+  canGoPrev = false,
+  canGoNext = false,
+  runPosition = 0,
+  runTotal = 0,
 }: SidebarProps) {
   const selectedExp = experiments.find((e) => e.id === selectedExperiment);
   const isInitializing = state === "initializing";
@@ -320,6 +332,58 @@ export function Sidebar({
 
           {/* JSON Config Editor */}
           <JsonConfigEditor config={config} onChange={onConfigChange} experimentInfo={selectedExp} />
+
+          {/* Run history navigation */}
+          {runTotal > 0 && (
+            <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+              <button
+                onClick={onPrevRun}
+                disabled={!canGoPrev}
+                title="Previous executed config"
+                style={{
+                  padding: "6px 10px",
+                  background: canGoPrev ? "#1e1e3a" : "#0d0d14",
+                  border: `1px solid ${canGoPrev ? "#4cc9f0" : "#2a2a3e"}`,
+                  borderRadius: "4px",
+                  color: canGoPrev ? "#e0e0ff" : "#444",
+                  fontSize: "0.8rem",
+                  cursor: canGoPrev ? "pointer" : "not-allowed",
+                  transition: "all 0.15s",
+                }}
+              >
+                &#9664;
+              </button>
+              <span
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  fontSize: "0.7rem",
+                  color: "#888",
+                  fontFamily: "monospace",
+                  userSelect: "none",
+                }}
+              >
+                Run {runPosition} / {runTotal}
+              </span>
+              <button
+                onClick={onNextRun}
+                disabled={!canGoNext}
+                title="Next executed config"
+                style={{
+                  padding: "6px 10px",
+                  background: canGoNext ? "#1e1e3a" : "#0d0d14",
+                  border: `1px solid ${canGoNext ? "#4cc9f0" : "#2a2a3e"}`,
+                  borderRadius: "4px",
+                  color: canGoNext ? "#e0e0ff" : "#444",
+                  fontSize: "0.8rem",
+                  cursor: canGoNext ? "pointer" : "not-allowed",
+                  transition: "all 0.15s",
+                }}
+              >
+                &#9654;
+              </button>
+            </div>
+          )}
 
           {/* Mask preview (reactive to config.mask and config.balance) */}
           {hasMasks && balancedGrid && (

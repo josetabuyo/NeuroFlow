@@ -39,5 +39,8 @@ Thumbs.db
 # Playwright MCP
 .playwright-mcp/
 
+# SQLite data
+backend/data/
+
 # Prompt scratchpad
 NEXT_PROMPT.md

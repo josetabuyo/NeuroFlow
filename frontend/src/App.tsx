@@ -91,6 +91,61 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [isResizing, setIsResizing] = useState(false);
 
+  // ── Execution history (configs saved on Start/Refresh) ──
+  const [runHistory, setRunHistory] = useState<ExperimentConfig[]>([]);
+  const [runIndex, setRunIndex] = useState(-1);
+
+  const canGoPrev = runIndex > 0;
+  const canGoNext = runIndex >= 0 && runIndex < runHistory.length - 1;
+
+  const loadHistory = useCallback((expId: string) => {
+    fetch(`${API_URL}/api/experiments/${expId}/config/history`)
+      .then((r) => r.json())
+      .then((data: { history: { config: ExperimentConfig }[] }) => {
+        const configs = data.history.map((h) => h.config);
+        setRunHistory(configs);
+        setRunIndex(configs.length > 0 ? configs.length - 1 : -1);
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveExecution = useCallback(
+    (expId: string, cfg: ExperimentConfig) => {
+      fetch(`${API_URL}/api/experiments/${expId}/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cfg),
+      })
+        .then((r) => r.json())
+        .then((data: { id: number }) => {
+          if (data.id !== -1) {
+            setRunHistory((prev) => [...prev, cfg]);
+            setRunIndex((prev) => prev + 1);
+          }
+        })
+        .catch(() => {});
+    },
+    [],
+  );
+
+  const goPrev = useCallback(() => {
+    setRunIndex((i) => {
+      if (i <= 0) return i;
+      const next = i - 1;
+      setConfig(runHistory[next]);
+      return next;
+    });
+  }, [runHistory]);
+
+  const goNext = useCallback(() => {
+    setRunIndex((i) => {
+      if (i >= runHistory.length - 1) return i;
+      const next = i + 1;
+      setConfig(runHistory[next]);
+      return next;
+    });
+  }, [runHistory]);
+
   const handleResizePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -144,20 +199,30 @@ function App() {
     toggleBrushMode,
   } = useExperiment();
 
-  // Fetch experiments list
+  // Fetch experiments list + restore last executed config
   useEffect(() => {
-    fetch(`${API_URL}/api/experiments`)
-      .then((r) => r.json())
-      .then((data: ExperimentInfo[]) => {
+    Promise.all([
+      fetch(`${API_URL}/api/experiments`).then((r) => r.json()),
+      fetch(`${API_URL}/api/experiments/${DEFAULT_SELECTED}/config/history`)
+        .then((r) => r.json())
+        .catch(() => ({ history: [] })),
+    ])
+      .then(([data, histData]: [ExperimentInfo[], { history: { config: ExperimentConfig }[] }]) => {
         if (data.length > 0) {
           setExperiments(data);
-          const selected = data.find((e) => e.id === DEFAULT_SELECTED) ?? data[0];
-          setConfig(resolveConfig(selected));
+          const configs = histData.history.map((h) => h.config);
+          setRunHistory(configs);
+          if (configs.length > 0) {
+            setRunIndex(configs.length - 1);
+            setConfig(configs[configs.length - 1]);
+          } else {
+            setRunIndex(-1);
+            const selected = data.find((e) => e.id === DEFAULT_SELECTED) ?? data[0];
+            setConfig(resolveConfig(selected));
+          }
         }
       })
-      .catch(() => {
-        // Use defaults if API is unavailable
-      });
+      .catch(() => {});
   }, []);
 
   const hasGrid = grid.length > 0;
@@ -201,18 +266,23 @@ function App() {
     (id: string) => {
       setSelectedExp(id);
       const exp = experiments.find((e) => e.id === id);
-      if (exp) setConfig(resolveConfig(exp));
+      if (!exp) return;
+
+      setConfig(resolveConfig(exp));
+      loadHistory(id);
     },
-    [experiments]
+    [experiments, loadHistory],
   );
 
   const handleStart = useCallback(() => {
     start(selectedExp, config);
-  }, [start, selectedExp, config]);
+    saveExecution(selectedExp, config);
+  }, [start, selectedExp, config, saveExecution]);
 
   const handleRefresh = useCallback(() => {
     reconnect(config);
-  }, [reconnect, config]);
+    saveExecution(selectedExp, config);
+  }, [reconnect, selectedExp, config, saveExecution]);
 
   const applyBrush = useCallback(
     (x: number, y: number) => {
@@ -300,6 +370,12 @@ function App() {
         connected={connected}
         experimentActive={hasGrid && activeExperiment === selectedExp}
         width={sidebarWidth}
+        onPrevRun={goPrev}
+        onNextRun={goNext}
+        canGoPrev={canGoPrev}
+        canGoNext={canGoNext}
+        runPosition={runIndex >= 0 ? runIndex + 1 : 0}
+        runTotal={runHistory.length}
       />
 
       {/* Resize handle */}

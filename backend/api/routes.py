@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from core.masks import get_mask_info
 from core.ascii_renderer import get_available_fonts
+from db import save_config, get_latest, get_history
 
 router = APIRouter(prefix="/api")
 
@@ -91,8 +92,8 @@ EXPERIMENTS = {
                     "height": 50,
                     "mask": "deamon_3_en_50",
                     "input_text": "",
-                    "deamon_exc_weight": 0.5,
-                    "deamon_inh_weight": -0.5,
+                    "deamon_exc_weight": 1,
+                    "deamon_inh_weight": -1,
                     "learning": False,
                     "process_mode": "min_vs_max",
                     "tension_function": {},
@@ -448,3 +449,24 @@ async def get_experiment(experiment_id: str) -> dict:
     if experiment_id not in EXPERIMENTS:
         return {"error": f"Experiment '{experiment_id}' not found"}
     return EXPERIMENTS[experiment_id]
+
+
+@router.post("/experiments/{experiment_id}/config")
+async def save_experiment_config(experiment_id: str, request: Request) -> dict:
+    """Persist a config snapshot for an experiment."""
+    config = await request.json()
+    sid = save_config(experiment_id, config)
+    return {"id": sid}
+
+
+@router.get("/experiments/{experiment_id}/config/latest")
+def get_latest_config(experiment_id: str) -> dict:
+    """Return the most recently saved config for an experiment."""
+    config = get_latest(experiment_id)
+    return {"config": config}
+
+
+@router.get("/experiments/{experiment_id}/config/history")
+def get_config_history(experiment_id: str) -> dict:
+    """All executed configs for an experiment, oldest first."""
+    return {"history": get_history(experiment_id)}

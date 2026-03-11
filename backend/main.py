@@ -9,8 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import router
 from api.websocket import ws_router
+from db import init_db
 
 logging.basicConfig(level=logging.INFO)
+
+init_db()
 
 app = FastAPI(
     title="NeuroFlow",
