@@ -1,14 +1,14 @@
 {
   "name": "Isolated Daemon",
-  "description": "Pure daemon formation without input or learning. Replicates Deamons Lab inside the SOM topology. Look for stable Mexican hat circles in the tissue.",
+  "description": "Pure daemon formation without input or learning. Verifies stable Mexican hat circles in the tissue. Nivel 0 of the validation ladder.",
   "config": {
-    "description": "Daemon-only baseline: no input, no learning. Verifies that the Mexican hat topology forms stable white circles (daemons). Nivel 0 of the SOM validation ladder.",
+    "description": "Daemon-only baseline: no input, no learning. The Mexican hat topology (excitatory center + inhibitory surround) should form stable white circles (daemons). Use tension view (T) to see the surface tension landscape.",
     "grid": { "width": 50, "height": 50 },
     "wiring": {
-      "mask": "deamon_3_en_50",
-      "dendrite_exc_weight": 1,
+      "mask": "deamon_e3_g2_i12_de1_di1",
+      "dendrite_exc_weight": 0.9,
       "dendrite_inh_weight": -1,
-      "process_mode": "min_vs_max"
+      "process_mode": "avg_vs_avg"
     }
   }
 }

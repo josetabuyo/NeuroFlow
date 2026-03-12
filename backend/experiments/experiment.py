@@ -163,8 +163,7 @@ class Experiment(Experimento):
         # Wiring overrides
         self.dendrite_exc_weight: float | None = None
         self.dendrite_inh_weight: float | None = None
-        self._tension_fn: str = ""
-        self._tension_fn_param: float = 1.0
+        self._tension_fns: list[tuple[str, float]] = []
 
         # Learning state
         self.learning_enabled: bool = False
@@ -204,12 +203,9 @@ class Experiment(Experimento):
 
         tf = wiring.get("tension_function")
         if tf and isinstance(tf, dict):
-            fn_name = next(iter(tf))
-            self._tension_fn = fn_name
-            self._tension_fn_param = float(tf[fn_name])
+            self._tension_fns = [(k, float(v)) for k, v in tf.items()]
         else:
-            self._tension_fn = ""
-            self._tension_fn_param = 1.0
+            self._tension_fns = []
 
         # ── Input (opt-in) ──
         input_cfg = config.get("input")
@@ -357,8 +353,7 @@ class Experiment(Experimento):
             refractory_steps=self.down_ticks,
             adaptation_enabled=self.adaptation_enabled,
             process_mode=self.process_mode,
-            tension_fn=self._tension_fn,
-            tension_fn_param=self._tension_fn_param,
+            tension_fns=self._tension_fns,
         )
 
         # ── Pre-render characters ──
@@ -645,10 +640,15 @@ class Experiment(Experimento):
                         fila.append(None)
             weight_grid.append(fila)
 
+        activation = self.brain_tensor.valores[neuron_idx].item()
+        tension = self.brain_tensor.tensiones[neuron_idx].item()
+
         result: dict[str, Any] = {
             "type": "connections",
             "x": x,
             "y": y,
+            "activation": round(activation, 4),
+            "tension": round(tension, 4),
             "total_dendritas": total_dendritas,
             "total_sinapsis": total_sinapsis,
             "weight_grid": weight_grid,
@@ -755,15 +755,11 @@ class Experiment(Experimento):
             if "tension_function" in wiring_cfg:
                 tf = wiring_cfg["tension_function"]
                 if tf and isinstance(tf, dict):
-                    fn_name = next(iter(tf))
-                    self._tension_fn = fn_name
-                    self._tension_fn_param = float(tf[fn_name])
+                    self._tension_fns = [(k, float(v)) for k, v in tf.items()]
                 else:
-                    self._tension_fn = ""
-                    self._tension_fn_param = 1.0
+                    self._tension_fns = []
                 if self.brain_tensor is not None:
-                    self.brain_tensor.tension_fn = self._tension_fn
-                    self.brain_tensor.tension_fn_param = self._tension_fn_param
+                    self.brain_tensor.tension_fns = self._tension_fns
 
         input_cfg = config.get("input")
         if input_cfg and self.input_enabled:

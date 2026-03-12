@@ -1,0 +1,14 @@
+{
+  "name": "Isolated Daemon Min vs Max",
+  "description": "Daemon formation using min_vs_max processing. Compares with avg_vs_avg: here the best excitatory dendrite competes against the best inhibitory. Sharper winner selection per neuron.",
+  "config": {
+    "description": "Same daemon topology as Isolated Daemon but with min_vs_max: tension = max(excitatory) + min(inhibitory). Only the strongest excitatory and inhibitory dendrites count. Compare daemon shape and stability with avg_vs_avg.",
+    "grid": { "width": 50, "height": 50 },
+    "wiring": {
+      "mask": "deamon_e3_g2_i12_de1_di1",
+      "dendrite_exc_weight": 0.9,
+      "dendrite_inh_weight": -1,
+      "process_mode": "min_vs_max"
+    }
+  }
+}

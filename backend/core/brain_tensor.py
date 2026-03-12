@@ -41,11 +41,17 @@ class BrainTensor:
         process_mode: str = "min_vs_max",
         tension_fn: str = "",
         tension_fn_param: float = 1.0,
+        tension_fns: list[tuple[str, float]] | None = None,
     ) -> None:
         self.device = device
         self.process_mode = process_mode
-        self.tension_fn = tension_fn
-        self.tension_fn_param = tension_fn_param
+        # Support both legacy single fn and composable list
+        if tension_fns is not None:
+            self.tension_fns = tension_fns
+        elif tension_fn:
+            self.tension_fns = [(tension_fn, tension_fn_param)]
+        else:
+            self.tension_fns = []
         # n_real = number of actual neurons from the Brain
         # N = total including possible border zero neuron
         self.n_real = n_real
@@ -159,8 +165,15 @@ class BrainTensor:
             min_vals = dendrita_para_calc.min(dim=1).values.clamp(max=0.0)  # [NR]
             tension = (max_vals + min_vals).clamp(-1.0, 1.0)  # [NR]
 
-        if self.tension_fn == "pow" and self.tension_fn_param != 1.0:
-            tension = tension.sign() * tension.abs().pow(self.tension_fn_param)
+        if self.tension_fns:
+            result = torch.zeros_like(tension)
+            for fn_name, coeff in self.tension_fns:
+                if fn_name == "x":
+                    result = result + coeff * tension
+                elif fn_name.startswith("x_pow_"):
+                    exp = int(fn_name.split("_pow_")[1])
+                    result = result + coeff * tension.pow(exp)
+            tension = result.clamp(-1.0, 1.0)
 
         self.tensiones[:NR] = tension
 

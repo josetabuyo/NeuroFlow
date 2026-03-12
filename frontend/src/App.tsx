@@ -134,6 +134,7 @@ function App() {
     inspectMode,
     connectionMap,
     inspectedCell,
+    inspectInfo,
     brushSize,
     brushMode,
     start,
@@ -405,6 +406,46 @@ function App() {
                     onToggleInspect={toggleInspectMode}
                     onToggleTension={toggleTensionMode}
                   />
+                  {inspectInfo && inspectedCell && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "8px",
+                        right: "8px",
+                        background: "rgba(13, 13, 20, 0.92)",
+                        border: "1px solid #2a2a3e",
+                        borderRadius: "6px",
+                        padding: "10px 14px",
+                        fontSize: "0.75rem",
+                        fontFamily: "monospace",
+                        color: "#ccc",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "4px",
+                        zIndex: 15,
+                        minWidth: "160px",
+                      }}
+                    >
+                      <div style={{ color: "#ffff00", fontWeight: 600, fontSize: "0.8rem", marginBottom: "2px" }}>
+                        Neuron ({inspectedCell.x}, {inspectedCell.y})
+                      </div>
+                      <div>
+                        <span style={{ color: "#888" }}>Activation: </span>
+                        <span style={{ color: inspectInfo.activation > 0.5 ? "#ffffff" : "#555" }}>
+                          {inspectInfo.activation.toFixed(2)}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "#888" }}>Tension: </span>
+                        <span style={{ color: inspectInfo.tension > 0 ? "#ff8c00" : inspectInfo.tension < 0 ? "#5000ff" : "#555" }}>
+                          {inspectInfo.tension >= 0 ? "+" : ""}{inspectInfo.tension.toFixed(4)}
+                        </span>
+                      </div>
+                      <div style={{ borderTop: "1px solid #1a1a2e", paddingTop: "4px", marginTop: "2px", color: "#666", fontSize: "0.65rem" }}>
+                        {inspectInfo.total_dendritas} dendrites / {inspectInfo.total_sinapsis} synapses
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {inputFrame && (
                   <div style={{

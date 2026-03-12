@@ -121,6 +121,8 @@ export interface ConnectionsMessage {
   type: "connections";
   x: number;
   y: number;
+  activation: number;
+  tension: number;
   total_dendritas: number;
   total_sinapsis: number;
   weight_grid: (number | null)[][];

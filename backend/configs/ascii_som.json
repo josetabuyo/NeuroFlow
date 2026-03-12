@@ -1,0 +1,30 @@
+{
+  "name": "ASCII Input SOM",
+  "description": "SOM with ASCII character input (A, B). The original challenge: learn to distinguish letter shapes through distributed self-organization. Attempt only after Simple Figures converges.",
+  "config": {
+    "description": "ASCII characters rendered with press_start_2p font. The hardest input type: A and B share similar pixel distributions. Inspect neuron weights after ~500 steps to check for differentiation. Compare with and without tension_function.",
+    "grid": { "width": 50, "height": 50 },
+    "wiring": {
+      "mask": "deamon_e3_g2_i12_de1_di1",
+      "dendrite_exc_weight": 0.9,
+      "dendrite_inh_weight": -1,
+      "process_mode": "avg_vs_avg",
+      "tension_function": { "x_pow_3": 1.0 }
+    },
+    "input": {
+      "text": "AB",
+      "resolution": 20,
+      "frames_per_char": 10,
+      "dendrite_input_weight": 0.2,
+      "font": "press_start_2p",
+      "font_size": 10
+    },
+    "noise": {
+      "background": 0.05,
+      "inter_char": true
+    },
+    "learning": {
+      "rate": 0.01
+    }
+  }
+}

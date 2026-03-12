@@ -31,6 +31,12 @@ interface UseExperimentReturn {
   inspectMode: boolean;
   connectionMap: (number | null)[][] | null;
   inspectedCell: { x: number; y: number } | null;
+  inspectInfo: {
+    activation: number;
+    tension: number;
+    total_dendritas: number;
+    total_sinapsis: number;
+  } | null;
   brushSize: number;
   brushMode: "activate" | "deactivate";
   start: (config: ExperimentConfig) => void;
@@ -58,6 +64,12 @@ export function useExperiment(): UseExperimentReturn {
   const [inspectMode, setInspectMode] = useState(false);
   const [connectionMap, setConnectionMap] = useState<(number | null)[][] | null>(null);
   const [inspectedCell, setInspectedCell] = useState<{ x: number; y: number } | null>(null);
+  const [inspectInfo, setInspectInfo] = useState<{
+    activation: number;
+    tension: number;
+    total_dendritas: number;
+    total_sinapsis: number;
+  } | null>(null);
   const [perf, setPerf] = useState<PerfMetrics | null>(null);
   const [tensionGrid, setTensionGrid] = useState<number[][] | null>(null);
   const [tensionMode, setTensionMode] = useState(false);
@@ -98,6 +110,12 @@ export function useExperiment(): UseExperimentReturn {
           if (msg.inspect) {
             setConnectionMap(msg.inspect.weight_grid);
             setInspectedCell({ x: msg.inspect.x, y: msg.inspect.y });
+            setInspectInfo({
+              activation: msg.inspect.activation,
+              tension: msg.inspect.tension,
+              total_dendritas: msg.inspect.total_dendritas,
+              total_sinapsis: msg.inspect.total_sinapsis,
+            });
             setInputWeightGrid(msg.inspect.input_weight_grid ?? null);
             if (msg.inspect.input_weight_width && msg.inspect.input_weight_height) {
               setInputWeightDims({ width: msg.inspect.input_weight_width, height: msg.inspect.input_weight_height });
@@ -107,6 +125,12 @@ export function useExperiment(): UseExperimentReturn {
         case "connections":
           setConnectionMap(msg.weight_grid);
           setInspectedCell({ x: msg.x, y: msg.y });
+          setInspectInfo({
+            activation: msg.activation,
+            tension: msg.tension,
+            total_dendritas: msg.total_dendritas,
+            total_sinapsis: msg.total_sinapsis,
+          });
           setInputWeightGrid(msg.input_weight_grid ?? null);
           if (msg.input_weight_width && msg.input_weight_height) {
             setInputWeightDims({ width: msg.input_weight_width, height: msg.input_weight_height });
@@ -188,6 +212,7 @@ export function useExperiment(): UseExperimentReturn {
   const reset = useCallback(() => {
     setConnectionMap(null);
     setInspectedCell(null);
+    setInspectInfo(null);
     setState("initializing");
     send({ action: "reset" });
   }, [send]);
@@ -223,6 +248,7 @@ export function useExperiment(): UseExperimentReturn {
       if (prev) {
         setConnectionMap(null);
         setInspectedCell(null);
+        setInspectInfo(null);
         setInputWeightGrid(null);
         setInputWeightDims(null);
         send({ action: "uninspect" });
@@ -250,6 +276,7 @@ export function useExperiment(): UseExperimentReturn {
     inspectMode,
     connectionMap,
     inspectedCell,
+    inspectInfo,
     brushSize,
     brushMode,
     start,

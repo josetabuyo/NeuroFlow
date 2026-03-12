@@ -1,0 +1,15 @@
+{
+  "name": "Sharp Pow Daemon",
+  "description": "Daemon sharpening via polynomial output function. No input, no learning. Each term is coeff * sign(t) * |t|^n, summed together. Use tension view to compare peak shape.",
+  "config": {
+    "description": "Polynomial tension shaping: f(t) = sum of coeff·t^n terms. x = linear, x_pow_2 = quadratic, x_pow_3 = cubic. Example: {x: 1, x_pow_2: 0.5} = t + 0.5·t². Experiment with different combinations to sharpen daemon peaks.",
+    "grid": { "width": 50, "height": 50 },
+    "wiring": {
+      "mask": "deamon_e3_g2_i12_de1_di1",
+      "dendrite_exc_weight": 0.9,
+      "dendrite_inh_weight": -1,
+      "process_mode": "avg_vs_avg",
+      "tension_function": { "x_pow_2": 1.0 }
+    }
+  }
+}
