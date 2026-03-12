@@ -22,11 +22,6 @@ export interface MaskPresetInfo {
   mask_stats?: MaskStats;
 }
 
-export interface BalanceModeInfo {
-  id: string;
-  name: string;
-}
-
 export interface InputSourceInfo {
   id: string;
   name: string;
@@ -40,54 +35,59 @@ export interface FontInfo {
   description: string;
 }
 
-export interface ExperimentConfig {
-  description?: string;
-  width: number;
-  height: number;
-  rule?: number;
-  balance?: number;
-  balance_mode?: string;
-  mask?: string;
-  input_enabled?: boolean;
-  input_text?: string;
-  input_resolution?: number;
-  frames_per_char?: number;
-  input_dendrite_weight?: number;
-  deamon_exc_weight?: number;
-  deamon_inh_weight?: number;
-  background_white_noise?: number;
-  shift_noise?: boolean;
-  noise_inter_char?: boolean;
-  input_source?: string;
-  font?: string;
-  font_size?: number;
-  learning?: boolean;
-  learning_rate?: number;
-  spike_adaptation?: boolean;
-  max_active_steps?: number;
-  refractory_steps?: number;
-  process_mode?: string;
-  tension_function?: Record<string, number>;
+export interface ProcessModeInfo {
+  id: string;
+  name: string;
+  description: string;
 }
 
-export interface ConfigPreset {
+/* ── Nested config (native format everywhere) ── */
+
+export interface ExperimentConfig {
+  description?: string;
+  grid: { width: number; height: number };
+  wiring: {
+    mask?: string;
+    dendrite_exc_weight?: number;
+    dendrite_inh_weight?: number;
+    process_mode?: string;
+    tension_function?: Record<string, number>;
+  };
+  input?: {
+    source?: string;
+    text?: string;
+    resolution?: number;
+    frames_per_char?: number;
+    dendrite_input_weight?: number;
+    font?: string;
+    font_size?: number;
+  };
+  noise?: {
+    background?: number;
+    shift?: boolean;
+    inter_char?: boolean;
+  };
+  learning?: {
+    rate?: number;
+  };
+  spiking?: {
+    up_ticks?: number;
+    down_ticks?: number;
+  };
+}
+
+export interface ConfigTemplate {
   id: string;
   name: string;
   description: string;
   config: ExperimentConfig;
 }
 
-export interface ExperimentInfo {
-  id: string;
-  name: string;
-  description: string;
-  rules?: number[];
-  masks?: MaskPresetInfo[];
-  balance_modes?: BalanceModeInfo[];
-  input_sources?: InputSourceInfo[];
-  fonts?: FontInfo[];
-  default_config: ExperimentConfig;
-  config_presets?: ConfigPreset[];
+export interface Metadata {
+  masks: MaskPresetInfo[];
+  fonts: FontInfo[];
+  process_modes: ProcessModeInfo[];
+  input_sources: InputSourceInfo[];
 }
 
 export interface PerfMetrics {

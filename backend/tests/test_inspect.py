@@ -1,15 +1,14 @@
-"""Tests for the Connection Inspector — inspect() in base Experimento.
+"""Tests for the Connection Inspector — inspect() in Experiment.
 
 Validates:
 - weight_grid with correct dimensions
 - Excitatory neighbors with positive weight
 - Inhibitory blocks with negative weight
-- Cells without connection → None
+- Cells without connection -> None
 - Inspected cell marked with 999
 - Neurona on border: same connections as center (toroidal topology)
 - total_dendritas and total_sinapsis correct
 - Effective weights clamped to [-1, 1]
-- Von Neumann: neuron has connections to row below
 - Source neuron in multiple dendrites: weights summed
 """
 
@@ -22,17 +21,25 @@ from core.dendrita import Dendrita
 from core.neurona import Neurona, NeuronaEntrada
 from core.brain import Brain
 from core.masks import MASK_SIMPLE
-from experiments.deamons_lab import DeamonsLabExperiment
+from experiments.experiment import Experiment
+
+
+def _nested_config(
+    width: int = 10, height: int = 10, mask: str = "simple",
+) -> dict:
+    return {
+        "grid": {"width": width, "height": height},
+        "wiring": {"mask": mask, "process_mode": "min_vs_max"},
+    }
 
 
 class TestInspect:
-    """Experimento.inspect() returns effective weight map."""
+    """Experiment.inspect() returns effective weight map."""
 
     def test_inspect_retorna_weight_grid_dimensiones_correctas(self) -> None:
-        """weight_grid has the same dimensions as the grid."""
         random.seed(42)
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         result = exp.inspect(5, 5)
 
@@ -44,10 +51,9 @@ class TestInspect:
         assert all(len(row) == 10 for row in grid)
 
     def test_vecinos_excitatorios_peso_positivo(self) -> None:
-        """Central neuron: 8 immediate neighbors with positive weight."""
         random.seed(42)
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         result = exp.inspect(5, 5)
         grid = result["weight_grid"]
@@ -60,10 +66,9 @@ class TestInspect:
             assert peso > 0, f"Neighbor ({nx},{ny}) should be excitatory, but has weight {peso}"
 
     def test_bloques_inhibitorios_peso_negativo(self) -> None:
-        """Central neuron: inhibitory blocks with negative weight."""
         random.seed(42)
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         result = exp.inspect(5, 5)
         grid = result["weight_grid"]
@@ -77,10 +82,9 @@ class TestInspect:
                 assert peso < 0, f"Cell ({nx},{ny}) should be inhibitory, but has weight {peso}"
 
     def test_celda_sin_conexion_es_none(self) -> None:
-        """Cells without connection to inspected neuron → None."""
         random.seed(42)
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 30, "height": 30, "mask": "simple"})
+        exp = Experiment()
+        exp.setup(_nested_config(width=30, height=30))
 
         result = exp.inspect(15, 15)
         grid = result["weight_grid"]
@@ -89,10 +93,9 @@ class TestInspect:
         assert grid[29][29] is None
 
     def test_celda_inspeccionada_marcada_999(self) -> None:
-        """The inspected cell is marked with special value 999."""
         random.seed(42)
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         result = exp.inspect(5, 5)
         grid = result["weight_grid"]
@@ -100,10 +103,9 @@ class TestInspect:
         assert grid[5][5] == 999
 
     def test_neurona_borde_mismas_conexiones_que_centro(self) -> None:
-        """Toroidal: border neuron has the same connection count as center."""
         random.seed(42)
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 30, "height": 30, "mask": "simple"})
+        exp = Experiment()
+        exp.setup(_nested_config(width=30, height=30))
 
         result_centro = exp.inspect(15, 15)
         result_borde = exp.inspect(0, 0)
@@ -121,10 +123,9 @@ class TestInspect:
         assert conexiones_borde == conexiones_centro
 
     def test_total_dendritas_y_sinapsis_correctos(self) -> None:
-        """total_dendritas and total_sinapsis reflect the actual structure."""
         random.seed(42)
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         result = exp.inspect(5, 5)
 
@@ -135,10 +136,9 @@ class TestInspect:
         assert result["total_sinapsis"] == total_sinapsis
 
     def test_pesos_efectivos_clampeados(self) -> None:
-        """Effective weights are clamped to [-1, 1]."""
         random.seed(42)
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10, "mask": "simple"})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         result = exp.inspect(5, 5)
         grid = result["weight_grid"]
@@ -149,7 +149,6 @@ class TestInspect:
                     assert -1.0 <= cell <= 1.0, f"Weight {cell} out of range [-1, 1]"
 
     def test_neurona_fuente_multiples_dendritas_suma(self) -> None:
-        """If a source neuron appears in multiple dendrites, weights are summed."""
         constructor = Constructor()
         brain, _ = constructor.crear_grilla(
             width=3, height=3, filas_entrada=[], filas_salida=[], umbral=0.0
@@ -166,12 +165,14 @@ class TestInspect:
 
         neurona_destino.dendritas.extend([d1, d2])
 
-        exp = DeamonsLabExperiment()
+        exp = Experiment()
         exp.brain = brain
         exp.width = 3
         exp.height = 3
         exp.regiones = {}
         exp.generation = 0
+        exp.input_enabled = False
+        exp._input_start_idx = 9
 
         result = exp.inspect(1, 1)
         grid = result["weight_grid"]

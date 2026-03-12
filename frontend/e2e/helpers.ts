@@ -5,15 +5,9 @@ export async function waitForConnection(page: Page): Promise<void> {
   await expect(page.getByText("ready")).toBeVisible({ timeout: 10_000 });
 }
 
-/** Start an experiment and wait for canvas + controls to be ready. */
-export async function startExperiment(
-  page: Page,
-  experiment: "deamons_lab"
-): Promise<void> {
-  await page.getByRole("button", { name: "Deamons Lab" }).click();
+/** Start an experiment with the current config and wait for canvas + controls. */
+export async function startExperiment(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Start Experiment" }).click();
-  // Use "main canvas" to avoid matching the MaskPreview canvas in the sidebar.
-  // deamons_lab with large masks can take 30+ seconds to build on the backend.
   await expect(page.locator("main canvas")).toBeVisible({ timeout: 45_000 });
   await expect(
     page.getByRole("button", { name: "Step" })

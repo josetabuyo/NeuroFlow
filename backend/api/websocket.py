@@ -10,18 +10,11 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from experiments.base import Experimento
-from experiments.deamons_lab import DeamonsLabExperiment
-from experiments.dynamic_som import DynamicSOMExperiment
+from experiments.experiment import Experiment
 
 logger = logging.getLogger(__name__)
 
 ws_router = APIRouter()
-
-EXPERIMENT_CLASSES: dict[str, type[Experimento]] = {
-    "deamons_lab": DeamonsLabExperiment,
-    "dynamic_som": DynamicSOMExperiment,
-}
 
 
 class ExperimentSession:
@@ -29,7 +22,7 @@ class ExperimentSession:
 
     def __init__(self, websocket: WebSocket) -> None:
         self.ws = websocket
-        self.experiment: Experimento | None = None
+        self.experiment: Experiment | None = None
         self._play_task: asyncio.Task | None = None
         self._playing: bool = False
         self.fps: int = 10
@@ -66,14 +59,8 @@ class ExperimentSession:
             await self.send({"type": "error", "message": f"Unknown action: {action}"})
 
     async def _handle_start(self, message: dict[str, Any]) -> None:
-        """Initialize an experiment."""
-        experiment_id = message.get("experiment", "deamons_lab")
+        """Initialize an experiment from config."""
         config = message.get("config", {})
-
-        exp_class = EXPERIMENT_CLASSES.get(experiment_id)
-        if not exp_class:
-            await self.send({"type": "error", "message": f"Unknown experiment: {experiment_id}"})
-            return
 
         await self._stop_play_loop()
         self._inspect_x = None
@@ -82,7 +69,7 @@ class ExperimentSession:
         await self.send({"type": "status", "state": "initializing"})
         await asyncio.sleep(0)
 
-        self.experiment = exp_class()
+        self.experiment = Experiment()
         self.experiment.setup(config)
 
         await self.send({"type": "status", "state": "ready"})
@@ -107,7 +94,7 @@ class ExperimentSession:
         cells: list[dict[str, int]] = message.get("cells", [])
         value: float = message.get("value", 1.0)
 
-        brain_tensor = getattr(self.experiment, "brain_tensor", None)
+        brain_tensor = self.experiment.brain_tensor
         if brain_tensor:
             w = self.experiment.width
             for cell in cells:
@@ -127,7 +114,7 @@ class ExperimentSession:
             await self.send({"type": "status", "state": "paused"})
 
     async def _handle_step(self, message: dict[str, Any]) -> None:
-        """Process one or more steps. Supports {"action": "step", "count": N}."""
+        """Process one or more steps."""
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
@@ -167,11 +154,7 @@ class ExperimentSession:
         await self._stop_play_loop()
 
     async def _handle_inspect(self, message: dict[str, Any]) -> None:
-        """Start live inspection of a neuron's connections.
-
-        Sends the full inspect data immediately and remembers the cell
-        so that subsequent frames include updated weights.
-        """
+        """Start live inspection of a neuron's connections."""
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
@@ -189,7 +172,7 @@ class ExperimentSession:
         self._inspect_y = None
 
     async def _handle_reconnect(self, message: dict[str, Any]) -> None:
-        """Full restart with new config — equivalent to a fresh Start."""
+        """Full restart with new config."""
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
@@ -209,24 +192,17 @@ class ExperimentSession:
     async def _handle_update_config(self, message: dict[str, Any]) -> None:
         """Apply config changes to a running experiment.
 
-        Soft params (learning, noise, text) are applied in-place without
-        interrupting playback.  Hard params trigger a reconnect with
-        automatic play-loop restart.
+        Soft params are applied in-place without interrupting playback.
+        Hard params trigger a full rebuild.
         """
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
 
         config = message.get("config", {})
+        soft_only = self.experiment.update_config(config)
 
-        if hasattr(self.experiment, "update_config"):
-            soft_only = self.experiment.update_config(config)
-            if soft_only:
-                return
-
-        elif hasattr(self.experiment, "reconnect"):
-            self.experiment.reconnect(config)
-        else:
+        if soft_only:
             return
 
         was_playing = self._playing
@@ -283,11 +259,7 @@ class ExperimentSession:
         steps: int | None = None,
         elapsed_s: float | None = None,
     ) -> None:
-        """Send the current frame to the client, with optional timing metrics.
-
-        When a neuron is being inspected, the frame includes live-updated
-        inspect data so the client can visualize synapse changes in real time.
-        """
+        """Send the current frame to the client."""
         if not self.experiment:
             return
 

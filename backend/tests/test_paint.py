@@ -8,19 +8,24 @@ Validates:
 - Paint updates the frame (the grid reflects changes)
 """
 
-import pytest
-from experiments.deamons_lab import DeamonsLabExperiment
+from experiments.experiment import Experiment
+
+
+def _nested_config(width: int = 10, height: int = 10) -> dict:
+    return {
+        "grid": {"width": width, "height": height},
+        "wiring": {"mask": "simple", "process_mode": "min_vs_max"},
+    }
 
 
 class TestPaint:
     """Paint action: activate/deactivate groups of neurons."""
 
     def test_paint_una_celda_activa(self) -> None:
-        """Paint with one cell and value 1.0 activates the neuron."""
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
-        idx = 5 * 10 + 5  # y=5, x=5
+        idx = 5 * 10 + 5
         exp.brain_tensor.set_valor(idx, 0.0)
         assert exp.brain_tensor.valores[idx].item() == 0.0
 
@@ -28,9 +33,8 @@ class TestPaint:
         assert exp.brain_tensor.valores[idx].item() == 1.0
 
     def test_paint_una_celda_desactiva(self) -> None:
-        """Paint with one cell and value 0.0 deactivates the neuron."""
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         idx = 5 * 10 + 5
         exp.brain_tensor.set_valor(idx, 1.0)
@@ -40,9 +44,8 @@ class TestPaint:
         assert exp.brain_tensor.valores[idx].item() == 0.0
 
     def test_paint_multiples_celdas_activa_todas(self) -> None:
-        """Paint with multiple cells activates all neurons."""
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         celdas = [(3, 3), (4, 3), (5, 3), (3, 4), (4, 4), (5, 4)]
         for x, y in celdas:
@@ -59,17 +62,16 @@ class TestPaint:
                 f"Neuron ({x},{y}) should be active"
 
     def test_paint_celdas_fuera_del_grid_no_falla(self) -> None:
-        """Paint with cells outside the grid ignores without failing."""
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         celdas = [
-            (5, 5),    # Valid
-            (-1, 5),   # Outside
-            (5, -1),   # Outside
-            (10, 5),   # Outside
-            (5, 10),   # Outside
-            (99, 99),  # Outside
+            (5, 5),
+            (-1, 5),
+            (5, -1),
+            (10, 5),
+            (5, 10),
+            (99, 99),
         ]
 
         for x, y in celdas:
@@ -81,9 +83,8 @@ class TestPaint:
         assert exp.brain_tensor.valores[idx_valid].item() == 1.0
 
     def test_paint_actualiza_frame(self) -> None:
-        """Paint modifies the frame: the grid reflects changes."""
-        exp = DeamonsLabExperiment()
-        exp.setup({"width": 10, "height": 10})
+        exp = Experiment()
+        exp.setup(_nested_config())
 
         for i in range(exp.brain_tensor.n_real):
             exp.brain_tensor.set_valor(i, 0.0)

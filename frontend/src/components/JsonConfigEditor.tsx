@@ -1,10 +1,10 @@
 /** JSON config editor — CodeMirror 6 based, with dark theme matching the app.
  *
- * Displays the flat ExperimentConfig as a nested JSON structure for readability,
- * and converts back to flat on edit. Zero backend changes required.
+ * Works directly with the nested ExperimentConfig format.
+ * No flat/nested conversion needed — what you see is what the backend gets.
  *
  * Provides context-aware autocomplete for fields with known options
- * (masks, fonts, process_mode, etc.) derived from the ExperimentInfo.
+ * (masks, fonts, process_mode, etc.) derived from Metadata.
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -15,177 +15,7 @@ import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/lang
 import { autocompletion } from "@codemirror/autocomplete";
 import type { CompletionContext, CompletionResult } from "@codemirror/autocomplete";
 import { tags } from "@lezer/highlight";
-import type { ExperimentConfig, ExperimentInfo } from "../types";
-
-/* ── Nested config type (display only) ──────────────────────────── */
-
-interface NestedConfig {
-  description?: string;
-  grid: { width: number; height: number };
-  wiring: {
-    mask?: string;
-    process_mode?: string;
-    dendrite_input_weight?: number;
-    dendrite_exc_weight?: number;
-    dendrite_inh_weight?: number;
-    balance?: number;
-    balance_mode?: string;
-    rule?: number;
-    tension_function?: Record<string, number>;
-  };
-  input?: {
-    enabled?: boolean;
-    source?: string;
-    ascii?: {
-      font?: string;
-      font_size?: number;
-      text?: string;
-      resolution?: number;
-      frames_per_char?: number;
-    };
-  };
-  noise?: {
-    background_white_noise?: number;
-    shift?: boolean;
-    noise_inter_char?: boolean;
-  };
-  learning?: {
-    enabled?: boolean;
-    rate?: number;
-  };
-  spiking?: {
-    enabled?: boolean;
-    max_active_steps?: number;
-    refractory_steps?: number;
-  };
-}
-
-/* ── Flat ↔ Nested conversion ───────────────────────────────────── */
-
-function toNested(c: ExperimentConfig): NestedConfig {
-  const n: NestedConfig = {
-    ...(c.description !== undefined ? { description: c.description } : {}),
-    grid: { width: c.width, height: c.height },
-    wiring: {},
-  };
-
-  if (c.mask !== undefined) n.wiring.mask = c.mask;
-  if (c.process_mode !== undefined) n.wiring.process_mode = c.process_mode;
-  if (c.input_dendrite_weight !== undefined) n.wiring.dendrite_input_weight = c.input_dendrite_weight;
-  if (c.deamon_exc_weight !== undefined) n.wiring.dendrite_exc_weight = c.deamon_exc_weight;
-  if (c.deamon_inh_weight !== undefined) n.wiring.dendrite_inh_weight = c.deamon_inh_weight;
-  if (c.balance !== undefined) n.wiring.balance = c.balance;
-  if (c.balance_mode !== undefined) n.wiring.balance_mode = c.balance_mode;
-  if (c.rule !== undefined) n.wiring.rule = c.rule;
-  if (c.tension_function !== undefined) n.wiring.tension_function = c.tension_function;
-
-  const hasInput = c.input_enabled !== undefined
-    || c.input_source !== undefined
-    || c.font !== undefined
-    || (c.input_text !== undefined && c.input_text !== "")
-    || c.input_resolution !== undefined;
-  if (hasInput) {
-    n.input = {};
-    if (c.input_enabled !== undefined) n.input.enabled = c.input_enabled;
-    if (c.input_source !== undefined) n.input.source = c.input_source;
-
-    const hasAscii = c.font !== undefined || c.font_size !== undefined
-      || c.input_text !== undefined || c.input_resolution !== undefined || c.frames_per_char !== undefined;
-    if (hasAscii) {
-      n.input.ascii = {};
-      if (c.font !== undefined) n.input.ascii.font = c.font;
-      if (c.font_size !== undefined) n.input.ascii.font_size = c.font_size;
-      if (c.input_text !== undefined) n.input.ascii.text = c.input_text;
-      if (c.input_resolution !== undefined) n.input.ascii.resolution = c.input_resolution;
-      if (c.frames_per_char !== undefined) n.input.ascii.frames_per_char = c.frames_per_char;
-    }
-  }
-
-  const hasNoise = c.background_white_noise !== undefined
-    || c.shift_noise !== undefined || c.noise_inter_char !== undefined;
-  if (hasNoise) {
-    n.noise = {};
-    if (c.background_white_noise !== undefined) n.noise.background_white_noise = c.background_white_noise;
-    if (c.shift_noise !== undefined) n.noise.shift = c.shift_noise;
-    if (c.noise_inter_char !== undefined) n.noise.noise_inter_char = c.noise_inter_char;
-  }
-
-  const hasLearning = c.learning !== undefined || c.learning_rate !== undefined;
-  if (hasLearning) {
-    n.learning = {};
-    if (c.learning !== undefined) n.learning.enabled = c.learning;
-    if (c.learning_rate !== undefined) n.learning.rate = c.learning_rate;
-  }
-
-  const hasSpiking = c.spike_adaptation !== undefined || c.max_active_steps !== undefined
-    || c.refractory_steps !== undefined;
-  if (hasSpiking) {
-    n.spiking = {};
-    if (c.spike_adaptation !== undefined) n.spiking.enabled = c.spike_adaptation;
-    if (c.max_active_steps !== undefined) n.spiking.max_active_steps = c.max_active_steps;
-    if (c.refractory_steps !== undefined) n.spiking.refractory_steps = c.refractory_steps;
-  }
-
-  return n;
-}
-
-function toFlat(n: NestedConfig): ExperimentConfig {
-  const c: ExperimentConfig = {
-    ...(n.description !== undefined ? { description: n.description } : {}),
-    width: n.grid.width,
-    height: n.grid.height,
-  };
-
-  if (n.wiring.mask !== undefined) c.mask = n.wiring.mask;
-  if (n.wiring.process_mode !== undefined) c.process_mode = n.wiring.process_mode;
-  if (n.wiring.dendrite_input_weight !== undefined) c.input_dendrite_weight = n.wiring.dendrite_input_weight;
-  if (n.wiring.dendrite_exc_weight !== undefined) c.deamon_exc_weight = n.wiring.dendrite_exc_weight;
-  if (n.wiring.dendrite_inh_weight !== undefined) c.deamon_inh_weight = n.wiring.dendrite_inh_weight;
-  if (n.wiring.balance !== undefined) c.balance = n.wiring.balance;
-  if (n.wiring.balance_mode !== undefined) c.balance_mode = n.wiring.balance_mode;
-  if (n.wiring.rule !== undefined) c.rule = n.wiring.rule;
-  if (n.wiring.tension_function !== undefined) c.tension_function = n.wiring.tension_function;
-
-  if (n.input) {
-    if (n.input.enabled !== undefined) c.input_enabled = n.input.enabled;
-    if (n.input.source !== undefined) c.input_source = n.input.source;
-    if (n.input.ascii) {
-      if (n.input.ascii.font !== undefined) c.font = n.input.ascii.font;
-      if (n.input.ascii.font_size !== undefined) c.font_size = n.input.ascii.font_size;
-      if (n.input.ascii.text !== undefined) c.input_text = n.input.ascii.text;
-      if (n.input.ascii.resolution !== undefined) c.input_resolution = n.input.ascii.resolution;
-      if (n.input.ascii.frames_per_char !== undefined) c.frames_per_char = n.input.ascii.frames_per_char;
-    }
-  } else {
-    c.input_enabled = false;
-    c.input_text = "";
-  }
-
-  if (n.noise) {
-    if (n.noise.background_white_noise !== undefined) c.background_white_noise = n.noise.background_white_noise;
-    if (n.noise.shift !== undefined) c.shift_noise = n.noise.shift;
-    if (n.noise.noise_inter_char !== undefined) c.noise_inter_char = n.noise.noise_inter_char;
-  }
-
-  if (n.learning) {
-    if (n.learning.enabled !== undefined) c.learning = n.learning.enabled;
-    if (n.learning.rate !== undefined) c.learning_rate = n.learning.rate;
-  }
-
-  if (n.spiking) {
-    if (n.spiking.enabled !== undefined) c.spike_adaptation = n.spiking.enabled;
-    if (n.spiking.max_active_steps !== undefined) c.max_active_steps = n.spiking.max_active_steps;
-    if (n.spiking.refractory_steps !== undefined) c.refractory_steps = n.spiking.refractory_steps;
-  }
-
-  return c;
-}
-
-/* ── Stable JSON serialization ──────────────────────────────────── */
-
-function nestedStringify(config: ExperimentConfig): string {
-  return JSON.stringify(toNested(config), null, 2);
-}
+import type { ExperimentConfig, Metadata } from "../types";
 
 /* ── Autocomplete: JSON path detection + options ────────────────── */
 
@@ -197,41 +27,41 @@ interface OptionItem {
 
 type OptionsMap = Record<string, OptionItem[]>;
 
-function buildOptionsMap(exp: ExperimentInfo | undefined): OptionsMap {
+function buildOptionsMap(metadata: Metadata | undefined): OptionsMap {
   const map: OptionsMap = {};
 
-  map["wiring.process_mode"] = [
-    { value: "avg_vs_avg", label: "avg_vs_avg", detail: "Avg excitatory vs avg inhibitory" },
-    { value: "min_vs_max", label: "min_vs_max", detail: "Best exc vs best inh" },
-    { value: "sum", label: "sum", detail: "All dendrites summed" },
-  ];
+  if (metadata?.process_modes) {
+    map["wiring.process_mode"] = metadata.process_modes.map((m) => ({
+      value: m.id,
+      label: m.id,
+      detail: m.description,
+    }));
+  } else {
+    map["wiring.process_mode"] = [
+      { value: "avg_vs_avg", label: "avg_vs_avg", detail: "Avg excitatory vs avg inhibitory" },
+      { value: "min_vs_max", label: "min_vs_max", detail: "Best exc vs best inh" },
+      { value: "sum", label: "sum", detail: "All dendrites summed" },
+    ];
+  }
 
-  if (exp?.masks) {
-    map["wiring.mask"] = exp.masks.map((m) => ({
+  if (metadata?.masks) {
+    map["wiring.mask"] = metadata.masks.map((m) => ({
       value: m.id,
       label: m.id,
       detail: m.name,
     }));
   }
 
-  if (exp?.balance_modes) {
-    map["wiring.balance_mode"] = exp.balance_modes.map((m) => ({
-      value: m.id,
-      label: m.id,
-      detail: m.name,
-    }));
-  }
-
-  if (exp?.input_sources) {
-    map["input.source"] = exp.input_sources.map((s) => ({
+  if (metadata?.input_sources) {
+    map["input.source"] = metadata.input_sources.map((s) => ({
       value: s.id,
       label: s.id,
       detail: s.name,
     }));
   }
 
-  if (exp?.fonts) {
-    map["input.ascii.font"] = exp.fonts.map((f) => ({
+  if (metadata?.fonts) {
+    map["input.font"] = metadata.fonts.map((f) => ({
       value: f.id,
       label: f.id,
       detail: `${f.name} — ${f.description}`,
@@ -382,19 +212,21 @@ const baseExtensions = [json(), neuroTheme, syntaxHighlighting(neuroHighlight), 
 interface JsonConfigEditorProps {
   config: ExperimentConfig;
   onChange: (config: ExperimentConfig) => void;
-  experimentInfo?: ExperimentInfo;
+  metadata?: Metadata;
 }
 
-export function JsonConfigEditor({ config, onChange, experimentInfo }: JsonConfigEditorProps) {
-  const [text, setText] = useState(() => nestedStringify(config));
+export function JsonConfigEditor({ config, onChange, metadata }: JsonConfigEditorProps) {
+  const stringify = (c: ExperimentConfig) => JSON.stringify(c, null, 2);
+
+  const [text, setText] = useState(() => stringify(config));
   const [parseError, setParseError] = useState<string | null>(null);
   const lastExternalConfig = useRef(config);
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  const configJson = useMemo(() => nestedStringify(config), [config]);
+  const configJson = useMemo(() => stringify(config), [config]);
 
   const extensions = useMemo(() => {
-    const optionsMap = buildOptionsMap(experimentInfo);
+    const optionsMap = buildOptionsMap(metadata);
     const completionSource = makeCompletionSource(optionsMap);
     return [
       ...baseExtensions,
@@ -404,10 +236,10 @@ export function JsonConfigEditor({ config, onChange, experimentInfo }: JsonConfi
         icons: true,
       }),
     ];
-  }, [experimentInfo]);
+  }, [metadata]);
 
   useEffect(() => {
-    if (configJson !== nestedStringify(lastExternalConfig.current)) {
+    if (configJson !== stringify(lastExternalConfig.current)) {
       lastExternalConfig.current = config;
       setText(configJson);
       setParseError(null);
@@ -429,10 +261,13 @@ export function JsonConfigEditor({ config, onChange, experimentInfo }: JsonConfi
             setParseError("grid.width and grid.height are required");
             return;
           }
+          if (!parsed.wiring || typeof parsed.wiring !== "object") {
+            setParseError("wiring section is required");
+            return;
+          }
           setParseError(null);
-          const flat = toFlat(parsed as NestedConfig);
-          lastExternalConfig.current = flat;
-          onChange(flat);
+          lastExternalConfig.current = parsed;
+          onChange(parsed as ExperimentConfig);
         } catch (e) {
           setParseError((e as Error).message);
         }

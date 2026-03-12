@@ -8,105 +8,48 @@ import { Controls } from "./components/Controls";
 import { BrushPalette } from "./components/BrushPalette";
 import { useExperiment } from "./hooks/useExperiment";
 import { generateSquareBrush } from "./brushes";
-import type { ExperimentInfo, ExperimentConfig } from "./types";
+import type { ConfigTemplate, ExperimentConfig, Metadata } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
-const DEFAULT_EXPERIMENTS: ExperimentInfo[] = [
-  {
-    id: "deamons_lab",
-    name: "Deamons Lab",
-    description:
-      "Configurable mask connectivity lab with balance control",
-    masks: [
-      { id: "simple", name: "Kohonen Simple", description: "Moore r=1, corona r=2-4, 8 inh. dendrites.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, 8 blocks 3x3", dendrites_inh: 8 },
-      { id: "wide_hat", name: "Wide Hat", description: "Moore r=1, corona r=2-7, 8 inh. dendrites.", center: "Moore r=1 (8 neighbors)", corona: "r=2-7, large corona", dendrites_inh: 8 },
-      { id: "narrow_hat", name: "Narrow Hat", description: "Moore r=1, corona r=2-3, 8 inh. dendrites.", center: "Moore r=1 (8 neighbors)", corona: "r=2-3, close corona", dendrites_inh: 8 },
-      { id: "big_center", name: "Big Center", description: "Moore r=2 (24 neighbors), corona r=4-7, 8 inh. dendrites.", center: "Moore r=2 (24 neighbors)", corona: "r=4-7, far corona", dendrites_inh: 8 },
-      { id: "cross_center", name: "Cross Center", description: "Von Neumann r=1 (4 neighbors), corona r=2-4, 4 inh. dendrites.", center: "Von Neumann r=1 (4 neighbors)", corona: "r=2-4, 4 cardinal blocks", dendrites_inh: 4 },
-      { id: "one_dendrite", name: "One Dendrite", description: "Moore r=1, corona r=2-4 in 1 single inh. dendrite.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, all in 1 dendrite", dendrites_inh: 1 },
-      { id: "fine_grain", name: "Fine Grain", description: "Moore r=1, corona r=2-4, 16 inh. sectors.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, 16 sectors", dendrites_inh: 16 },
-      { id: "double_ring", name: "Double Ring", description: "Moore r=1, ring r=2-3 (-1) + ring r=5-7 (-0.5).", center: "Moore r=1 (8 neighbors)", corona: "r=2-3 (-1) + r=5-7 (-0.5)", dendrites_inh: 16 },
-      { id: "soft_inhibit", name: "Soft Inhibition", description: "Moore r=1, corona r=2-4, inh. weight -0.5.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, weight -0.5", dendrites_inh: 8 },
-      { id: "strong_center", name: "Strong Center", description: "Moore r=1 x2 exc. dendrites, corona r=2-4.", center: "Moore r=1 (2 exc. dendrites)", corona: "r=2-4, weight -1", dendrites_inh: 8 },
-    ],
-    default_config: { width: 50, height: 50, balance: 0.0, process_mode: "min_vs_max" },
+const DEFAULT_CONFIG: ExperimentConfig = {
+  grid: { width: 50, height: 50 },
+  wiring: {
+    mask: "deamon_3_en_50",
+    dendrite_exc_weight: 1,
+    dendrite_inh_weight: -1,
+    process_mode: "min_vs_max",
   },
-  {
-    id: "dynamic_som",
-    name: "Dynamic SOM",
-    description: "Self-organizing map with visual input streams",
-    masks: [
-      { id: "simple", name: "Kohonen Simple", description: "Moore r=1, corona r=2-4, 8 inh. dendrites.", center: "Moore r=1 (8 neighbors)", corona: "r=2-4, 8 blocks 3x3", dendrites_inh: 8 },
-    ],
-    input_sources: [{ id: "ascii", name: "ASCII Images" }],
-    fonts: [
-      { id: "press_start_2p", name: "Press Start 2P", sizes: [7, 8, 9, 10, 12, 14], default_size: 8, description: "Pixel font — arcade style" },
-      { id: "silkscreen", name: "Silkscreen", sizes: [7, 8, 9, 10, 12, 14], default_size: 10, description: "Pixel font — small screen" },
-    ],
-    default_config: {
-      width: 50,
-      height: 50,
-      input_text: "AB",
-      input_resolution: 20,
-      frames_per_char: 10,
-      input_dendrite_weight: 0.2,
-      deamon_exc_weight: 0.5,
-      deamon_inh_weight: -0.5,
-      background_white_noise: 0.05,
-      shift_noise: false,
-      noise_inter_char: true,
-      input_source: "ascii",
-      font: "press_start_2p",
-      font_size: 10,
-      learning: true,
-      learning_rate: 0.01,
-      spike_adaptation: false,
-      max_active_steps: 5,
-      refractory_steps: 5,
-      process_mode: "min_vs_max",
-    },
-  },
-];
-
-const DEFAULT_SELECTED = "deamons_lab";
-
-function resolveConfig(exp: ExperimentInfo): ExperimentConfig {
-  const cfg = { ...exp.default_config };
-  if (!cfg.mask && exp.masks?.length) cfg.mask = exp.masks[0].id;
-  return cfg;
-}
+};
 
 const SIDEBAR_DEFAULT = 380;
 const SIDEBAR_MIN = 280;
 const SIDEBAR_MAX = 700;
 
 function App() {
-  const [experiments, setExperiments] = useState<ExperimentInfo[]>(DEFAULT_EXPERIMENTS);
-  const [selectedExp, setSelectedExp] = useState(DEFAULT_SELECTED);
-  const [config, setConfig] = useState<ExperimentConfig>(
-    resolveConfig(DEFAULT_EXPERIMENTS.find((e) => e.id === DEFAULT_SELECTED) ?? DEFAULT_EXPERIMENTS[0])
-  );
+  const [templates, setTemplates] = useState<ConfigTemplate[]>([]);
+  const [metadata, setMetadata] = useState<Metadata | undefined>(undefined);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [config, setConfig] = useState<ExperimentConfig>(DEFAULT_CONFIG);
   const [stepsPerTick, setStepsPerTick] = useState(1);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [isResizing, setIsResizing] = useState(false);
 
-  // ── Execution history per preset ──
-  const [activePresetId, setActivePresetId] = useState("_default");
+  // ── Execution history ──
   const [runHistory, setRunHistory] = useState<ExperimentConfig[]>([]);
   const [runIndex, setRunIndex] = useState(-1);
 
   const canGoPrev = runIndex > 0;
   const canGoNext = runIndex >= 0 && runIndex < runHistory.length - 1;
 
-  const activePresetRef = useRef(activePresetId);
-  activePresetRef.current = activePresetId;
+  const selectedTemplateRef = useRef(selectedTemplate);
+  selectedTemplateRef.current = selectedTemplate;
 
-  const loadHistory = useCallback((expId: string, presetId: string) => {
-    fetch(`${API_URL}/api/experiments/${expId}/config/history?preset=${encodeURIComponent(presetId)}`)
+  const loadHistory = useCallback((templateId: string) => {
+    fetch(`${API_URL}/api/templates/${templateId}/config/history?preset=_default`)
       .then((r) => r.json())
       .then((data: { history: { config: ExperimentConfig }[] }) => {
-        if (activePresetRef.current !== presetId) return;
+        if (selectedTemplateRef.current !== templateId) return;
         const configs = data.history.map((h) => h.config);
         setRunHistory(configs);
         if (configs.length > 0) {
@@ -120,8 +63,8 @@ function App() {
   }, []);
 
   const saveExecution = useCallback(
-    (expId: string, presetId: string, cfg: ExperimentConfig) => {
-      fetch(`${API_URL}/api/experiments/${expId}/config?preset=${encodeURIComponent(presetId)}`, {
+    (templateId: string, cfg: ExperimentConfig) => {
+      fetch(`${API_URL}/api/templates/${templateId}/config?preset=_default`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(cfg),
@@ -136,15 +79,6 @@ function App() {
         .catch(() => {});
     },
     [],
-  );
-
-  const handlePresetSelect = useCallback(
-    (presetId: string, presetConfig: ExperimentConfig) => {
-      setActivePresetId(presetId);
-      setConfig(presetConfig);
-      loadHistory(selectedExp, presetId);
-    },
-    [selectedExp, loadHistory],
   );
 
   const goPrev = useCallback(() => {
@@ -196,7 +130,7 @@ function App() {
     stats,
     perf,
     generation,
-    activeExperiment,
+    experimentActive,
     inspectMode,
     connectionMap,
     inspectedCell,
@@ -218,27 +152,32 @@ function App() {
     toggleBrushMode,
   } = useExperiment();
 
-  // Fetch experiments list + restore last executed config for _default preset
+  // Fetch templates + metadata on mount
   useEffect(() => {
     Promise.all([
-      fetch(`${API_URL}/api/experiments`).then((r) => r.json()),
-      fetch(`${API_URL}/api/experiments/${DEFAULT_SELECTED}/config/history?preset=_default`)
-        .then((r) => r.json())
-        .catch(() => ({ history: [] })),
+      fetch(`${API_URL}/api/templates`).then((r) => r.json()),
+      fetch(`${API_URL}/api/metadata`).then((r) => r.json()),
     ])
-      .then(([data, histData]: [ExperimentInfo[], { history: { config: ExperimentConfig }[] }]) => {
-        if (data.length > 0) {
-          setExperiments(data);
-          const configs = histData.history.map((h) => h.config);
-          setRunHistory(configs);
-          if (configs.length > 0) {
-            setRunIndex(configs.length - 1);
-            setConfig(configs[configs.length - 1]);
-          } else {
-            setRunIndex(-1);
-            const selected = data.find((e) => e.id === DEFAULT_SELECTED) ?? data[0];
-            setConfig(resolveConfig(selected));
-          }
+      .then(([tplData, metaData]: [ConfigTemplate[], Metadata]) => {
+        setTemplates(tplData);
+        setMetadata(metaData);
+        if (tplData.length > 0) {
+          const firstId = tplData[0].id;
+          setSelectedTemplate(firstId);
+          setConfig(tplData[0].config);
+
+          // Load history for first template
+          fetch(`${API_URL}/api/templates/${firstId}/config/history?preset=_default`)
+            .then((r) => r.json())
+            .then((histData: { history: { config: ExperimentConfig }[] }) => {
+              const configs = histData.history.map((h) => h.config);
+              setRunHistory(configs);
+              if (configs.length > 0) {
+                setRunIndex(configs.length - 1);
+                setConfig(configs[configs.length - 1]);
+              }
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {});
@@ -246,19 +185,7 @@ function App() {
 
   const hasGrid = grid.length > 0;
 
-  // Auto-sync soft config changes to the backend in real-time.
-  // Hard params (width, height, mask, resolution, dendrite weights) are
-  // excluded — those only apply when pressing Start/Refresh.
-  const SOFT_KEYS: (keyof ExperimentConfig)[] = [
-    "learning", "learning_rate", "background_white_noise", "shift_noise",
-    "noise_inter_char", "frames_per_char", "input_text", "font", "font_size",
-    "spike_adaptation", "max_active_steps", "refractory_steps",
-    "process_mode", "tension_function",
-  ];
-
-  const experimentActiveRef = useRef(false);
-  experimentActiveRef.current = hasGrid && activeExperiment === selectedExp;
-
+  // Soft config sync: update running experiment when certain nested fields change
   const prevConfigRef = useRef(config);
   const liveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -266,43 +193,46 @@ function App() {
     const prev = prevConfigRef.current;
     prevConfigRef.current = config;
 
-    if (!experimentActiveRef.current) return;
+    if (!experimentActive || !hasGrid) return;
 
-    const changed = SOFT_KEYS.some((k) => config[k] !== prev[k]);
+    const changed =
+      JSON.stringify(config.learning) !== JSON.stringify(prev.learning) ||
+      JSON.stringify(config.noise) !== JSON.stringify(prev.noise) ||
+      JSON.stringify(config.spiking) !== JSON.stringify(prev.spiking) ||
+      JSON.stringify(config.wiring?.process_mode) !== JSON.stringify(prev.wiring?.process_mode) ||
+      JSON.stringify(config.wiring?.tension_function) !== JSON.stringify(prev.wiring?.tension_function) ||
+      JSON.stringify(config.input?.text) !== JSON.stringify(prev.input?.text) ||
+      JSON.stringify(config.input?.font) !== JSON.stringify(prev.input?.font) ||
+      JSON.stringify(config.input?.font_size) !== JSON.stringify(prev.input?.font_size) ||
+      JSON.stringify(config.input?.frames_per_char) !== JSON.stringify(prev.input?.frames_per_char);
+
     if (!changed) return;
 
-    const softPatch: Partial<ExperimentConfig> = {};
-    for (const k of SOFT_KEYS) {
-      if (config[k] !== undefined) (softPatch as Record<string, unknown>)[k] = config[k];
-    }
-
     clearTimeout(liveTimerRef.current);
-    liveTimerRef.current = setTimeout(() => updateConfig(softPatch), 80);
+    liveTimerRef.current = setTimeout(() => updateConfig(config), 80);
     return () => clearTimeout(liveTimerRef.current);
-  }, [config, updateConfig]);
+  }, [config, updateConfig, experimentActive, hasGrid]);
 
-  const handleSelectExperiment = useCallback(
+  const handleSelectTemplate = useCallback(
     (id: string) => {
-      setSelectedExp(id);
-      const exp = experiments.find((e) => e.id === id);
-      if (!exp) return;
-
-      setActivePresetId("_default");
-      setConfig(resolveConfig(exp));
-      loadHistory(id, "_default");
+      setSelectedTemplate(id);
+      const tpl = templates.find((t) => t.id === id);
+      if (!tpl) return;
+      setConfig(tpl.config);
+      loadHistory(id);
     },
-    [experiments, loadHistory],
+    [templates, loadHistory],
   );
 
   const handleStart = useCallback(() => {
-    start(selectedExp, config);
-    saveExecution(selectedExp, activePresetId, config);
-  }, [start, selectedExp, config, saveExecution, activePresetId]);
+    start(config);
+    saveExecution(selectedTemplate, config);
+  }, [start, config, saveExecution, selectedTemplate]);
 
   const handleRefresh = useCallback(() => {
     reconnect(config);
-    saveExecution(selectedExp, activePresetId, config);
-  }, [reconnect, selectedExp, config, saveExecution, activePresetId]);
+    saveExecution(selectedTemplate, config);
+  }, [reconnect, config, saveExecution, selectedTemplate]);
 
   const applyBrush = useCallback(
     (x: number, y: number) => {
@@ -313,7 +243,7 @@ function App() {
         .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
         .filter(
           (c) =>
-            c.x >= 0 && c.x < config.width && c.y >= 0 && c.y < config.height
+            c.x >= 0 && c.x < config.grid.width && c.y >= 0 && c.y < config.grid.height
         );
       paint(cells, value);
     },
@@ -377,21 +307,20 @@ function App() {
       }}
     >
       <Sidebar
-        experiments={experiments}
-        selectedExperiment={selectedExp}
+        templates={templates}
+        selectedTemplate={selectedTemplate}
         config={config}
+        metadata={metadata}
         state={state}
         stats={stats}
         inputFrame={inputFrame}
-        onSelectExperiment={handleSelectExperiment}
+        onSelectTemplate={handleSelectTemplate}
         onConfigChange={setConfig}
         onStart={handleStart}
         onRefresh={handleRefresh}
         connected={connected}
-        experimentActive={hasGrid && activeExperiment === selectedExp}
+        experimentActive={experimentActive && hasGrid}
         width={sidebarWidth}
-        activePresetId={activePresetId}
-        onPresetSelect={handlePresetSelect}
         onPrevRun={goPrev}
         onNextRun={goNext}
         canGoPrev={canGoPrev}
@@ -453,8 +382,8 @@ function App() {
                     grid={grid}
                     tensionGrid={tensionGrid}
                     tensionMode={tensionMode}
-                    width={config.width}
-                    height={config.height}
+                    width={config.grid.width}
+                    height={config.grid.height}
                     connectionMap={connectionMap}
                     inspectedCell={inspectedCell}
                     onCellClick={handleCellClick}
@@ -551,7 +480,7 @@ function App() {
                   </p>
                   <p>
                     {connected
-                      ? "Select an experiment and start"
+                      ? "Select a template and start"
                       : "Connecting to server..."}
                   </p>
                 </>

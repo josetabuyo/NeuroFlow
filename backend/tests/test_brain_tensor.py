@@ -182,11 +182,11 @@ class TestBrainTensorGetGrid:
                 )
 
 
-class TestBrainTensorBalanceado:
-    """BrainTensor with balanced weights works correctly."""
+class TestBrainTensorProcessing:
+    """BrainTensor produces correct binary values after processing."""
 
-    def test_balanceado_procesa(self):
-        """Brain with balancing produces binary values after one step."""
+    def test_procesar_produces_binary_values(self):
+        """Brain produces binary values after one step."""
         random.seed(55)
         constructor = Constructor()
         brain, _ = constructor.crear_grilla(
@@ -195,7 +195,6 @@ class TestBrainTensorBalanceado:
             umbral=0.0,
         )
         constructor.aplicar_mascara_2d(brain, 10, 10, MASK_SIMPLE)
-        constructor.balancear_pesos(list(brain.neuronas), target=0.0)
         for n in brain.neuronas:
             n.activar_external(random.random())
 

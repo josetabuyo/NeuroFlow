@@ -1,0 +1,31 @@
+{
+  "name": "ASCII Sharp pow 3",
+  "description": "ASCII A/B with pow-3 tension sharpening. Best available config for the original challenge. Compare with ASCII Baseline to measure improvement.",
+  "config": {
+    "description": "ASCII characters A/B with pow-3 sharpening applied. Combines real character shapes with selective learning. Inspect neuron weights after ~500 steps and compare with ASCII Baseline to see differentiation.",
+    "grid": { "width": 50, "height": 50 },
+    "wiring": {
+      "mask": "deamon_3_en_50",
+      "dendrite_exc_weight": 0.5,
+      "dendrite_inh_weight": -0.5,
+      "process_mode": "min_vs_max",
+      "tension_function": { "pow": 3.0 }
+    },
+    "input": {
+      "source": "ascii",
+      "text": "AB",
+      "resolution": 20,
+      "frames_per_char": 10,
+      "dendrite_input_weight": 0.2,
+      "font": "press_start_2p",
+      "font_size": 10
+    },
+    "noise": {
+      "background": 0.05,
+      "inter_char": true
+    },
+    "learning": {
+      "rate": 0.01
+    }
+  }
+}
