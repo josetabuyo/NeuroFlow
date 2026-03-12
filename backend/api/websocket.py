@@ -189,22 +189,20 @@ class ExperimentSession:
         self._inspect_y = None
 
     async def _handle_reconnect(self, message: dict[str, Any]) -> None:
-        """Reconnect with new mask/balance, preserving neuron state."""
+        """Full restart with new config — equivalent to a fresh Start."""
         if not self.experiment:
             await self.send({"type": "error", "message": "No experiment started"})
             return
 
-        if not hasattr(self.experiment, "reconnect"):
-            await self.send({"type": "error", "message": "Experiment doesn't support reconnect"})
-            return
-
         await self._stop_play_loop()
+        self._inspect_x = None
+        self._inspect_y = None
 
         await self.send({"type": "status", "state": "initializing"})
         await asyncio.sleep(0)
 
         config = message.get("config", {})
-        self.experiment.reconnect(config)
+        self.experiment.setup(config)
         await self.send({"type": "status", "state": "ready"})
         await self._send_frame()
 

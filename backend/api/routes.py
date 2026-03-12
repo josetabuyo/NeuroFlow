@@ -452,21 +452,23 @@ async def get_experiment(experiment_id: str) -> dict:
 
 
 @router.post("/experiments/{experiment_id}/config")
-async def save_experiment_config(experiment_id: str, request: Request) -> dict:
-    """Persist a config snapshot for an experiment."""
+async def save_experiment_config(
+    experiment_id: str, request: Request, preset: str = "_default",
+) -> dict:
+    """Persist a config snapshot for an experiment+preset."""
     config = await request.json()
-    sid = save_config(experiment_id, config)
+    sid = save_config(experiment_id, preset, config)
     return {"id": sid}
 
 
 @router.get("/experiments/{experiment_id}/config/latest")
-def get_latest_config(experiment_id: str) -> dict:
-    """Return the most recently saved config for an experiment."""
-    config = get_latest(experiment_id)
+def get_latest_config(experiment_id: str, preset: str = "_default") -> dict:
+    """Return the most recently saved config for an experiment+preset."""
+    config = get_latest(experiment_id, preset)
     return {"config": config}
 
 
 @router.get("/experiments/{experiment_id}/config/history")
-def get_config_history(experiment_id: str) -> dict:
-    """All executed configs for an experiment, oldest first."""
-    return {"history": get_history(experiment_id)}
+def get_config_history(experiment_id: str, preset: str = "_default") -> dict:
+    """All executed configs for an experiment+preset, oldest first."""
+    return {"history": get_history(experiment_id, preset)}

@@ -91,27 +91,37 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [isResizing, setIsResizing] = useState(false);
 
-  // ── Execution history (configs saved on Start/Refresh) ──
+  // ── Execution history per preset ──
+  const [activePresetId, setActivePresetId] = useState("_default");
   const [runHistory, setRunHistory] = useState<ExperimentConfig[]>([]);
   const [runIndex, setRunIndex] = useState(-1);
 
   const canGoPrev = runIndex > 0;
   const canGoNext = runIndex >= 0 && runIndex < runHistory.length - 1;
 
-  const loadHistory = useCallback((expId: string) => {
-    fetch(`${API_URL}/api/experiments/${expId}/config/history`)
+  const activePresetRef = useRef(activePresetId);
+  activePresetRef.current = activePresetId;
+
+  const loadHistory = useCallback((expId: string, presetId: string) => {
+    fetch(`${API_URL}/api/experiments/${expId}/config/history?preset=${encodeURIComponent(presetId)}`)
       .then((r) => r.json())
       .then((data: { history: { config: ExperimentConfig }[] }) => {
+        if (activePresetRef.current !== presetId) return;
         const configs = data.history.map((h) => h.config);
         setRunHistory(configs);
-        setRunIndex(configs.length > 0 ? configs.length - 1 : -1);
+        if (configs.length > 0) {
+          setRunIndex(configs.length - 1);
+          setConfig(configs[configs.length - 1]);
+        } else {
+          setRunIndex(-1);
+        }
       })
       .catch(() => {});
   }, []);
 
   const saveExecution = useCallback(
-    (expId: string, cfg: ExperimentConfig) => {
-      fetch(`${API_URL}/api/experiments/${expId}/config`, {
+    (expId: string, presetId: string, cfg: ExperimentConfig) => {
+      fetch(`${API_URL}/api/experiments/${expId}/config?preset=${encodeURIComponent(presetId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(cfg),
@@ -126,6 +136,15 @@ function App() {
         .catch(() => {});
     },
     [],
+  );
+
+  const handlePresetSelect = useCallback(
+    (presetId: string, presetConfig: ExperimentConfig) => {
+      setActivePresetId(presetId);
+      setConfig(presetConfig);
+      loadHistory(selectedExp, presetId);
+    },
+    [selectedExp, loadHistory],
   );
 
   const goPrev = useCallback(() => {
@@ -199,11 +218,11 @@ function App() {
     toggleBrushMode,
   } = useExperiment();
 
-  // Fetch experiments list + restore last executed config
+  // Fetch experiments list + restore last executed config for _default preset
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}/api/experiments`).then((r) => r.json()),
-      fetch(`${API_URL}/api/experiments/${DEFAULT_SELECTED}/config/history`)
+      fetch(`${API_URL}/api/experiments/${DEFAULT_SELECTED}/config/history?preset=_default`)
         .then((r) => r.json())
         .catch(() => ({ history: [] })),
     ])
@@ -268,21 +287,22 @@ function App() {
       const exp = experiments.find((e) => e.id === id);
       if (!exp) return;
 
+      setActivePresetId("_default");
       setConfig(resolveConfig(exp));
-      loadHistory(id);
+      loadHistory(id, "_default");
     },
     [experiments, loadHistory],
   );
 
   const handleStart = useCallback(() => {
     start(selectedExp, config);
-    saveExecution(selectedExp, config);
-  }, [start, selectedExp, config, saveExecution]);
+    saveExecution(selectedExp, activePresetId, config);
+  }, [start, selectedExp, config, saveExecution, activePresetId]);
 
   const handleRefresh = useCallback(() => {
     reconnect(config);
-    saveExecution(selectedExp, config);
-  }, [reconnect, selectedExp, config, saveExecution]);
+    saveExecution(selectedExp, activePresetId, config);
+  }, [reconnect, selectedExp, config, saveExecution, activePresetId]);
 
   const applyBrush = useCallback(
     (x: number, y: number) => {
@@ -370,6 +390,8 @@ function App() {
         connected={connected}
         experimentActive={hasGrid && activeExperiment === selectedExp}
         width={sidebarWidth}
+        activePresetId={activePresetId}
+        onPresetSelect={handlePresetSelect}
         onPrevRun={goPrev}
         onNextRun={goNext}
         canGoPrev={canGoPrev}

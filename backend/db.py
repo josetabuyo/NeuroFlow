@@ -20,34 +20,42 @@ def init_db() -> None:
         CREATE TABLE IF NOT EXISTS config_snapshots (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             experiment TEXT    NOT NULL,
+            preset_id  TEXT    NOT NULL DEFAULT '_default',
             config     TEXT    NOT NULL,
             created_at TEXT    NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    # Migration: add preset_id if table already existed without it
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(config_snapshots)").fetchall()]
+    if "preset_id" not in cols:
+        conn.execute(
+            "ALTER TABLE config_snapshots "
+            "ADD COLUMN preset_id TEXT NOT NULL DEFAULT '_default'"
+        )
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_snapshots_exp
-        ON config_snapshots(experiment, id DESC)
+        CREATE INDEX IF NOT EXISTS idx_snapshots_exp_preset
+        ON config_snapshots(experiment, preset_id, id DESC)
     """)
     conn.commit()
     conn.close()
 
 
-def save_config(experiment: str, config: dict) -> int:
-    """Save a config snapshot. Returns -1 if identical to the last saved."""
+def save_config(experiment: str, preset_id: str, config: dict) -> int:
+    """Save a config snapshot. Returns -1 if identical to the last saved for this preset."""
     conn = _connect()
 
     last = conn.execute(
         "SELECT config FROM config_snapshots "
-        "WHERE experiment = ? ORDER BY id DESC LIMIT 1",
-        (experiment,),
+        "WHERE experiment = ? AND preset_id = ? ORDER BY id DESC LIMIT 1",
+        (experiment, preset_id),
     ).fetchone()
     if last and json.loads(last[0]) == config:
         conn.close()
         return -1
 
     cur = conn.execute(
-        "INSERT INTO config_snapshots (experiment, config) VALUES (?, ?)",
-        (experiment, json.dumps(config)),
+        "INSERT INTO config_snapshots (experiment, preset_id, config) VALUES (?, ?, ?)",
+        (experiment, preset_id, json.dumps(config)),
     )
     sid = cur.lastrowid
 
@@ -56,24 +64,24 @@ def save_config(experiment: str, config: dict) -> int:
     return sid  # type: ignore[return-value]
 
 
-def get_latest(experiment: str) -> dict | None:
+def get_latest(experiment: str, preset_id: str) -> dict | None:
     conn = _connect()
     row = conn.execute(
         "SELECT config FROM config_snapshots "
-        "WHERE experiment = ? ORDER BY id DESC LIMIT 1",
-        (experiment,),
+        "WHERE experiment = ? AND preset_id = ? ORDER BY id DESC LIMIT 1",
+        (experiment, preset_id),
     ).fetchone()
     conn.close()
     return json.loads(row[0]) if row else None
 
 
-def get_history(experiment: str) -> list[dict]:
-    """All executed configs for an experiment, oldest first."""
+def get_history(experiment: str, preset_id: str) -> list[dict]:
+    """All executed configs for an experiment+preset, oldest first."""
     conn = _connect()
     rows = conn.execute(
         "SELECT id, config, created_at FROM config_snapshots "
-        "WHERE experiment = ? ORDER BY id ASC",
-        (experiment,),
+        "WHERE experiment = ? AND preset_id = ? ORDER BY id ASC",
+        (experiment, preset_id),
     ).fetchall()
     conn.close()
     return [

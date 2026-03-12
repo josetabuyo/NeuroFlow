@@ -4,17 +4,6 @@ import { useEffect, useRef, useMemo } from "react";
 import type { ExperimentInfo, ExperimentConfig, ExperimentState, ExperimentStats } from "../types";
 import { JsonConfigEditor } from "./JsonConfigEditor";
 
-function configMatches(a: ExperimentConfig, b: ExperimentConfig): boolean {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof ExperimentConfig>;
-  for (const k of keys) {
-    if (k === "description") continue;
-    const va = a[k];
-    const vb = b[k];
-    if (JSON.stringify(va) !== JSON.stringify(vb)) return false;
-  }
-  return true;
-}
-
 function weightToColor(weight: number | null): string {
   if (weight === null) return "#111111";
   if (weight === 999) return "#ffff00";
@@ -149,6 +138,8 @@ interface SidebarProps {
   connected: boolean;
   experimentActive?: boolean;
   width?: number;
+  activePresetId?: string;
+  onPresetSelect?: (presetId: string, config: ExperimentConfig) => void;
   onPrevRun?: () => void;
   onNextRun?: () => void;
   canGoPrev?: boolean;
@@ -171,6 +162,8 @@ export function Sidebar({
   connected,
   experimentActive,
   width = 380,
+  activePresetId = "_default",
+  onPresetSelect,
   onPrevRun,
   onNextRun,
   canGoPrev = false,
@@ -185,12 +178,7 @@ export function Sidebar({
     [selectedExp?.config_presets]
   );
 
-  // Derive selected preset from config (clears when user edits JSON)
-  const selectedPresetId = useMemo(() => {
-    if (!configPresets.length) return "";
-    const match = configPresets.find((p) => configMatches(p.config, config));
-    return match ? match.id : "";
-  }, [config, configPresets]);
+  const selectedPresetId = activePresetId === "_default" ? "" : activePresetId;
 
   const masks = selectedExp?.masks ?? [];
   const activeMask = masks.length > 0
@@ -306,7 +294,10 @@ export function Sidebar({
                   const id = e.target.value;
                   if (id) {
                     const preset = configPresets.find((p) => p.id === id);
-                    if (preset) onConfigChange(preset.config);
+                    if (preset) {
+                      if (onPresetSelect) onPresetSelect(id, preset.config);
+                      else onConfigChange(preset.config);
+                    }
                   }
                 }}
                 style={{
