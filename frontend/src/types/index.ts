@@ -1,6 +1,9 @@
 /** Shared types for NeuroFlow frontend. */
 
 export interface MaskStats {
+  total_dendrites: number;
+  exc_dendrites: number;
+  inh_dendrites: number;
   excitatory_synapses: number;
   inhibitory_synapses: number;
   ratio_exc_inh: number;

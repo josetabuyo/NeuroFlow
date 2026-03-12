@@ -881,34 +881,40 @@ def get_random_weights(mask_id: str) -> bool:
     return MASK_PRESETS[mask_id].get("random_weights", True)
 
 
-def _compute_preview_grid(mask: MaskDef) -> list[list[float | None]]:
-    """Compute a preview grid sized to fit 100% of the mask.
+def _compute_preview_grid(
+    mask: MaskDef,
+    grid_width: int = 50,
+    grid_height: int = 50,
+) -> list[list[float | None]]:
+    """Simulate the inspect view for a center neuron with random synapse weights.
 
-    The grid is (2*max_r+1) square, with the center cell marked as 999.0.
-    Each offset (dx, dy) maps to col=center+dx, row=center+dy. If two
-    dendrites overlap on the same cell the one with the larger absolute weight
-    wins.
+    Creates a (grid_width × grid_height) grid and places the neuron at the
+    center.  For each synapse, generates a deterministic random weight and
+    computes ``effective_weight = synapse_peso × dendrite_peso``, matching
+    how ``inspect()`` displays real connections.  When multiple dendrites
+    share a source cell, effective weights are summed and clamped to [-1, 1].
     """
-    max_r = 0
-    for dendrite in mask:
-        for dx, dy in dendrite["offsets"]:
-            max_r = max(max_r, abs(dx), abs(dy))
+    rng = _random_mod.Random(42)
 
-    max_r = max(max_r, 1)
-    size = 2 * max_r + 1
-    center = max_r
-    grid: list[list[float | None]] = [[None] * size for _ in range(size)]
-    grid[center][center] = 999.0
+    center_x = grid_width // 2
+    center_y = grid_height // 2
+
+    grid: list[list[float | None]] = [[None] * grid_width for _ in range(grid_height)]
+    grid[center_y][center_x] = 999.0
 
     for dendrite in mask:
-        peso: float = dendrite["peso_dendrita"]
-        for dx, dy in dendrite["offsets"]:
-            col = center + dx
-            row = center + dy
-            if 0 <= row < size and 0 <= col < size:
+        peso_d: float = dendrite["peso_dendrita"]
+        pesos_s = dendrite.get("pesos_sinapsis")
+        for i, (dx, dy) in enumerate(dendrite["offsets"]):
+            col = center_x + dx
+            row = center_y + dy
+            if 0 <= row < grid_height and 0 <= col < grid_width:
+                syn_w = pesos_s[i] if pesos_s else rng.random()
+                effective = syn_w * peso_d
                 existing = grid[row][col]
-                if existing is None or abs(peso) > abs(existing):
-                    grid[row][col] = peso
+                if existing is not None and existing != 999.0:
+                    effective = max(-1.0, min(1.0, existing + effective))
+                grid[row][col] = effective
 
     return grid
 
@@ -916,10 +922,12 @@ def _compute_preview_grid(mask: MaskDef) -> list[list[float | None]]:
 def _compute_mask_stats(mask: MaskDef) -> dict[str, Any]:
     """Compute static wiring stats for a mask definition.
 
-    Returns per-neuron synapse counts and effective radii (Chebyshev distance).
+    Returns per-neuron synapse/dendrite counts and effective radii (Chebyshev distance).
     """
     exc_synapses = 0
     inh_synapses = 0
+    exc_dendrites = 0
+    inh_dendrites = 0
     max_exc_radius = 0
     max_inh_radius = 0
 
@@ -930,12 +938,17 @@ def _compute_mask_stats(mask: MaskDef) -> dict[str, Any]:
         max_r = max((max(abs(dx), abs(dy)) for dx, dy in offsets), default=0)
         if peso > 0:
             exc_synapses += n
+            exc_dendrites += 1
             max_exc_radius = max(max_exc_radius, max_r)
         else:
             inh_synapses += n
+            inh_dendrites += 1
             max_inh_radius = max(max_inh_radius, max_r)
 
     return {
+        "total_dendrites": exc_dendrites + inh_dendrites,
+        "exc_dendrites": exc_dendrites,
+        "inh_dendrites": inh_dendrites,
         "excitatory_synapses": exc_synapses,
         "inhibitory_synapses": inh_synapses,
         "ratio_exc_inh": round(exc_synapses / max(inh_synapses, 1), 3),
@@ -944,12 +957,17 @@ def _compute_mask_stats(mask: MaskDef) -> dict[str, Any]:
     }
 
 
-def get_mask_info() -> list[dict[str, Any]]:
+def get_mask_info(
+    grid_width: int = 50,
+    grid_height: int = 50,
+) -> list[dict[str, Any]]:
     """Get metadata for all mask presets (without the mask data itself)."""
     result = []
     for preset in MASK_PRESETS.values():
         entry = {k: v for k, v in preset.items() if k != "mask"}
-        entry["preview_grid"] = _compute_preview_grid(preset["mask"])
+        entry["preview_grid"] = _compute_preview_grid(
+            preset["mask"], grid_width, grid_height,
+        )
         entry["mask_stats"] = _compute_mask_stats(preset["mask"])
         result.append(entry)
     return result

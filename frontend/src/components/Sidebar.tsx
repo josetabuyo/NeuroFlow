@@ -35,7 +35,7 @@ function applyBalance(
   );
 }
 
-const PREVIEW_DISPLAY_PX = 220;
+const PREVIEW_DISPLAY_PX = 350;
 
 function MaskPreview({ grid }: { grid: (number | null)[][] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -50,17 +50,18 @@ function MaskPreview({ grid }: { grid: (number | null)[][] }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const cellPx = Math.max(1, Math.floor(PREVIEW_DISPLAY_PX / Math.max(rows, cols)));
+    const cellPx = Math.max(2, Math.floor(PREVIEW_DISPLAY_PX / Math.max(rows, cols)));
     canvas.width = cellPx * cols;
     canvas.height = cellPx * rows;
 
     ctx.fillStyle = "#0a0a0a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    const cellFill = cellPx > 2 ? cellPx - 1 : cellPx;
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         ctx.fillStyle = weightToColor(grid[row][col]);
-        ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
+        ctx.fillRect(col * cellPx, row * cellPx, cellFill, cellFill);
       }
     }
   }, [grid]);
@@ -70,10 +71,11 @@ function MaskPreview({ grid }: { grid: (number | null)[][] }) {
       ref={canvasRef}
       style={{
         width: "100%",
-        aspectRatio: "1 / 1",
+        aspectRatio: `${grid[0]?.length ?? 1} / ${grid.length || 1}`,
         display: "block",
         imageRendering: "pixelated",
         borderRadius: "4px",
+        border: "1px solid #2a2a3e",
       }}
     />
   );
@@ -379,17 +381,34 @@ export function Sidebar({
           {/* Mask preview (reactive to config.mask and config.balance) */}
           {hasMasks && balancedGrid && (
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  textTransform: "uppercase",
-                  color: "#888",
-                  display: "block",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                Preview
-              </label>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                <label
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    color: "#888",
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  Neuron Preview
+                </label>
+                {activeMask?.mask_stats && (
+                  <span
+                    style={{
+                      fontSize: "0.65rem",
+                      color: "#555",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    <span style={{ color: "#4ade80" }}>{activeMask.mask_stats.exc_dendrites}</span>
+                    {" + "}
+                    <span style={{ color: "#8b00ff" }}>{activeMask.mask_stats.inh_dendrites}</span>
+                    {" = "}
+                    <span style={{ color: "#e0e0ff" }}>{activeMask.mask_stats.total_dendrites}</span>
+                    {" dendrites"}
+                  </span>
+                )}
+              </div>
               <MaskPreview grid={balancedGrid} />
             </div>
           )}
