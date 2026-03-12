@@ -102,7 +102,7 @@ EXPERIMENTS = {
             },
             {
                 "id": "daemon_adaptation",
-                "name": "Daemon + Adaptation",
+                "name": "Spiking Daemon",
                 "description": (
                     "Daemons with spike frequency adaptation (ON/OFF cycling). "
                     "Shows the 'lava lamp' effect: daemons migrate and die. "
@@ -328,6 +328,7 @@ EXPERIMENTS = {
                     "input_dendrite_weight": 0.2,
                     "deamon_exc_weight": 0.5,
                     "deamon_inh_weight": -0.5,
+                    "noise_inter_char": True,
                     "learning_rate": 0.01,
                     "font": "press_start_2p",
                     "font_size": 10,
@@ -358,6 +359,7 @@ EXPERIMENTS = {
                     "input_dendrite_weight": 0.2,
                     "deamon_exc_weight": 0.5,
                     "deamon_inh_weight": -0.5,
+                    "noise_inter_char": True,
                     "learning_rate": 0.01,
                     "font": "press_start_2p",
                     "font_size": 10,

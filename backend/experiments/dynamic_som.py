@@ -44,7 +44,7 @@ class DynamicSOMExperiment(Experimento):
         self.deamon_inh_weight: float = -0.5
         self.background_white_noise: float = 0.05
         self.shift_noise_enabled: bool = False
-        self.noise_inter_char: bool = True
+        self.noise_inter_char: bool = False
         self.learning_enabled: bool = True
         self.learning_rate: float = 0.01
         self.adaptation_enabled: bool = True
@@ -82,8 +82,8 @@ class DynamicSOMExperiment(Experimento):
             background_white_noise (float): White noise probability per pixel (default 0.05).
                 0 disables white noise entirely.
             shift_noise (bool): Enable shift noise (default False).
-            noise_inter_char (bool): White noise between characters (default True).
-                When False, the gap between characters is skipped entirely.
+            noise_inter_char (bool): White noise between characters (default False).
+                When True, inserts random noise frames between characters.
             font (str): Font ID from the registry (default "press_start_2p").
             font_size (int): Font size in target-res pixels (default 10).
         """
@@ -102,7 +102,7 @@ class DynamicSOMExperiment(Experimento):
         self.deamon_inh_weight = config.get("deamon_inh_weight", -0.5)
         self.background_white_noise = float(config.get("background_white_noise", 0.05))
         self.shift_noise_enabled = config.get("shift_noise", False)
-        self.noise_inter_char = config.get("noise_inter_char", True)
+        self.noise_inter_char = config.get("noise_inter_char", False)
         self.learning_enabled = config.get("learning", True)
         self.learning_rate = config.get("learning_rate", 0.01)
         self.adaptation_enabled = config.get("spike_adaptation", False)

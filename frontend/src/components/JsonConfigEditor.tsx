@@ -25,9 +25,9 @@ interface NestedConfig {
   wiring: {
     mask?: string;
     process_mode?: string;
-    dendrite_weight?: number;
-    deamon_exc_weight?: number;
-    deamon_inh_weight?: number;
+    dendrite_input_weight?: number;
+    dendrite_exc_weight?: number;
+    dendrite_inh_weight?: number;
     balance?: number;
     balance_mode?: string;
     rule?: number;
@@ -71,9 +71,9 @@ function toNested(c: ExperimentConfig): NestedConfig {
 
   if (c.mask !== undefined) n.wiring.mask = c.mask;
   if (c.process_mode !== undefined) n.wiring.process_mode = c.process_mode;
-  if (c.input_dendrite_weight !== undefined) n.wiring.dendrite_weight = c.input_dendrite_weight;
-  if (c.deamon_exc_weight !== undefined) n.wiring.deamon_exc_weight = c.deamon_exc_weight;
-  if (c.deamon_inh_weight !== undefined) n.wiring.deamon_inh_weight = c.deamon_inh_weight;
+  if (c.input_dendrite_weight !== undefined) n.wiring.dendrite_input_weight = c.input_dendrite_weight;
+  if (c.deamon_exc_weight !== undefined) n.wiring.dendrite_exc_weight = c.deamon_exc_weight;
+  if (c.deamon_inh_weight !== undefined) n.wiring.dendrite_inh_weight = c.deamon_inh_weight;
   if (c.balance !== undefined) n.wiring.balance = c.balance;
   if (c.balance_mode !== undefined) n.wiring.balance_mode = c.balance_mode;
   if (c.rule !== undefined) n.wiring.rule = c.rule;
@@ -138,9 +138,9 @@ function toFlat(n: NestedConfig): ExperimentConfig {
 
   if (n.wiring.mask !== undefined) c.mask = n.wiring.mask;
   if (n.wiring.process_mode !== undefined) c.process_mode = n.wiring.process_mode;
-  if (n.wiring.dendrite_weight !== undefined) c.input_dendrite_weight = n.wiring.dendrite_weight;
-  if (n.wiring.deamon_exc_weight !== undefined) c.deamon_exc_weight = n.wiring.deamon_exc_weight;
-  if (n.wiring.deamon_inh_weight !== undefined) c.deamon_inh_weight = n.wiring.deamon_inh_weight;
+  if (n.wiring.dendrite_input_weight !== undefined) c.input_dendrite_weight = n.wiring.dendrite_input_weight;
+  if (n.wiring.dendrite_exc_weight !== undefined) c.deamon_exc_weight = n.wiring.dendrite_exc_weight;
+  if (n.wiring.dendrite_inh_weight !== undefined) c.deamon_inh_weight = n.wiring.dendrite_inh_weight;
   if (n.wiring.balance !== undefined) c.balance = n.wiring.balance;
   if (n.wiring.balance_mode !== undefined) c.balance_mode = n.wiring.balance_mode;
   if (n.wiring.rule !== undefined) c.rule = n.wiring.rule;
