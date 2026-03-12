@@ -35,6 +35,7 @@ class DynamicSOMExperiment(Experimento):
         super().__init__()
         self._config: dict[str, Any] = {}
         self.brain_tensor = None
+        self.input_enabled: bool = True
         self.input_resolution: int = 20
         self.input_text: str = "AB"
         self.frames_per_char: int = 10
@@ -69,6 +70,8 @@ class DynamicSOMExperiment(Experimento):
             width (int): Tissue width (default 50).
             height (int): Tissue height (default 50).
             mask (str): Wiring preset ID (default "deamon_3_en_50").
+            input_enabled (bool): Create input region and dendrites (default True).
+                When False, no input neurons or dendrites are created at all.
             input_text (str): Characters to cycle through (default "AB").
                 Empty string means pure white noise with no character rendering.
             input_resolution (int): Input image size, square (default 20).
@@ -90,6 +93,7 @@ class DynamicSOMExperiment(Experimento):
         self.generation = 0
 
         mask_id: str = config.get("mask", "deamon_3_en_50")
+        self.input_enabled = config.get("input_enabled", True)
         self.input_text = config.get("input_text", "AB") or ""
         self.input_resolution = config.get("input_resolution", 20)
         self.frames_per_char = max(1, config.get("frames_per_char", 10))
@@ -133,7 +137,7 @@ class DynamicSOMExperiment(Experimento):
             else:
                 mask.append(d)
 
-        n_input = self.input_resolution * self.input_resolution
+        n_input = self.input_resolution * self.input_resolution if self.input_enabled else 0
         self._input_start_idx = self.width * self.height
 
         # --- Create neurons ---
@@ -145,8 +149,9 @@ class DynamicSOMExperiment(Experimento):
                 )
 
         input_neurons: list[Neurona] = []
-        for idx in range(n_input):
-            input_neurons.append(NeuronaEntrada(id=f"inp_{idx}"))
+        if self.input_enabled:
+            for idx in range(n_input):
+                input_neurons.append(NeuronaEntrada(id=f"inp_{idx}"))
 
         all_neurons: list[Neurona] = tissue_neurons + input_neurons
         self.brain = Brain(neuronas=all_neurons)
@@ -156,14 +161,15 @@ class DynamicSOMExperiment(Experimento):
         for n in tissue_neurons:
             region_tissue.agregar(n)
 
-        region_input = Region(nombre="input")
-        for n in input_neurons:
-            region_input.agregar(n)
-
-        self.regiones = {
+        self.regiones: dict[str, Region] = {
             "tissue": region_tissue,
-            "input": region_input,
         }
+
+        if self.input_enabled:
+            region_input = Region(nombre="input")
+            for n in input_neurons:
+                region_input.agregar(n)
+            self.regiones["input"] = region_input
 
         # --- Apply wiring mask to tissue ---
         constructor = Constructor()
@@ -176,17 +182,18 @@ class DynamicSOMExperiment(Experimento):
         )
 
         # --- Add input dendrite to each tissue neuron ---
-        for tissue_n in tissue_neurons:
-            sinapsis_list: list[Sinapsis] = []
-            for inp_n in input_neurons:
-                peso = random.uniform(0.2, 1.0)
-                sinapsis_list.append(
-                    Sinapsis(neurona_entrante=inp_n, peso=peso)
+        if self.input_enabled:
+            for tissue_n in tissue_neurons:
+                sinapsis_list: list[Sinapsis] = []
+                for inp_n in input_neurons:
+                    peso = random.uniform(0.2, 1.0)
+                    sinapsis_list.append(
+                        Sinapsis(neurona_entrante=inp_n, peso=peso)
+                    )
+                dendrita = Dendrita(
+                    sinapsis=sinapsis_list, peso=self.input_dendrite_weight
                 )
-            dendrita = Dendrita(
-                sinapsis=sinapsis_list, peso=self.input_dendrite_weight
-            )
-            tissue_n.dendritas.append(dendrita)
+                tissue_n.dendritas.append(dendrita)
 
         # --- Initialize tissue with random values ---
         for n in tissue_neurons:
@@ -205,7 +212,7 @@ class DynamicSOMExperiment(Experimento):
 
         # --- Pre-render characters (skip for synthetic patterns) ---
         self._char_images = {}
-        if not self._is_synthetic_input():
+        if self.input_enabled and not self._is_synthetic_input():
             for char in set(self.input_text):
                 self._char_images[char] = render_char(
                     char, self.input_resolution,
@@ -219,7 +226,8 @@ class DynamicSOMExperiment(Experimento):
         self._rng = np.random.default_rng()
 
         # --- Project initial frame ---
-        self._generate_and_project()
+        if self.input_enabled:
+            self._generate_and_project()
 
     _SYNTHETIC_PATTERNS = {
         "HALF_TOP", "HALF_BOT", "BARS_H", "BARS_V", "DOT_TL", "DOT_BR",
@@ -294,7 +302,8 @@ class DynamicSOMExperiment(Experimento):
 
     def step(self) -> dict[str, Any]:
         """One step: generate frame, project, process, learn, advance counter."""
-        self._generate_and_project()
+        if self.input_enabled:
+            self._generate_and_project()
         self.brain_tensor.procesar()
 
         if self.learning_enabled and self.brain_tensor is not None:
@@ -302,7 +311,7 @@ class DynamicSOMExperiment(Experimento):
 
         self.generation += 1
 
-        if self.input_text:
+        if self.input_enabled and self.input_text:
             n_items = (
                 len([t.strip() for t in self.input_text.split(",")])
                 if self._is_synthetic_input()
@@ -357,6 +366,8 @@ class DynamicSOMExperiment(Experimento):
 
     def get_input_frame(self) -> list[list[float]] | None:
         """Return the current input image being projected."""
+        if not self.input_enabled:
+            return None
         if self._current_input_frame is not None:
             return self._current_input_frame.tolist()
         return None
@@ -368,6 +379,9 @@ class DynamicSOMExperiment(Experimento):
 
         vals = self.brain_tensor.valores[: self._input_start_idx]
         active = int((vals > 0.5).sum().item())
+
+        if not self.input_enabled:
+            return {"active_cells": active, "steps": self.generation}
 
         if not self.input_text:
             current_char = ""
@@ -403,7 +417,7 @@ class DynamicSOMExperiment(Experimento):
             return result
 
         neuron_idx = y * self.width + x
-        n_input = self.input_resolution * self.input_resolution
+        n_input = (self.input_resolution * self.input_resolution) if self.input_enabled else 0
         input_start = self._input_start_idx
         input_end = input_start + n_input
 
@@ -416,7 +430,6 @@ class DynamicSOMExperiment(Experimento):
         total_sinapsis = int(valid.sum().item())
         total_dendritas = int(dend_ids[valid].unique().numel()) if total_sinapsis > 0 else 0
 
-        # Accumulate effective weights for tissue (daemon) connections
         tissue_pesos: dict[int, float] = {}
         input_weights: list[float] = [0.0] * n_input
 
@@ -427,7 +440,7 @@ class DynamicSOMExperiment(Experimento):
             w = weights[i].item()
             dw = dend_weights[i].item()
 
-            if input_start <= src < input_end:
+            if self.input_enabled and input_start <= src < input_end:
                 input_weights[src - input_start] = w
             elif src < input_start:
                 effective = w * dw
@@ -436,7 +449,6 @@ class DynamicSOMExperiment(Experimento):
         for src in tissue_pesos:
             tissue_pesos[src] = max(-1.0, min(1.0, tissue_pesos[src]))
 
-        # Build weight_grid (daemon connections)
         weight_grid: list[list[float | None]] = []
         for row in range(self.height):
             fila: list[float | None] = []
@@ -451,23 +463,27 @@ class DynamicSOMExperiment(Experimento):
                         fila.append(None)
             weight_grid.append(fila)
 
-        # Build input_weight_grid
-        res = self.input_resolution
-        input_grid: list[list[float]] = []
-        for r in range(res):
-            input_grid.append(input_weights[r * res : (r + 1) * res])
-
-        return {
+        result: dict[str, Any] = {
             "type": "connections",
             "x": x,
             "y": y,
             "total_dendritas": total_dendritas,
             "total_sinapsis": total_sinapsis,
             "weight_grid": weight_grid,
-            "input_weight_grid": input_grid,
-            "input_weight_width": res,
-            "input_weight_height": res,
         }
+
+        if self.input_enabled:
+            res = self.input_resolution
+            input_grid: list[list[float]] = []
+            for r in range(res):
+                input_grid.append(input_weights[r * res : (r + 1) * res])
+            result["input_weight_grid"] = input_grid
+            result["input_weight_width"] = res
+            result["input_weight_height"] = res
+        else:
+            result["input_weight_grid"] = None
+
+        return result
 
     def update_config(self, config: dict[str, Any]) -> bool:
         """Update parameters on a running experiment.
@@ -485,7 +501,7 @@ class DynamicSOMExperiment(Experimento):
             return False
 
         hard_keys = {
-            "width", "height", "mask", "input_resolution",
+            "width", "height", "mask", "input_enabled", "input_resolution",
             "input_dendrite_weight", "deamon_exc_weight", "deamon_inh_weight",
         }
         needs_reconnect = any(
@@ -585,7 +601,7 @@ class DynamicSOMExperiment(Experimento):
         n_restore = min(len(saved_values), self._input_start_idx)
         self.brain_tensor.valores[:n_restore] = saved_values[:n_restore]
 
-        if self.input_text:
+        if self.input_enabled and self.input_text:
             self._char_index = saved_char_index % len(self.input_text)
         else:
             self._char_index = 0

@@ -34,6 +34,7 @@ interface NestedConfig {
     tension_function?: Record<string, number>;
   };
   input?: {
+    enabled?: boolean;
     source?: string;
     ascii?: {
       font?: string;
@@ -78,12 +79,14 @@ function toNested(c: ExperimentConfig): NestedConfig {
   if (c.rule !== undefined) n.wiring.rule = c.rule;
   if (c.tension_function !== undefined) n.wiring.tension_function = c.tension_function;
 
-  const hasInput = c.input_source !== undefined
+  const hasInput = c.input_enabled !== undefined
+    || c.input_source !== undefined
     || c.font !== undefined
     || (c.input_text !== undefined && c.input_text !== "")
     || c.input_resolution !== undefined;
   if (hasInput) {
     n.input = {};
+    if (c.input_enabled !== undefined) n.input.enabled = c.input_enabled;
     if (c.input_source !== undefined) n.input.source = c.input_source;
 
     const hasAscii = c.font !== undefined || c.font_size !== undefined
@@ -144,6 +147,7 @@ function toFlat(n: NestedConfig): ExperimentConfig {
   if (n.wiring.tension_function !== undefined) c.tension_function = n.wiring.tension_function;
 
   if (n.input) {
+    if (n.input.enabled !== undefined) c.input_enabled = n.input.enabled;
     if (n.input.source !== undefined) c.input_source = n.input.source;
     if (n.input.ascii) {
       if (n.input.ascii.font !== undefined) c.font = n.input.ascii.font;
@@ -153,6 +157,7 @@ function toFlat(n: NestedConfig): ExperimentConfig {
       if (n.input.ascii.frames_per_char !== undefined) c.frames_per_char = n.input.ascii.frames_per_char;
     }
   } else {
+    c.input_enabled = false;
     c.input_text = "";
   }
 

@@ -48,6 +48,7 @@ export interface ExperimentConfig {
   balance?: number;
   balance_mode?: string;
   mask?: string;
+  input_enabled?: boolean;
   input_text?: string;
   input_resolution?: number;
   frames_per_char?: number;
