@@ -1,27 +1,21 @@
 {
-  "name": "ASCII Input SOM",
-  "description": "SOM with ASCII character input (A, B). The original challenge: learn to distinguish letter shapes through distributed self-organization. Attempt only after Simple Figures converges.",
+  "name": "Dynamic SOM",
+  "description": "Stage 2 SOM built on Sharp Pow Daemon — the only daemon with avg_vs_avg that proved it can sustain activity. Adds primitive shape input to test if stable internal representations emerge.",
   "config": {
-    "description": "ASCII characters rendered with press_start_2p font. The hardest input type: A and B share similar pixel distributions. Inspect neuron weights after ~500 steps to check for differentiation. Compare with and without tension_function.",
+    "description": "Extends Sharp Pow Daemon (avg_vs_avg + x_pow_2 tension) with HALF_TOP/HALF_BOT input. No noise. The goal: find out how many ticks the network needs to settle on a consistent internal state for each pattern, and whether that state persists. Vary frames_per_char.",
     "grid": { "width": 50, "height": 50 },
     "wiring": {
-      "mask": "deamon_e3_g2_i12_de1_di1",
+      "mask": "deamon_e3_g1_i11_de1_di1",
       "dendrite_exc_weight": 0.9,
       "dendrite_inh_weight": -1,
       "process_mode": "avg_vs_avg",
-      "tension_function": { "x_pow_3": 1.0 }
+      "tension_function": { "x": 3, "x_pow_3": 9, "x_pow_2": 2 }
     },
     "input": {
-      "text": "AB",
+      "text": "HALF_TOP,HALF_BOT",
       "resolution": 20,
       "frames_per_char": 10,
-      "dendrite_input_weight": 0.2,
-      "font": "press_start_2p",
-      "font_size": 10
-    },
-    "noise": {
-      "background": 0.05,
-      "inter_char": true
+      "dendrite_input_weight": 0.2
     },
     "learning": {
       "rate": 0.01

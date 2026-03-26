@@ -54,6 +54,14 @@ async def list_templates() -> list[dict]:
     return TEMPLATES
 
 
+@router.post("/templates/refresh")
+async def refresh_templates() -> list[dict]:
+    """Re-read all JSON files from configs/ and update the in-memory TEMPLATES list."""
+    global TEMPLATES
+    TEMPLATES = _load_templates()
+    return TEMPLATES
+
+
 @router.get("/templates/{template_id}")
 async def get_template(template_id: str) -> dict:
     """Get a specific config template."""
