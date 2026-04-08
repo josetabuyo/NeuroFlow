@@ -9,6 +9,7 @@ It only runs once when starting the experiment.
 
 from __future__ import annotations
 
+import numpy as np
 import torch
 
 from .brain import Brain
@@ -61,39 +62,55 @@ class ConstructorTensor:
         if max_dend == 0:
             max_dend = 1
 
-        # Allocate tensors
-        valores = torch.zeros(N, dtype=torch.float32)
-        pesos_sinapsis = torch.zeros(N, max_syn, dtype=torch.float32)
-        indices_fuente = torch.zeros(N, max_syn, dtype=torch.long)
-        pesos_dendrita = torch.zeros(N, max_syn, dtype=torch.float32)
-        mascara_valida = torch.zeros(N, max_syn, dtype=torch.bool)
-        dendrita_ids = torch.zeros(N, max_syn, dtype=torch.long)
-        umbrales = torch.zeros(N, dtype=torch.float32)
-        mascara_entrada = torch.zeros(N, dtype=torch.bool)
+        # Allocate numpy arrays for bulk fill (list appends + numpy slice
+        # assignment are ~20x faster than individual PyTorch element writes)
+        valores_np = np.zeros(N, dtype=np.float32)
+        umbrales_np = np.zeros(N, dtype=np.float32)
+        entrada_np = np.zeros(N, dtype=np.bool_)
+        pesos_s_np = np.zeros((N, max_syn), dtype=np.float32)
+        indices_f_np = np.full((N, max_syn), N, dtype=np.int64)
+        pesos_d_np = np.zeros((N, max_syn), dtype=np.float32)
+        mascara_v_np = np.zeros((N, max_syn), dtype=np.bool_)
+        dend_ids_np = np.zeros((N, max_syn), dtype=np.int64)
 
-        # Second pass: fill tensors
+        # Second pass: fill via Python lists, then bulk-assign per row
         for i, neurona in enumerate(brain.neuronas):
-            valores[i] = neurona.valor
-            umbrales[i] = neurona.umbral
+            valores_np[i] = neurona.valor
+            umbrales_np[i] = neurona.umbral
 
             if isinstance(neurona, NeuronaEntrada):
-                mascara_entrada[i] = True
+                entrada_np[i] = True
 
-            syn_idx = 0
+            ps: list[float] = []
+            fi: list[int] = []
+            pd: list[float] = []
+            di: list[int] = []
+
             for d_idx, dendrita in enumerate(neurona.dendritas):
+                dw = dendrita.peso
                 for sinapsis in dendrita.sinapsis:
-                    pesos_sinapsis[i, syn_idx] = sinapsis.peso
-                    pesos_dendrita[i, syn_idx] = dendrita.peso
-                    mascara_valida[i, syn_idx] = True
-                    dendrita_ids[i, syn_idx] = d_idx
+                    ps.append(sinapsis.peso)
+                    fi.append(id_to_idx.get(sinapsis.neurona_entrante.id, N))
+                    pd.append(dw)
+                    di.append(d_idx)
 
-                    src_id = sinapsis.neurona_entrante.id
-                    if src_id in id_to_idx:
-                        indices_fuente[i, syn_idx] = id_to_idx[src_id]
-                    else:
-                        indices_fuente[i, syn_idx] = N
+            k = len(ps)
+            if k:
+                pesos_s_np[i, :k] = ps
+                indices_f_np[i, :k] = fi
+                pesos_d_np[i, :k] = pd
+                mascara_v_np[i, :k] = True
+                dend_ids_np[i, :k] = di
 
-                    syn_idx += 1
+        # Convert to tensors in one shot (zero-copy from numpy)
+        valores = torch.from_numpy(valores_np)
+        umbrales = torch.from_numpy(umbrales_np)
+        mascara_entrada = torch.from_numpy(entrada_np)
+        pesos_sinapsis = torch.from_numpy(pesos_s_np)
+        indices_fuente = torch.from_numpy(indices_f_np)
+        pesos_dendrita = torch.from_numpy(pesos_d_np)
+        mascara_valida = torch.from_numpy(mascara_v_np)
+        dendrita_ids = torch.from_numpy(dend_ids_np)
 
         # Check if we need a zero neuron for border synapses
         has_border = (indices_fuente == N).any().item()

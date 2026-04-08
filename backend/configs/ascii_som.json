@@ -5,7 +5,7 @@
     "description": "Extends Sharp Pow Daemon (avg_vs_avg + x_pow_2 tension) with HALF_TOP/HALF_BOT input. No noise. The goal: find out how many ticks the network needs to settle on a consistent internal state for each pattern, and whether that state persists. Vary frames_per_char.",
     "grid": { "width": 50, "height": 50 },
     "wiring": {
-      "mask": "deamon_e3_g1_i11_de1_di1",
+      "mask": "deamon_e3_g2_i12_de1_di1",
       "dendrite_exc_weight": 0.9,
       "dendrite_inh_weight": -1,
       "process_mode": "avg_vs_avg",

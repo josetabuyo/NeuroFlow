@@ -54,7 +54,12 @@ class ExperimentSession:
 
         handler = handlers.get(action)
         if handler:
-            await handler(message)
+            try:
+                await handler(message)
+            except Exception as e:
+                logger.exception("Error handling action '%s'", action)
+                await self.send({"type": "error", "message": f"{type(e).__name__}: {e}"})
+                await self.send({"type": "status", "state": "ready"})
         else:
             await self.send({"type": "error", "message": f"Unknown action: {action}"})
 

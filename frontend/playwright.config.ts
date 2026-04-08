@@ -10,21 +10,21 @@ export default defineConfig({
   timeout: 60_000,
 
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "http://localhost:5174",
     trace: "on-first-retry",
   },
 
   webServer: [
     {
       command:
-        "cd ../backend && source ../venv/bin/activate && python -m uvicorn main:app --port 8501",
-      port: 8501,
+        "cd ../backend && source ../venv/bin/activate && python -m uvicorn main:app --port 8502",
+      port: 8502,
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,
     },
     {
       command: "npm run dev",
-      port: 5173,
+      port: 5174,
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,
     },
