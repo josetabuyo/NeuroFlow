@@ -168,6 +168,9 @@ class Experiment(Experimento):
         # Learning state
         self.learning_enabled: bool = False
         self.learning_rate: float = 0.01
+        self.lr_exc: float = 1.0
+        self.lr_inh: float = 1.0
+        self.lr_input: float = 1.0
 
         # Spiking state
         self.adaptation_enabled: bool = False
@@ -238,6 +241,11 @@ class Experiment(Experimento):
         self.learning_enabled = learning_cfg is not None
         if learning_cfg:
             self.learning_rate = learning_cfg.get("rate", 0.01)
+            self.lr_exc   = learning_cfg.get("lr_exc",   1.0)
+            self.lr_inh   = learning_cfg.get("lr_inh",   1.0)
+            self.lr_input = learning_cfg.get("lr_input", 1.0)
+        else:
+            self.lr_exc = self.lr_inh = self.lr_input = 1.0
 
         # ── Spiking (opt-in) ──
         spiking_cfg = config.get("spiking")
@@ -452,7 +460,12 @@ class Experiment(Experimento):
         self.brain_tensor.procesar()
 
         if self.learning_enabled and self.brain_tensor is not None:
-            self.brain_tensor.learn(lr=self.learning_rate)
+            self.brain_tensor.learn(
+                lr=self.learning_rate,
+                lr_exc=self.lr_exc,
+                lr_inh=self.lr_inh,
+                lr_input=self.lr_input,
+            )
 
         self.generation += 1
 
@@ -715,6 +728,9 @@ class Experiment(Experimento):
             if learning_cfg:
                 self.learning_enabled = True
                 self.learning_rate = learning_cfg.get("rate", self.learning_rate)
+                self.lr_exc   = learning_cfg.get("lr_exc",   self.lr_exc)
+                self.lr_inh   = learning_cfg.get("lr_inh",   self.lr_inh)
+                self.lr_input = learning_cfg.get("lr_input", self.lr_input)
             else:
                 self.learning_enabled = False
         elif "learning" not in config and self._config.get("learning") is not None and config.get("learning") is None:

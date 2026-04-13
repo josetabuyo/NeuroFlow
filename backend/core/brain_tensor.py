@@ -42,6 +42,9 @@ class BrainTensor:
         tension_fn: str = "",
         tension_fn_param: float = 1.0,
         tension_fns: list[tuple[str, float]] | None = None,
+        es_exc_syn: torch.BoolTensor | None = None,
+        es_inh_syn: torch.BoolTensor | None = None,
+        es_input_syn: torch.BoolTensor | None = None,
     ) -> None:
         self.device = device
         self.process_mode = process_mode
@@ -83,6 +86,22 @@ class BrainTensor:
 
         # Pre-compute per-dendrite weights [N, max_dend] and dendrite mask
         self._dend_pesos, self._dendrita_mascara = self._precompute_dendrite_info()
+
+        # Per-synapse type masks for selective learning
+        NR = n_real
+        max_syn = pesos_sinapsis.shape[1] if pesos_sinapsis.ndim > 1 else 1
+        if es_exc_syn is not None:
+            self.es_exc_syn = es_exc_syn.to(device)
+        else:
+            self.es_exc_syn = torch.ones(NR, max_syn, dtype=torch.bool, device=device)
+        if es_inh_syn is not None:
+            self.es_inh_syn = es_inh_syn.to(device)
+        else:
+            self.es_inh_syn = torch.zeros(NR, max_syn, dtype=torch.bool, device=device)
+        if es_input_syn is not None:
+            self.es_input_syn = es_input_syn.to(device)
+        else:
+            self.es_input_syn = torch.zeros(NR, max_syn, dtype=torch.bool, device=device)
 
         # Tension values (updated each procesar() call)
         self.tensiones = torch.zeros(self.N, device=device)
@@ -218,19 +237,32 @@ class BrainTensor:
             )
         
 
-    def learn(self, lr: float) -> None:
-        """Tension-modulated Hebbian learning on all valid synapses.
+    def learn(
+        self,
+        lr: float,
+        lr_exc: float = 1.0,
+        lr_inh: float = 1.0,
+        lr_input: float = 1.0,
+    ) -> None:
+        """Tension-modulated Hebbian learning with per-dendrite-type rates.
 
-        Rule: dW = lr * tension * (source_value - weight)
-          - Positive tension: weights move toward source values
-          - Negative tension: weights move away from source values
+        Rule: dW = lr * lr_type * tension * (source_value - weight)
+          - lr_exc/lr_inh/lr_input multiply the base rate for each synapse type.
+          - Set a multiplier to 0.0 to freeze learning for that dendrite type.
         """
         NR = self.n_real
 
         source_vals = self.valores[self.indices_fuente]  # [NR, max_syn]
         tension = self.tensiones[:NR].unsqueeze(1)       # [NR, 1]
 
-        delta = lr * tension * (source_vals - self.pesos_sinapsis)
+        # Per-synapse effective learning rate
+        lr_map = (
+            self.es_exc_syn.float()   * lr_exc +
+            self.es_inh_syn.float()   * lr_inh +
+            self.es_input_syn.float() * lr_input
+        )  # [NR, max_syn]
+
+        delta = lr * lr_map * tension * (source_vals - self.pesos_sinapsis)
         self.pesos_sinapsis = (self.pesos_sinapsis + delta * self.mascara_valida).clamp(0.0, 1.0)
 
     def procesar_n(self, n: int) -> None:

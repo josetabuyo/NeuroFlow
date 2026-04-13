@@ -115,7 +115,7 @@ class ConstructorTensor:
         # Check if we need a zero neuron for border synapses
         has_border = (indices_fuente == N).any().item()
         if has_border:
-            # Append a zero neuron
+            # Append a zero neuron (marked as NeuronaEntrada so it stays frozen)
             valores = torch.cat([valores, torch.zeros(1)])
             umbrales = torch.cat([umbrales, torch.zeros(1)])
             mascara_entrada = torch.cat([mascara_entrada, torch.tensor([True])])
@@ -123,6 +123,17 @@ class ConstructorTensor:
         else:
             # Clamp any stray indices (shouldn't happen, but safety)
             indices_fuente = indices_fuente.clamp(0, N - 1)
+
+        # ── Per-synapse type masks ──
+        # Used by learn() to apply different learning rates per dendrite type.
+        # Border synapses are excluded because mascara_valida is False for them.
+        NR = N  # real neuron count before possible border extension
+        src_safe = indices_fuente.clamp(0, mascara_entrada.shape[0] - 1)
+        src_is_input = mascara_entrada[src_safe]  # [NR, max_syn]
+
+        es_input_syn = src_is_input & mascara_valida           # source is NeuronaEntrada
+        es_exc_syn   = (~src_is_input) & (pesos_dendrita >= 0) & mascara_valida
+        es_inh_syn   = (~src_is_input) & (pesos_dendrita <  0) & mascara_valida
 
         return BrainTensor(
             valores=valores,
@@ -143,4 +154,7 @@ class ConstructorTensor:
             tension_fn=tension_fn,
             tension_fn_param=tension_fn_param,
             tension_fns=tension_fns,
+            es_exc_syn=es_exc_syn,
+            es_inh_syn=es_inh_syn,
+            es_input_syn=es_input_syn,
         )
