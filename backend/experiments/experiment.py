@@ -240,7 +240,7 @@ class Experiment(Experimento):
         learning_cfg = config.get("learning")
         self.learning_enabled = learning_cfg is not None
         if learning_cfg:
-            self.learning_rate = learning_cfg.get("rate", 0.01)
+            self.learning_rate = learning_cfg.get("rate", 1.0)
             self.lr_exc   = learning_cfg.get("lr_exc",   1.0)
             self.lr_inh   = learning_cfg.get("lr_inh",   1.0)
             self.lr_input = learning_cfg.get("lr_input", 1.0)

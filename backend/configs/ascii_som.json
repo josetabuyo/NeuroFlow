@@ -18,7 +18,6 @@
       "dendrite_input_weight": 0.2
     },
     "learning": {
-      "rate": 0.01,
       "lr_exc": 0.0,
       "lr_inh": 0.0,
       "lr_input": 1.0
