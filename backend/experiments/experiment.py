@@ -219,11 +219,13 @@ class Experiment(Experimento):
             self.input_resolution = input_cfg.get("resolution", 20)
             self.frames_per_char = max(1, input_cfg.get("frames_per_char", 10))
             self.dendrite_input_weight = input_cfg.get("dendrite_input_weight", 0.2)
+            self.input_density = float(input_cfg.get("density", 1.0))
             self._font_id = input_cfg.get("font", "press_start_2p")
             self._font_size = input_cfg.get("font_size", 10)
         else:
             self.input_text = ""
             self.input_resolution = 0
+            self.input_density = 1.0
 
         # ── Noise (opt-in) ──
         noise_cfg = config.get("noise")
@@ -327,9 +329,11 @@ class Experiment(Experimento):
         if self.input_enabled and not is_wolfram:
             input_neuron_list = list(self.regiones["input"].neuronas.values())
             tissue_list = list(self.regiones["tissue"].neuronas.values())
+            k = max(1, round(len(input_neuron_list) * self.input_density))
             for tissue_n in tissue_list:
+                sampled = random.sample(input_neuron_list, k) if k < len(input_neuron_list) else input_neuron_list
                 sinapsis_list: list[Sinapsis] = []
-                for inp_n in input_neuron_list:
+                for inp_n in sampled:
                     peso = random.uniform(0.2, 1.0)
                     sinapsis_list.append(
                         Sinapsis(neurona_entrante=inp_n, peso=peso)
