@@ -1,10 +1,39 @@
-# Analisis: Problemas de Aprendizaje en el Dynamic SOM
+# Analisis: Aprendizaje en el Dynamic SOM
 
-## 1. Diagnostico del problema central
+## 1. Conclusion del experimento
 
-Los Daemons se vuelven estaticos y los pesos sinapticos de entrada permanecen ruidosos porque el sistema tiene **varios problemas compuestos** que impiden la diferenciacion. Los analizo en orden de impacto.
+**El experimento Dynamic SOM esta esencialmente concluido (abril 2026).**
 
-**Estado actual:** Despues de multiples iteraciones de desarrollo (spike adaptation, process modes, configurable weights, JSON editor), el SOM todavia no muestra regiones diferenciadas en el espacio que compartan un patron aprendido. Los daemons se ven como circulos blancos (activacion final) o sombreros mexicanos (tension superficial), pero no hay organizacion topologica en respuesta al input.
+El sistema muestra organizacion topografica consistente con un SOM clasico de Kohonen.
+Los resultados observados:
+
+- **Desplazamiento del centro de masa de los daemons** en respuesta a cada patron de entrada.
+- **Separacion abrupta** para patrones sin pixeles en comun (HALF_TOP vs HALF_BOT): las poblaciones de daemons para cada patron se separan de forma violenta y limpia.
+- **Separacion gradual** para patrones similares (que comparten pixeles): los daemons que se establecen estan claramente sesgados hacia cada patron, de forma proporcional a la similitud — y esto es consistente entre corridas.
+- **Hallazgo clave:** La mask de conectividad lateral recurrente (exitatorio cercano + inhibitorio lejano) **no requiere entrenamiento**. Solo es necesario entrenar la dendrita de entrada para obtener organizacion topografica completa.
+
+### Por que funciona sin entrenar los pesos recurrentes
+
+En un SOM clasico de Kohonen, el algoritmo entrena los vectores prototipo *y* aplica una funcion de vecindad explicita. En NeuroFlow:
+
+- La **cooperacion local** (neuronas vecinas se activan juntas → cohesion del daemon) emerge del exitatorio cercano de la mask.
+- La **competencia global** (neuronas lejanas se suprimen → exclusion de daemons) emerge del inhibitorio lejano.
+
+Los pesos recurrentes son un **prior topografico fijo** — la estructura espacial no se aprende, emerge del connectome y es estable antes de que se presente cualquier input. El aprendizaje solo necesita mapear los patrones de entrada sobre ese prior.
+
+**Implicacion para Stage 3:** El sistema motor/nociceptor puede construirse sobre una capa de daemons congelada. Solo los pesos de interfaz (input → daemon, daemon → output) necesitan entrenarse.
+
+### Pendiente antes de cerrar Stage 2
+
+- Formalizar metricas: desplazamiento del centro de masa, indice de sesgo de daemons por patron
+- Tuning: `lr_input`, `density`, `frames_per_char` optimos para separacion limpia
+- Documentar cuantitativamente el efecto de gradiente de similitud
+
+---
+
+## Historial de problemas resueltos durante el desarrollo
+
+**Estado original:** Despues de multiples iteraciones (spike adaptation, process modes, configurable weights, JSON editor), el SOM no mostraba regiones diferenciadas. Los daemons se veian como circulos blancos o sombreros mexicanos, pero sin organizacion topologica en respuesta al input.
 
 ---
 

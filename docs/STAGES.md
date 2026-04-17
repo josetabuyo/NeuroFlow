@@ -48,7 +48,7 @@ with respect to competitive exclusion (see [Vision](VISION.md#paralelo-con-las-n
 
 ## Stage 2: Dynamic SOM
 
-**Status:** In progress.
+**Status:** Essentially complete. Pending: metric formalization and tuning.
 
 **Objective:** Implement a Self-Organizing Map (SOM)
 using NeuroFlow's connectionist model and observe whether the system
@@ -112,11 +112,40 @@ between SOMs and convolutional network layers (Deep Dream).
 Only input dendrites learn (`lr_exc=0, lr_inh=0`). Recurrent (daemon) weights stay fixed.
 This isolates whether the input pathway alone can produce topographic organization.
 
-### Open question
+### Results observed (April 2026)
 
-Does freezing recurrent weights + training only input dendrites produce topographic
-differentiation? Neurons in different regions should develop different input weight
-patterns after sufficient training with `HALF_TOP` / `HALF_BOT`.
+**The experiment confirmed topographic self-organization consistent with SOM behavior.**
+
+| Observation | Description |
+|-------------|-------------|
+| Center-of-mass shift | Daemon clusters visibly migrated in response to each input pattern |
+| Abrupt separation (orthogonal patterns) | With `HALF_TOP` / `HALF_BOT` (zero shared pixels), daemon populations for each pattern separated violently and cleanly |
+| Graded separation (similar patterns) | With patterns sharing pixels, daemons that settled were clearly biased toward each pattern — proportionally, not abruptly — and this was consistent across runs |
+| Input-only learning suffices | The recurrent lateral mask (excitatory center + inhibitory surround) does **not** need training. Only the input dendrite weights need to be learned to produce full SOM-like topographic organization |
+
+### Key finding
+
+The lateral connectivity structure (the daemon connectome) already implements the
+competitive/cooperative dynamics that a classical Kohonen SOM achieves via an explicit
+neighborhood function. The excitatory-center / inhibitory-surround mask provides:
+
+- **Local cooperation** (neighboring neurons activate together → daemon cohesion)
+- **Global competition** (distant neurons suppress each other → daemon exclusion)
+
+This means the recurrent weights are effectively a *fixed topographic prior*, and
+learning only needs to map input patterns onto that prior. This is a stronger result
+than a standard SOM: the spatial structure is not learned — it emerges from the
+connectome and is stable before any input is presented.
+
+**Implication for Stage 3:** The motor/nociceptor system can be built on top of a
+frozen daemon layer. Only the interface weights (input → daemon, daemon → output)
+need to be trained.
+
+### Pending before closing Stage 2
+
+- Formalize metrics: center-of-mass displacement, daemon bias index per pattern
+- Tuning: optimal `lr_input`, `density`, `frames_per_char` for clean separation
+- Document the similarity-gradient effect quantitatively
 
 ---
 
