@@ -241,31 +241,6 @@ Processing region (inhibitory feedback)
 
 ---
 
-### Experiment 2: Simple Living Creature
-
-**Goal:** A simulated agent that moves using motor outputs, learns to flee pain
-via nociceptors, and develops avoidance behavior without explicit reward.
-
-**Architecture:**
-- Input: sensory readings from a simulated body (proximity, contact)
-- Processing: daemon tissue
-- Output: motor signals (direction, intensity) interpreted by a physics simulation
-- Nociceptor: activated by contact/damage events in the simulation
-
-**Hypothesis:** Consistent nociceptive inhibition during harmful contacts will
-progressively suppress the motor patterns that led to them — avoidance behavior
-without a reward function.
-
-**Pleasure:** Not explicitly modeled. If it emerges, it will appear as reduced
-nociceptive activity in states the agent reaches repeatedly without pain —
-consistent with the biological view that pleasure has no dedicated receptor,
-only the progressive silencing of pain signals.
-
-This experiment requires Stage 4 (Tuning) infrastructure to be useful,
-since finding the right connectome parameters for a body is a search problem.
-
----
-
 Any metrics obtained in Stage 3 feed into Stage 4 (Tuning).
 
 ---
@@ -310,15 +285,36 @@ systematic search and selection techniques.
 **Objective:** Take the connectionist model into a simulated world where
 an agent moves intelligently without language.
 
-**Plan:**
+**Prerequisite:** Stage 4 (Tuning) must be complete — finding the right connectome
+parameters for a body-coupled system is a search problem that requires genetic
+algorithm infrastructure.
 
-1. Simulate a virtual world with a simple agent (sphere or minimal object)
-2. Publish models that emulate living beings without language:
-   - ***Aplysia californica***: sea slug studied by Eric Kandel;
-     nervous system with ~20,000 neurons, which enabled the discovery of
-     synaptic mechanisms of learning and memory
-   - **Zebrafish** (*Danio rerio*): transparent and relatively simple
-     nervous system; spinal motor circuits well characterized for locomotion
+### Experiment: Simple Living Creature
+
+**Goal:** A simulated agent that moves using motor outputs, learns to flee pain
+via nociceptors, and develops avoidance behavior without explicit reward.
+
+**Architecture:**
+- Input: sensory readings from a simulated body (proximity, contact)
+- Processing: daemon tissue (connectome tuned in Stage 4)
+- Output: motor signals (direction, intensity) interpreted by a physics simulation
+- Nociceptor: activated by contact/damage events in the simulation
+
+**Hypothesis:** Consistent nociceptive inhibition during harmful contacts will
+progressively suppress the motor patterns that led to them — avoidance behavior
+without a reward function.
+
+**Pleasure:** Not explicitly modeled. If it emerges, it will appear as reduced
+nociceptive activity in states the agent reaches repeatedly without pain —
+consistent with the biological view that pleasure has no dedicated receptor,
+only the progressive silencing of pain signals.
+
+**Models to emulate:**
+- ***Aplysia californica***: sea slug studied by Eric Kandel;
+  nervous system with ~20,000 neurons, which enabled the discovery of
+  synaptic mechanisms of learning and memory
+- **Zebrafish** (*Danio rerio*): transparent and relatively simple
+  nervous system; spinal motor circuits well characterized for locomotion
 
 **Scientific inspiration:**
 
