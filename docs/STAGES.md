@@ -48,7 +48,7 @@ with respect to competitive exclusion (see [Vision](VISION.md#paralelo-con-las-n
 
 ## Stage 2: Dynamic SOM
 
-**Status:** Next.
+**Status:** In progress.
 
 **Objective:** Implement a Self-Organizing Map (SOM)
 using NeuroFlow's connectionist model and observe whether the system
@@ -67,6 +67,56 @@ replicates the topographic organization capacity that Kohonen described.
 
 **Inspiration:** Kohonen (1990), Hubel & Wiesel (1981), the relationship
 between SOMs and convolutional network layers (Deep Dream).
+
+### Infrastructure built (April 2026)
+
+| Feature | Description |
+|---------|-------------|
+| Unified `Experiment` class | Single class replaces per-experiment files. All features opt-in via config sections. |
+| Synthetic input patterns | `HALF_TOP`, `HALF_BOT`, `BARS_H`, `BARS_V`, `DOT_TL`, `DOT_BR` — no font needed |
+| Polynomial tension shaping | `tension_function: {"x": N, "x_pow_2": N, "x_pow_3": N}` — composable, soft param |
+| Config templates + history | Dropdown with presets, SQLite history per preset, JSON editor in UI |
+| Per-dendrite-type learning | `lr_exc`, `lr_inh`, `lr_input` multipliers on top of `rate` — allows freezing recurrent weights while training only input dendrites |
+| Input density | `input.density` (0–1) — fraction of input neurons each tissue neuron connects to; sparse connectivity promotes specialization |
+| Auto-fit glyph rendering | Characters fill the input grid to the edge (`padding=0`); `padding=N` adds margin |
+| WebSocket error handling | Backend exceptions now sent to client instead of silently closing the connection |
+| Compile time optimization | `ConstructorTensor.compilar` went from 31s → 4s (bulk numpy array fill instead of per-element tensor writes) |
+
+### Current experiment config (Dynamic SOM)
+
+```json
+{
+  "grid": { "width": 50, "height": 50 },
+  "wiring": {
+    "mask": "deamon_e3_g2_i12_de1_di1",
+    "dendrite_exc_weight": 0.9,
+    "dendrite_inh_weight": -1,
+    "process_mode": "avg_vs_avg",
+    "tension_function": { "x": 3, "x_pow_3": 9, "x_pow_2": 2 }
+  },
+  "input": {
+    "text": "HALF_TOP,HALF_BOT",
+    "resolution": 20,
+    "frames_per_char": 10,
+    "dendrite_input_weight": 0.2
+  },
+  "learning": {
+    "rate": 1.0,
+    "lr_exc": 0.0,
+    "lr_inh": 0.0,
+    "lr_input": 0.01
+  }
+}
+```
+
+Only input dendrites learn (`lr_exc=0, lr_inh=0`). Recurrent (daemon) weights stay fixed.
+This isolates whether the input pathway alone can produce topographic organization.
+
+### Open question
+
+Does freezing recurrent weights + training only input dendrites produce topographic
+differentiation? Neurons in different regions should develop different input weight
+patterns after sufficient training with `HALF_TOP` / `HALF_BOT`.
 
 ---
 

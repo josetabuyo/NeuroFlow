@@ -437,80 +437,91 @@ Esto puede implementarse como un nuevo endpoint en la API (`/run_protocol`) o co
 | # | Problema | Estado | Resultado |
 |---|----------|--------|-----------|
 | 2 | Aprendizaje durante gap | Resuelto | `noise_inter_char=False` salta el gap. |
-| 3 | Techo plano | **Implementado, sin probar** | Power law sharpening implementado. Pendiente: correr presets y verificar. |
-| 4 | Max active steps (SFA) | Implementado | "Lava lamp". Dinamismo sin organizacion. |
-| 5 | Balance dendrita lejana/cercana | Requiere tuning | Metricas parcialmente confiables. |
-| 6 | Funcion de salida (sharpening) | **Implementado** | `tension_function: {"pow": N}` en config. Soft param. |
+| 3 | Techo plano | En prueba | Power law sharpening implementado. Ahora probando con input-only learning. |
+| 4 | Max active steps (SFA) | Implementado | "Lava lamp". Dinamismo sin organizacion topologica. |
+| 5 | Balance dendrita lejana/cercana | Nueva estrategia — ver abajo | Weights recurrentes fijos, solo entrena input. |
+| 6 | Funcion de salida (sharpening) | **Implementado** | `tension_function: {"x": N, "x_pow_2": N, "x_pow_3": N}` composable. Soft param. |
 | 7 | Patrones simplificados | **Implementado** | HALF_TOP/BOT, BARS_H/V, DOT_TL/BR via input_text. |
-| 8 | Orquestacion de protocolos | Propuesta nueva | Infraestructura para tuning sistematico. |
+| 8 | Orquestacion de protocolos | Propuesta — pendiente | Infraestructura para tuning sistematico. |
 
-### Sistema de presets de configuracion (nuevo)
+### Nuevas herramientas implementadas (abril 2026)
 
-Se agrego un sistema de `config_presets` al Dynamic SOM con un dropdown en la sidebar.
-Cada preset incluye una `description` como primer campo del JSON que explica el objetivo del experimento.
-Los presets estan organizados en tiers progresivos:
+| Feature | Config | Descripcion |
+|---------|--------|-------------|
+| Per-type learning rates | `learning.lr_exc`, `lr_inh`, `lr_input` | Multiplicadores sobre `rate` por tipo de dendrita. Permite congelar pesos recurrentes y entrenar solo la dendrita de entrada. |
+| Densidad de input | `input.density` (0.0–1.0) | Fraccion de neuronas de input que se conectan a cada neurona de tejido. Sparse → potencial especializacion. |
+| Auto-fit glyph | — (siempre activo) | Caracteres llenados al borde del grid de input. `padding` configurable. |
 
-| Tier | Presets | Objetivo |
-|------|---------|----------|
-| 0 | Isolated Daemon, Daemon + Adaptation | Validar mecanica base sin input |
-| 1 | Halves Raw, pow 2, pow 3, pow 5 | Investigar techo plano con patrones simples |
-| 2 | Bars Sharp, Corner Dots | Diversidad de patrones con sharpening |
-| 3 | ASCII Baseline, ASCII Sharp | Desafio original A vs B |
-| 4 | Halves + Adaptation, Halves Sum Mode | Experimentos compuestos |
+### Nueva estrategia activa: input-only learning
 
-### Prioridades actualizadas
+En lugar de entrenar todos los pesos simultaneamente (donde el daemon absorbe el gradiente),
+se congela el aprendizaje de las dendritas recurrentes y solo se entrena la dendrita de entrada:
 
-#### Prioridad 1: Probar tension sharpening con presets
-Toda la infraestructura esta lista. Proximo paso: correr los presets del Tier 1
-(Halves Raw → pow 2 → pow 3 → pow 5) y comparar los pesos de entrada via inspect.
-Buscar: neuronas en distintas regiones con pesos de entrada diferenciados.
+```json
+"learning": { "rate": 1.0, "lr_exc": 0.0, "lr_inh": 0.0, "lr_input": 0.01 }
+```
 
-**Protocolo de prueba:**
-1. Seleccionar preset "Halves Raw", Start, correr ~500 steps, inspeccionar pesos de entrada
-2. Seleccionar preset "Halves Sharp pow 3", Start, correr ~500 steps, inspeccionar pesos
-3. Comparar: hay regiones diferenciadas? Los pesos muestran estructura?
-4. Si pow 3 muestra mejora, probar pow 2 y pow 5 para encontrar el optimo
+**Hipotesis:** Si el daemon ya es estable (Stage 1 probado), los pesos recurrentes no necesitan
+entrenamiento. El unico objetivo es que los pesos de input diferencien patrones. Al congelar
+exc/inh, se elimina la competencia entre gradientes y el input tiene campo libre para especializarse.
 
-#### Prioridad 2: Normalizacion divisiva (si power law no alcanza)
-Si `tension_function: {"pow": N}` no es suficiente, implementar normalizacion divisiva
-como alternativa biologicamente fundamentada (Carandini & Heeger, 2012).
+**Criterio de exito:** Despues de N steps con HALF_TOP/HALF_BOT, al inspeccionar los pesos de
+input de neuronas en distintas regiones del grid, se deben ver patrones diferenciados:
+algunas neuronas con pesos altos en la mitad superior, otras en la mitad inferior.
 
-#### Prioridad 3: Protocolo de orquestacion basico
-Implementar la capacidad de correr una secuencia de fases con parametros distintos.
-Necesario para hacer warmup sin input → entrenamiento → evaluacion.
+### Prioridades actuales
+
+#### Prioridad 1: Probar input-only learning con HALF_TOP/HALF_BOT
+Correr Dynamic SOM con `lr_exc=0, lr_inh=0, lr_input=0.01` durante varios miles de steps.
+Usar la herramienta de inspect para ver los pesos de input de neuronas en distintas zonas.
+Buscar diferenciacion topografica.
+
+#### Prioridad 2: Variar input density
+Probar `density: 0.25` y `density: 0.1`. La conectividad sparse fuerza a distintas neuronas
+a especializarse en distintas partes del input — similar a como V1 tiene campos receptivos locales.
+
+#### Prioridad 3: Normalizacion divisiva (si power law no alcanza)
+Si el sharpening polinomial no es suficiente para crear ganadores locales, implementar
+normalizacion divisiva (Carandini & Heeger, 2012) como siguiente nivel.
+
+#### Prioridad 4: Protocolo de orquestacion basico
+Warmup sin input (N steps, solo daemons) → entrenamiento → evaluacion con learning desactivado.
+El sistema ya soporta `update_config()` en caliente, solo falta orquestar la secuencia.
 
 ---
 
 ## 11. Prompt para continuar en otro chat
 
 ```
-Probar el efecto del Tension Sharpening en el Dynamic SOM de
-NeuroFlow. Todo esta implementado, falta correr los experimentos
-y documentar resultados.
+Estamos en Stage 2 (Dynamic SOM) de NeuroFlow — sistema conexionista
+basado en daemons con aprendizaje hebbiano.
 
-Estado actual:
-- tension_function (power law) implementado y es soft param
-- Patrones sinteticos implementados (HALF_TOP/BOT, BARS_H/V, DOT_TL/BR)
-- Sistema de config_presets con 12 presets organizados en tiers
-- Todo pasa tests (381 passed)
+Estado actual (abril 2026):
+- Infraestructura completa: templates, config history (SQLite), JSON editor,
+  WebSocket, inspect panel, tension sharpening polinomial
+- Per-type learning rates: lr_exc, lr_inh, lr_input (multiplicadores sobre rate)
+- Input density: conectividad sparse configurable
+- Auto-fit glyph rendering
+- Arquitectura unificada: clase Experiment unica, config JSON opt-in
 
-Que hacer:
-1. Abrir la UI (localhost:5173), seleccionar Dynamic SOM
-2. En el combo de presets, seleccionar "Halves Raw"
-3. Start, correr ~500 steps, inspeccionar pesos de entrada de
-   varias neuronas en distintas zonas del grid
-4. Seleccionar "Halves Sharp pow 3", Start, repetir inspeccion
-5. Comparar: hay diferenciacion en los pesos? Regiones distintas?
-6. Si hay mejora con pow 3, probar pow 2 y pow 5 para calibrar
-7. Documentar resultados en docs/analysis_som_learning_problems.md
+Experimento activo: Dynamic SOM con HALF_TOP/HALF_BOT
+- Solo entrenan las dendritas de entrada (lr_exc=0, lr_inh=0, lr_input=0.01)
+- Pesos recurrentes (daemon) congelados
+- Hipotesis: el daemon ya estable no necesita reentrenamiento; el input
+  tiene campo libre para diferenciarse topograficamente
 
-Presets disponibles (en orden de prueba sugerido):
-- Isolated Daemon: verificar formacion de daemons sin input
-- Halves Raw: baseline sin sharpening (muestra techo plano)
-- Halves Sharp pow 2/3/5: sharpening progresivo
-- Bars Sharp, Corner Dots: patrones mas complejos
-- ASCII Baseline vs ASCII Sharp: desafio original A vs B
+Lo que falta probar:
+1. Correr ~2000-5000 steps con el config actual
+2. Usar inspect en neuronas de distintas zonas del grid
+3. Ver si los pesos de input muestran diferenciacion (mitad sup vs inf)
+4. Probar input.density: 0.25 y 0.1 para ver efecto de sparse connectivity
+5. Si no hay diferenciacion: considerar normalizacion divisiva (seccion 6)
 
-Si power law no alcanza, la siguiente opcion es normalizacion
-divisiva (seccion 6 del doc de analisis).
+Archivos clave:
+- backend/experiments/experiment.py — logica del experimento
+- backend/core/brain_tensor.py — learn() con lr_exc/lr_inh/lr_input
+- backend/core/ascii_renderer.py — render_char con auto-fit
+- backend/configs/ascii_som.json — config activo del template Dynamic SOM
+- docs/analysis_som_learning_problems.md — analisis completo de problemas
+- docs/STAGES.md — roadmap con estado actual
 ```
