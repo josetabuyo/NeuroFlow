@@ -153,29 +153,120 @@ need to be trained.
 
 **Status:** Planned.
 
-**Objective:** Explore two fundamental concepts before moving on to
-full motor agents:
+**Objective:** Add output (motor) and error-signal (nociceptor) regions to the
+connectionist model. Build progressively from the simplest useful case to a
+simulated living creature.
 
-### Nociceptor
+---
 
-The nociceptor is the pain receptor. In NeuroFlow, modeling
-**nociceptive inhibition** makes it possible to understand how a distributed
-system can signal "danger" without a central processor — analogous to
-gate control theory in the dorsal horn of the spinal cord.
+### Architecture: three regions
 
-### Motor
+```
+Input region  →  Processing region  →  Output (motor) region
+                      ↓
+              Nociceptor region  (error signal, negative weight)
+```
 
-How to interpret the **outputs** of a connectionist system as
-motor signals. The goal in this stage is not to solve a specific problem,
-but rather:
+- **Input region:** existing NeuronaEntrada layer
+- **Processing region:** existing daemon tissue (lateral exc/inh connectome, frozen)
+- **Output region:** new — motor neurons that read from the processing layer
+- **Nociceptor region:** new — receives error signal, feeds back with negative weight
 
-- To develop abstract theoretical models
-- To observe what dynamics emerge
-- To define what metrics can be obtained
+---
 
-**Experiment:** *Motor & Nociceptor* — theoretical and abstract models.
+### Motor region — two levels of complexity
 
-Any metrics obtained here will feed into Stage 4 (Tuning).
+#### Level 1 (implement first): Simple output layer
+- No lateral connections between output neurons
+- Each output neuron connects to the processing region only (distant connections)
+- Fully connected by default, with parametrizable `density`
+- Equivalent to the output layer of a simple feedforward net
+- Weights learned via the same Hebbian mechanism, same `lr_output` multiplier
+
+#### Level 2 (implement after Level 1 is validated): Output layer with lateral connections
+- Output neurons have excitatory-center / inhibitory-surround lateral connections
+- This allows the output layer to self-organize topographically as well
+- Same mask system as the processing region
+
+---
+
+### Nociceptor region
+
+The nociceptor is a region that carries an **error signal** — the difference between
+what was expected and what was produced. It is not a special mechanism; it is another
+input region with **negative dendrite weight**, so it inhibits rather than excites.
+
+- Acts exactly like the input region, but with negative weight
+- Provides gradient-free error feedback: active nociceptor pixels suppress the
+  neurons that fired when they should not have
+
+**No special "pleasure" connections exist in biology** — pleasure is the absence of
+nociceptive inhibition, or the reduction of it. This may emerge naturally from the
+model without explicit implementation.
+
+---
+
+### Experiment 1: Input Mimic
+
+**Config template name:** `Input Mimic`
+
+**Goal:** Train a system that reproduces its input at the output layer,
+filtering noise as a spontaneous effect of its operation.
+
+**Architecture:**
+```
+Input (noisy pattern)
+  ↓ input dendrite (positive weight)
+Processing region (daemon tissue, frozen recurrent weights)
+  ↓ output dendrite (learned)
+Output region (no lateral connections)
+  ↓ compare with clean input
+Nociceptor region ← diff(input, output): pixels that differ = 1
+  ↓ nociceptor dendrite (negative weight, same as input dendrite path)
+Processing region (inhibitory feedback)
+```
+
+**Why this is interesting:**
+- The system learns to reconstruct its input without supervised labels
+- Noise filtering emerges spontaneously: noisy input → stable daemon state → clean output
+- The nociceptor provides a local error signal without backpropagation
+- Has direct utility: denoising, pattern completion, anomaly detection
+
+**Implementation order:**
+1. Add output region to `Experiment` class (Level 1: no lateral connections, parametrizable density)
+2. Add nociceptor region (error diff projected as negative-weight input)
+3. Create `input_mimic.json` config template
+4. Add output grid visualization to the UI (second canvas or overlay)
+5. Validate: noisy input → reconstructed clean output after training
+
+---
+
+### Experiment 2: Simple Living Creature
+
+**Goal:** A simulated agent that moves using motor outputs, learns to flee pain
+via nociceptors, and develops avoidance behavior without explicit reward.
+
+**Architecture:**
+- Input: sensory readings from a simulated body (proximity, contact)
+- Processing: daemon tissue
+- Output: motor signals (direction, intensity) interpreted by a physics simulation
+- Nociceptor: activated by contact/damage events in the simulation
+
+**Hypothesis:** Consistent nociceptive inhibition during harmful contacts will
+progressively suppress the motor patterns that led to them — avoidance behavior
+without a reward function.
+
+**Pleasure:** Not explicitly modeled. If it emerges, it will appear as reduced
+nociceptive activity in states the agent reaches repeatedly without pain —
+consistent with the biological view that pleasure has no dedicated receptor,
+only the progressive silencing of pain signals.
+
+This experiment requires Stage 4 (Tuning) infrastructure to be useful,
+since finding the right connectome parameters for a body is a search problem.
+
+---
+
+Any metrics obtained in Stage 3 feed into Stage 4 (Tuning).
 
 ---
 
