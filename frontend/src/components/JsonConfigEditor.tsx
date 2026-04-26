@@ -304,6 +304,10 @@ export function JsonConfigEditor({ config, onChange, metadata }: JsonConfigEdito
           border: `1px solid ${parseError ? "#ef476f" : "#2a2a3e"}`,
           overflow: "hidden",
           transition: "border-color 0.2s",
+          resize: "vertical",
+          height: "440px",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <CodeMirror
@@ -321,7 +325,7 @@ export function JsonConfigEditor({ config, onChange, metadata }: JsonConfigEdito
             highlightSelectionMatches: false,
             searchKeymap: false,
           }}
-          style={{ maxHeight: "60vh", overflow: "auto" }}
+          style={{ flex: 1, height: "100%", overflow: "auto" }}
         />
       </div>
       {parseError && (

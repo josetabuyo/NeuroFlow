@@ -1,11 +1,9 @@
 /** NeuroFlow — Main Application Layout. */
 
 import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
-import { PixelCanvas } from "./components/PixelCanvas";
-import { MiniGrid } from "./components/MiniGrid";
 import { Sidebar } from "./components/Sidebar";
 import { Controls } from "./components/Controls";
-import { BrushPalette } from "./components/BrushPalette";
+import { Scene } from "./components/Scene";
 import { useExperiment } from "./hooks/useExperiment";
 import { generateSquareBrush } from "./brushes";
 import type { ConfigTemplate, ExperimentConfig, Metadata } from "./types";
@@ -125,7 +123,6 @@ function App() {
     tensionMode,
     inputFrame,
     inputWeightGrid,
-    inputWeightDims,
     state,
     stats,
     perf,
@@ -295,6 +292,7 @@ function App() {
     verticalAlign: "middle",
   });
 
+
   return (
     <div
       style={{
@@ -314,7 +312,6 @@ function App() {
         metadata={metadata}
         state={state}
         stats={stats}
-        inputFrame={inputFrame}
         onSelectTemplate={handleSelectTemplate}
         onConfigChange={setConfig}
         onStart={handleStart}
@@ -360,150 +357,65 @@ function App() {
           overflow: "hidden",
         }}
       >
+        <div style={{ flexShrink: 0 }}>
+          <Controls
+            state={state}
+            stats={stats}
+            perf={perf}
+            generation={generation}
+            stepsPerTick={stepsPerTick}
+            onPlay={handlePlay}
+            onPause={pause}
+            onStep={handleStep}
+            onReset={reset}
+            onStepsPerTickChange={setStepsPerTick}
+          />
+        </div>
+
         <div
           style={{
             flex: 1,
             minHeight: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
             background: "#0d0d14",
             borderRadius: "8px",
             border: "1px solid #1a1a2e",
             overflow: "hidden",
-            padding: "16px",
             position: "relative",
           }}
         >
           {hasGrid ? (
-            <>
-              <div style={{ display: "flex", gap: "16px", width: "100%", height: "100%", minHeight: 0, alignItems: "center", justifyContent: "center" }}>
-                <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", height: "100%", position: "relative" }}>
-                  <PixelCanvas
-                    grid={grid}
-                    tensionGrid={tensionGrid}
-                    tensionMode={tensionMode}
-                    width={config.grid.width}
-                    height={config.grid.height}
-                    connectionMap={connectionMap}
-                    inspectedCell={inspectedCell}
-                    onCellClick={handleCellClick}
-                    onCellDrag={handleCellDrag}
-                  />
-                  <BrushPalette
-                    brushSize={brushSize}
-                    brushMode={brushMode}
-                    inspectMode={inspectMode}
-                    tensionMode={tensionMode}
-                    canInspect={
-                      state === "ready" ||
-                      state === "paused" ||
-                      state === "running"
-                    }
-                    onIncrease={increaseBrushSize}
-                    onDecrease={decreaseBrushSize}
-                    onToggleMode={toggleBrushMode}
-                    onToggleInspect={toggleInspectMode}
-                    onToggleTension={toggleTensionMode}
-                  />
-                  {inspectInfo && inspectedCell && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "8px",
-                        right: "8px",
-                        background: "rgba(13, 13, 20, 0.92)",
-                        border: "1px solid #2a2a3e",
-                        borderRadius: "6px",
-                        padding: "10px 14px",
-                        fontSize: "0.75rem",
-                        fontFamily: "monospace",
-                        color: "#ccc",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "4px",
-                        zIndex: 15,
-                        minWidth: "160px",
-                      }}
-                    >
-                      <div style={{ color: "#ffff00", fontWeight: 600, fontSize: "0.8rem", marginBottom: "2px" }}>
-                        Neuron ({inspectedCell.x}, {inspectedCell.y})
-                      </div>
-                      <div>
-                        <span style={{ color: "#888" }}>Activation: </span>
-                        <span style={{ color: inspectInfo.activation > 0.5 ? "#ffffff" : "#555" }}>
-                          {inspectInfo.activation.toFixed(2)}
-                        </span>
-                      </div>
-                      <div>
-                        <span style={{ color: "#888" }}>Tension: </span>
-                        <span style={{ color: inspectInfo.tension > 0 ? "#ff8c00" : inspectInfo.tension < 0 ? "#5000ff" : "#555" }}>
-                          {inspectInfo.tension >= 0 ? "+" : ""}{inspectInfo.tension.toFixed(4)}
-                        </span>
-                      </div>
-                      <div style={{ borderTop: "1px solid #1a1a2e", paddingTop: "4px", marginTop: "2px", color: "#666", fontSize: "0.65rem" }}>
-                        {inspectInfo.total_dendritas} dendrites / {inspectInfo.total_sinapsis} synapses
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {inputFrame && (
-                  <div style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "12px",
-                    alignItems: "center",
-                    flexShrink: 0,
-                    maxHeight: "100%",
-                    overflow: "auto",
-                  }}>
-                    <MiniGrid
-                      label="Input"
-                      grid={inputFrame}
-                      width={inputFrame[0]?.length ?? 0}
-                      height={inputFrame.length}
-                      maxSize={140}
-                      subtitle={stats?.current_char ? `"${stats.current_char}" ${(stats.frame_in_char ?? 0) + 1}/${stats.frames_per_char ?? "?"}` : undefined}
-                    />
-                    {inputWeightGrid && inputWeightDims && (
-                      <MiniGrid
-                        label="Learned"
-                        grid={inputWeightGrid}
-                        width={inputWeightDims.width}
-                        height={inputWeightDims.height}
-                        maxSize={140}
-                        colorMode="weight"
-                        subtitle={inspectedCell ? `Neuron (${inspectedCell.x}, ${inspectedCell.y})` : undefined}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-              {isInitializing && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "rgba(10, 10, 15, 0.75)",
-                    borderRadius: "8px",
-                    zIndex: 10,
-                  }}
-                >
-                  <div style={{ textAlign: "center", color: "#888" }}>
-                    <div className="neuro-spinner" />
-                    <p style={{ marginTop: "12px", fontSize: "0.85rem" }}>
-                      Building network...
-                    </p>
-                  </div>
-                </div>
-              )}
-            </>
+            <Scene
+              grid={grid}
+              hiddenW={config.grid.width}
+              hiddenH={config.grid.height}
+              tensionGrid={tensionGrid}
+              tensionMode={tensionMode}
+              connectionMap={connectionMap}
+              inspectedCell={inspectedCell}
+              inspectInfo={inspectInfo}
+              inputFrame={inputFrame}
+              inputWeightGrid={inputWeightGrid}
+              onCellClick={handleCellClick}
+              onCellDrag={handleCellDrag}
+              brushSize={brushSize}
+              brushMode={brushMode}
+              inspectMode={inspectMode}
+              canInspect={state === "ready" || state === "paused" || state === "running"}
+              onIncrease={increaseBrushSize}
+              onDecrease={decreaseBrushSize}
+              onToggleMode={toggleBrushMode}
+              onToggleInspect={toggleInspectMode}
+              onToggleTension={toggleTensionMode}
+              isInitializing={isInitializing}
+            />
           ) : (
             <div
               style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 textAlign: "center",
                 color: "#444",
                 fontSize: "0.9rem",
@@ -528,21 +440,6 @@ function App() {
               )}
             </div>
           )}
-        </div>
-
-        <div style={{ flexShrink: 0 }}>
-          <Controls
-            state={state}
-            stats={stats}
-            perf={perf}
-            generation={generation}
-            stepsPerTick={stepsPerTick}
-            onPlay={handlePlay}
-            onPause={pause}
-            onStep={handleStep}
-            onReset={reset}
-            onStepsPerTickChange={setStepsPerTick}
-          />
         </div>
 
         <div

@@ -59,14 +59,93 @@ export function Controls({
     <div
       style={{
         display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
+        flexDirection: "column",
+        gap: "6px",
         padding: "12px 0",
-        gap: "12px",
-        flexWrap: "wrap",
       }}
     >
-      <div style={{ display: "flex", gap: "8px" }}>
+      {/* Row 1: stats metrics */}
+      <div
+        style={{
+          display: "flex",
+          gap: "16px",
+          fontSize: "0.8rem",
+          color: "#888",
+          fontFamily: "monospace",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ display: "inline-block", minWidth: "100px" }}>
+          Steps:{" "}
+          <strong style={{ color: "#e0e0ff" }}>
+            {formatNumber(generation)}
+            {stats?.total_steps != null && (
+              <span style={{ color: "#666" }}>
+                {" / "}{stats.total_steps}
+              </span>
+            )}
+          </strong>
+        </span>
+        <span style={{ display: "inline-block", minWidth: "90px" }}>
+          Active:{" "}
+          <strong style={{ color: "#4cc9f0" }}>
+            {stats?.active_cells ?? 0}
+          </strong>
+        </span>
+        {stats?.daemon_count != null && (
+          <>
+            <span title="Clusters of >=3 contiguous active neurons" style={{ display: "inline-block", minWidth: "140px" }}>
+              Daemons:{" "}
+              <strong style={{ color: "#f0a500" }}>
+                {stats.daemon_count}
+              </strong>
+              <span style={{ color: "#555", fontSize: "0.7rem" }}>
+                {" "}(~{stats.avg_daemon_size ?? 0})
+              </span>
+            </span>
+            <span
+              title="Active neurons not part of any daemon (isolated/small groups)"
+              style={{
+                display: "inline-block",
+                minWidth: "80px",
+                color: (stats.noise_cells ?? 0) > (stats.active_cells * 0.3)
+                  ? "#f72585"
+                  : "#888",
+              }}
+            >
+              Noise:{" "}
+              <strong>
+                {stats.noise_cells ?? 0}
+              </strong>
+            </span>
+            <span title="Daemon count stability (20-frame sliding window)" style={{ display: "inline-block", minWidth: "90px" }}>
+              Stab:{" "}
+              <strong
+                style={{
+                  color:
+                    (stats.stability ?? 0) > 0.8
+                      ? "#4ade80"
+                      : (stats.stability ?? 0) > 0.5
+                        ? "#f0a500"
+                        : "#f72585",
+                }}
+              >
+                {(stats.stability ?? 0).toFixed(2)}
+              </strong>
+            </span>
+            <span title="Activation contrast inside vs outside daemons" style={{ display: "inline-block", minWidth: "80px" }}>
+              Excl:{" "}
+              <strong style={{ color: "#7b61ff" }}>
+                {(stats.exclusion ?? 0).toFixed(2)}
+              </strong>
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Row 2: buttons + steps/tick + perf + state */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
         {isRunning ? (
           <button style={btnStyle(true, "#f72585")} onClick={onPause}>
             Pause
@@ -80,36 +159,15 @@ export function Controls({
             Play
           </button>
         )}
-        <button
-          style={btnStyle(canStep, "#7b61ff")}
-          onClick={onStep}
-          disabled={!canStep}
-        >
+        <button style={btnStyle(canStep, "#7b61ff")} onClick={onStep} disabled={!canStep}>
           Step
         </button>
-        <button
-          style={btnStyle(canReset, "#ff9e00")}
-          onClick={onReset}
-          disabled={!canReset}
-        >
+        <button style={btnStyle(canReset, "#ff9e00")} onClick={onReset} disabled={!canReset}>
           Reset
         </button>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            marginLeft: "8px",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "0.7rem",
-              color: "#888",
-              whiteSpace: "nowrap",
-            }}
-          >
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "8px" }}>
+          <span style={{ fontSize: "0.7rem", color: "#888", whiteSpace: "nowrap" }}>
             Steps/tick:
           </span>
           <select
@@ -132,128 +190,47 @@ export function Controls({
             ))}
           </select>
         </div>
-      </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "16px",
-          fontSize: "0.8rem",
-          color: "#888",
-          fontFamily: "monospace",
-          alignItems: "center",
-        }}
-      >
-        <span>
-          Steps:{" "}
-          <strong style={{ color: "#e0e0ff" }}>
-            {formatNumber(generation)}
-            {stats?.total_steps != null && (
-              <span style={{ color: "#666" }}>
-                {" / "}{stats.total_steps}
-              </span>
-            )}
-          </strong>
-        </span>
-        <span>
-          Active:{" "}
-          <strong style={{ color: "#4cc9f0" }}>
-            {stats?.active_cells ?? 0}
-          </strong>
-        </span>
-        {stats?.daemon_count != null && (
-          <>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px", fontFamily: "monospace", fontSize: "0.8rem" }}>
+          {perf && (
             <span
-              title="Clusters of >=3 contiguous active neurons"
-            >
-              Daemons:{" "}
-              <strong style={{ color: "#f0a500" }}>
-                {stats.daemon_count}
-              </strong>
-              <span style={{ color: "#555", fontSize: "0.7rem" }}>
-                {" "}(~{stats.avg_daemon_size ?? 0})
-              </span>
-            </span>
-            <span
-              title="Active neurons not part of any daemon (isolated/small groups)"
               style={{
-                color: (stats.noise_cells ?? 0) > (stats.active_cells * 0.3)
-                  ? "#f72585"
-                  : "#888",
+                padding: "2px 8px",
+                borderRadius: "4px",
+                background: "#0d1f0d",
+                border: "1px solid #1a3a1a",
               }}
             >
-              Noise:{" "}
-              <strong>
-                {stats.noise_cells ?? 0}
+              <span style={{ color: "#666" }}>{perf.elapsed_ms}ms</span>
+              {" / "}
+              <strong style={{ color: "#4ade80" }}>
+                {formatNumber(perf.steps_per_second)} steps/s
               </strong>
             </span>
-            <span title="Daemon count stability (20-frame sliding window)">
-              Stab:{" "}
-              <strong
-                style={{
-                  color:
-                    (stats.stability ?? 0) > 0.8
-                      ? "#4ade80"
-                      : (stats.stability ?? 0) > 0.5
-                        ? "#f0a500"
-                        : "#f72585",
-                }}
-              >
-                {(stats.stability ?? 0).toFixed(2)}
-              </strong>
-            </span>
-            <span title="Activation contrast inside vs outside daemons">
-              Excl:{" "}
-              <strong style={{ color: "#7b61ff" }}>
-                {(stats.exclusion ?? 0).toFixed(2)}
-              </strong>
-            </span>
-          </>
-        )}
-        {perf && (
+          )}
           <span
             style={{
               padding: "2px 8px",
               borderRadius: "4px",
-              background: "#0d1f0d",
-              border: "1px solid #1a3a1a",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background:
+                state === "running" ? "#1a3a1a"
+                : state === "initializing" ? "#1a1a3a"
+                : state === "complete" ? "#3a1a1a"
+                : "#1a1a2e",
+              color:
+                state === "running" ? "#4ade80"
+                : state === "initializing" ? "#4cc9f0"
+                : state === "complete" ? "#f72585"
+                : "#666",
             }}
           >
-            <span style={{ color: "#666" }}>{perf.elapsed_ms}ms</span>
-            {" / "}
-            <strong style={{ color: "#4ade80" }}>
-              {formatNumber(perf.steps_per_second)} steps/s
-            </strong>
+            {isInitializing && <span className="neuro-spinner-sm" />}
+            {state}
           </span>
-        )}
-        <span
-          style={{
-            padding: "2px 8px",
-            borderRadius: "4px",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            background:
-              state === "running"
-                ? "#1a3a1a"
-                : state === "initializing"
-                ? "#1a1a3a"
-                : state === "complete"
-                ? "#3a1a1a"
-                : "#1a1a2e",
-            color:
-              state === "running"
-                ? "#4ade80"
-                : state === "initializing"
-                ? "#4cc9f0"
-                : state === "complete"
-                ? "#f72585"
-                : "#666",
-          }}
-        >
-          {isInitializing && <span className="neuro-spinner-sm" />}
-          {state}
-        </span>
+        </div>
       </div>
     </div>
   );
