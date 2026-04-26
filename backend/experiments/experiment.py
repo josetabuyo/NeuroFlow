@@ -28,7 +28,7 @@ from core.brain import Brain
 from core.region import Region
 from core.sinapsis import Sinapsis
 from core.dendrita import Dendrita
-from core.masks import get_mask, get_mask_type, get_random_weights
+from core.masks import get_mask, get_mask_type, get_random_weights, compile_deamon_wiring
 from core.ascii_renderer import render_char, apply_white_noise, apply_shift_noise
 from .base import Experimento
 
@@ -115,7 +115,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         config["wiring"] = {"mask": "deamon_3_en_50", "process_mode": "min_vs_max"}
     else:
         wiring = {**wiring}
-        if "mask" not in wiring:
+        if "mask" not in wiring and "deamon" not in wiring:
             logger.warning("wiring.mask missing, defaulting to 'deamon_3_en_50'")
             wiring["mask"] = "deamon_3_en_50"
         if "process_mode" not in wiring:
@@ -198,7 +198,7 @@ class Experiment(Experimento):
 
         # ── Wiring ──
         wiring = config["wiring"]
-        mask_id: str = wiring["mask"]
+        mask_id: str = wiring.get("mask", "")
         self.process_mode = wiring["process_mode"]
 
         self.dendrite_exc_weight = wiring.get("dendrite_exc_weight")
@@ -260,19 +260,36 @@ class Experiment(Experimento):
             self.down_ticks = 5
 
         # ── Mask setup ──
-        self._mask_type = get_mask_type(mask_id)
-        self._random_weights = get_random_weights(mask_id)
-        raw_mask = get_mask(mask_id)
+        if "deamon" in wiring:
+            self._mask_type = "kohonen"
+            deamon_cfg = wiring["deamon"]
+            # fixed: true → exact pesos_sinapsis, no random scaling
+            # default → pesos_sinapsis × random[0.2, 1.0] per neuron (enables daemon formation)
+            self._random_weights = not deamon_cfg.get("fixed", False)
+            raw_mask = compile_deamon_wiring(deamon_cfg)
+        else:
+            self._mask_type = get_mask_type(mask_id)
+            self._random_weights = get_random_weights(mask_id)
+            raw_mask = get_mask(mask_id)
 
-        mask = []
-        for d in raw_mask:
-            peso = d["peso_dendrita"]
-            if self.dendrite_exc_weight is not None and peso > 0:
-                mask.append({**d, "peso_dendrita": self.dendrite_exc_weight})
-            elif self.dendrite_inh_weight is not None and peso < 0:
-                mask.append({**d, "peso_dendrita": self.dendrite_inh_weight})
-            else:
-                mask.append(d)
+        # Apply flat dendrite-weight override when specified in wiring config.
+        # Works for both preset masks and inline deamon specs (compile_deamon_wiring
+        # always outputs ±1.0 for peso_dendrita — the gradient lives in pesos_sinapsis).
+        has_override = (
+            self.dendrite_exc_weight is not None or self.dendrite_inh_weight is not None
+        )
+        if has_override:
+            mask = []
+            for d in raw_mask:
+                peso = d["peso_dendrita"]
+                if self.dendrite_exc_weight is not None and peso > 0:
+                    mask.append({**d, "peso_dendrita": self.dendrite_exc_weight})
+                elif self.dendrite_inh_weight is not None and peso < 0:
+                    mask.append({**d, "peso_dendrita": self.dendrite_inh_weight})
+                else:
+                    mask.append(d)
+        else:
+            mask = raw_mask
 
         # ── Neurons ──
         is_wolfram = self._mask_type == "wolfram"

@@ -107,6 +107,177 @@ def _shift(offsets: list[tuple[int, int]], sdx: int, sdy: int) -> list[tuple[int
     return [(dx + sdx, dy + sdy) for dx, dy in offsets]
 
 
+def _ring_sq(r: int) -> list[tuple[int, int]]:
+    """Single Chebyshev ring at exactly r (square shell)."""
+    return _ring(r, r)
+
+
+def _ring_ci(r: int) -> list[tuple[int, int]]:
+    """Single Euclidean ring: cells where round(sqrt(dx²+dy²)) == r."""
+    return [
+        (dx, dy)
+        for dx in range(-r - 1, r + 2)
+        for dy in range(-r - 1, r + 2)
+        if not (dx == 0 and dy == 0)
+        and round(math.sqrt(dx * dx + dy * dy)) == r
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Deamon wiring compiler
+# ---------------------------------------------------------------------------
+
+DeamonWiringDef = dict[str, Any]
+
+
+def _apply_noise(weights: list[float], noise: float, seed: int) -> list[float]:
+    """Perturb each weight multiplicatively by ±noise, clamped to [0, 1]."""
+    if noise <= 0.0:
+        return weights
+    rng = _random_mod.Random(seed)
+    return [
+        max(0.0, min(1.0, w * (1.0 + rng.uniform(-noise, noise))))
+        for w in weights
+    ]
+
+
+def _build_exc_dendrite(
+    exc: dict[str, Any],
+    ring_fn: Any,
+) -> dict[str, Any] | None:
+    """Build the single excitatory dendrite from a weights+offset spec."""
+    weight_map: dict[tuple[int, int], float] = {}
+    for i, w in enumerate(exc["weights"]):
+        for off in ring_fn(exc["offset"] + i):
+            weight_map[off] = w
+    if not weight_map:
+        return None
+    offsets = list(weight_map.keys())
+    density = exc.get("density", 1.0)
+    if density < 1.0:
+        offsets = _random_sparse(offsets, density, seed=42)
+    pesos = [weight_map[off] for off in offsets]
+    noise = exc.get("noise")  # None = not specified; controls per-neuron scaling only
+    return {
+        "peso_dendrita": 1.0,
+        "offsets": offsets,
+        "pesos_sinapsis": pesos,
+        "random_noise": noise if noise is not None else 0.5,
+    }
+
+
+def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
+    """Compile a deamon wiring definition into a MaskDef.
+
+    Shapes
+    ------
+    ``square``
+        Excitatory: single dendrite, square rings, gradient in pesos_sinapsis.
+        Inhibitory: ``sectors`` (default 12) wedges covering the full ring range,
+        gradient in pesos_sinapsis.
+
+        Format::
+
+            {
+                "shape": "square",
+                "excitatory": {"offset": int, "weights": [...], "density": float},
+                "gap":        {"offset": int, "size": int},
+                "inhibitory": {"offset": int, "weights": [...],
+                               "sectors": int, "density": float},
+            }
+
+    ``square_flower``
+        Excitatory: identical to square (center cup).
+        Inhibitory: ``multiplier`` petals (default 8) placed at distance
+        ``offset`` from the center, angularly equidistant. Each petal is the
+        same square-cup shape defined by ``inhibitory.weights`` (rings 1, 2, …
+        from petal center). One dendrite per petal.
+
+        Format::
+
+            {
+                "shape": "square_flower",
+                "excitatory": {"offset": int, "weights": [...], "density": float},
+                "inhibitory": {"offset": int, "multiplier": int,
+                               "weights": [...], "density": float},
+            }
+    """
+    shape = wiring.get("shape", "square")
+    mask: MaskDef = []
+
+    if shape == "square_flower":
+        # ── Center (excitatory) ────────────────────────────────────────────
+        exc_dendrite = _build_exc_dendrite(wiring["excitatory"], _ring_sq)
+        if exc_dendrite:
+            mask.append(exc_dendrite)
+
+        # ── Petals (inhibitory) ────────────────────────────────────────────
+        inh = wiring["inhibitory"]
+        petal_dist: int = inh["offset"]
+        multiplier: int = inh.get("multiplier", 8)
+
+        # Petal cup shape: center cell at weight 1, then square rings 1, 2, …
+        petal_weight_map: dict[tuple[int, int], float] = {(0, 0): 1.0}
+        for i, w in enumerate(inh["weights"]):
+            for dx, dy in _ring_sq(i + 1):
+                petal_weight_map[(dx, dy)] = w
+
+        # Apply density once — same subsampled pattern for every petal
+        petal_local = list(petal_weight_map.keys())
+        density = inh.get("density", 1.0)
+        if density < 1.0:
+            petal_local = _random_sparse(petal_local, density, seed=43)
+
+        petal_noise = inh.get("noise")  # None = not specified; controls per-neuron scaling only
+        for k in range(multiplier):
+            angle = 2 * math.pi * k / multiplier
+            cx = round(petal_dist * math.cos(angle))
+            cy = round(petal_dist * math.sin(angle))
+            petal_offsets = [(cx + dx, cy + dy) for dx, dy in petal_local]
+            pesos = [petal_weight_map[(dx, dy)] for dx, dy in petal_local]
+            mask.append({
+                "peso_dendrita": -1.0,
+                "offsets": petal_offsets,
+                "pesos_sinapsis": pesos,
+                "random_noise": petal_noise if petal_noise is not None else 0.5,
+            })
+
+        return mask
+
+    # ── square / circular ──────────────────────────────────────────────────
+    ring_fn = _ring_sq if shape == "square" else _ring_ci
+
+    exc_dendrite = _build_exc_dendrite(wiring["excitatory"], ring_fn)
+    if exc_dendrite:
+        mask.append(exc_dendrite)
+
+    inh = wiring["inhibitory"]
+    n_sectors = inh.get("sectors", 12)
+
+    inh_weight_map: dict[tuple[int, int], float] = {}
+    for i, w in enumerate(inh["weights"]):
+        for off in ring_fn(inh["offset"] + i):
+            inh_weight_map[off] = w
+
+    inh_offsets = list(inh_weight_map.keys())
+    density = inh.get("density", 1.0)
+    if density < 1.0:
+        inh_offsets = _random_sparse(inh_offsets, density, seed=43)
+
+    inh_noise = inh.get("noise")  # None = not specified; controls per-neuron scaling only
+    sectors = _partition(inh_offsets, n_sectors)
+    for s_idx, sector_offsets in enumerate(sectors):
+        pesos = [inh_weight_map[off] for off in sector_offsets]
+        mask.append({
+            "peso_dendrita": -1.0,
+            "offsets": sector_offsets,
+            "pesos_sinapsis": pesos,
+            "random_noise": inh_noise if inh_noise is not None else 0.5,
+        })
+
+    return mask
+
+
 # ---------------------------------------------------------------------------
 # Mask presets
 # ---------------------------------------------------------------------------
@@ -275,6 +446,24 @@ MASK_DEAMON_E3_G2_I12_DE1_DI1: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _moore(3)},
     *_make_inhibitory(_ring(6, 17), -1.0, 12),
 ]
+
+# Same topology, fixed synapse weights (random_weights=False in the preset)
+MASK_DEAMON_E3_G2_I12_DE1_DI1_WE1_WI1: MaskDef = MASK_DEAMON_E3_G2_I12_DE1_DI1
+
+# Discrete Mexican-hat approximation: gradient weights per ring, square shape
+_WIRING_MHAT_SQ: DeamonWiringDef = {
+    "shape": "square",
+    "excitatory": {
+        "offset": 1,
+        "weights": [1.0, 0.85, 0.50],
+    },
+    "gap": {"offset": 4, "size": 2},
+    "inhibitory": {
+        "offset": 6,
+        "weights": [0.50, 0.85, 0.70, 0.60, 0.55, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10],
+    },
+}
+MASK_DEAMON_E3_G2_I12_MHAT_SQ: MaskDef = compile_deamon_wiring(_WIRING_MHAT_SQ)
 
 MASK_BIG_CENTER_SOFT_WIDE_INH: MaskDef = [
     {"peso_dendrita": 1.0, "offsets": _ring(1, 1)},
@@ -621,6 +810,27 @@ MASK_PRESETS: dict[str, dict[str, Any]] = {
         "random_weights": True,
         "mask": MASK_DEAMON_E3_G2_I12_DE1_DI1,
     },
+    "deamon_e3_g2_i12_de1_di1_we1_wi1": {
+        "id": "deamon_e3_g2_i12_de1_di1_we1_wi1",
+        "name": "Deamon (E3 G2 I12 DE1 DI1 WE1 WI1)",
+        "description": "Moore r=3 full (48 neighbors), gap r=4-5, corona r=6-17 full. Fixed weights: we=1, wi=-1.",
+        "center": "Moore r=3 (48 neighbors, full density)",
+        "corona": "r=6-17 full, gap r=4-5 silence (x2)",
+        "dendrites_inh": 12,
+        "random_weights": False,
+        "mask": MASK_DEAMON_E3_G2_I12_DE1_DI1_WE1_WI1,
+    },
+    "deamon_e3_g2_i12_mhat_sq": {
+        "id": "deamon_e3_g2_i12_mhat_sq",
+        "name": "Deamon (E3 G2 I12 MHat Sq)",
+        "description": "Discrete Mexican-hat approximation, square rings. Exc r=1-3 gradient [1.0→0.85→0.50], gap r=4-5, inh r=6-16 gradient [0.50→0.85→…→0.10].",
+        "center": "Square rings r=1-3, gradient weights",
+        "corona": "Square rings r=6-16, gradient weights, gap r=4-5",
+        "dendrites_inh": 11,
+        "random_weights": False,
+        "wiring": _WIRING_MHAT_SQ,
+        "mask": MASK_DEAMON_E3_G2_I12_MHAT_SQ,
+    },
     "all_exc": {
         "id": "all_exc",
         "name": "All Exc",
@@ -885,14 +1095,16 @@ def _compute_preview_grid(
     mask: MaskDef,
     grid_width: int = 50,
     grid_height: int = 50,
+    random_weights: bool = True,
 ) -> list[list[float | None]]:
-    """Simulate the inspect view for a center neuron with random synapse weights.
+    """Simulate the inspect view for a center neuron.
 
     Creates a (grid_width × grid_height) grid and places the neuron at the
-    center.  For each synapse, generates a deterministic random weight and
-    computes ``effective_weight = synapse_peso × dendrite_peso``, matching
-    how ``inspect()`` displays real connections.  When multiple dendrites
-    share a source cell, effective weights are summed and clamped to [-1, 1].
+    center.  For each synapse, generates a deterministic random weight (if
+    random_weights=True) or uses 1.0 (if random_weights=False), and computes
+    ``effective_weight = synapse_peso × dendrite_peso``, matching how
+    ``inspect()`` displays real connections.  When multiple dendrites share a
+    source cell, effective weights are summed and clamped to [-1, 1].
     """
     rng = _random_mod.Random(42)
 
@@ -905,11 +1117,19 @@ def _compute_preview_grid(
     for dendrite in mask:
         peso_d: float = dendrite["peso_dendrita"]
         pesos_s = dendrite.get("pesos_sinapsis")
+        noise_amp = dendrite.get("random_noise")  # None for presets, float for inline deamons
         for i, (dx, dy) in enumerate(dendrite["offsets"]):
             col = center_x + dx
             row = center_y + dy
             if 0 <= row < grid_height and 0 <= col < grid_width:
-                syn_w = pesos_s[i] if pesos_s else rng.random()
+                base = pesos_s[i] if pesos_s else 1.0
+                if not random_weights:
+                    syn_w = base
+                elif noise_amp is not None:
+                    scale = rng.uniform(1.0 - noise_amp, 1.0) if noise_amp > 0 else 1.0
+                    syn_w = base * scale
+                else:
+                    syn_w = base * rng.random() if pesos_s else rng.random()
                 effective = syn_w * peso_d
                 existing = grid[row][col]
                 if existing is not None and existing != 999.0:
@@ -957,6 +1177,39 @@ def _compute_mask_stats(mask: MaskDef) -> dict[str, Any]:
     }
 
 
+def _compute_dendrite_info(
+    mask: MaskDef,
+    grid_width: int,
+    grid_height: int,
+) -> list[dict[str, Any]]:
+    """Return per-dendrite info for the preview: centroid, avg weight, cell list."""
+    cx = grid_width // 2
+    cy = grid_height // 2
+    result = []
+    for dendrite in mask:
+        peso_d: float = dendrite["peso_dendrita"]
+        pesos_s: list[float] | None = dendrite.get("pesos_sinapsis")
+        valid_cells: list[list[int]] = []
+        eff_weights: list[float] = []
+        for i, (dx, dy) in enumerate(dendrite["offsets"]):
+            col, row = cx + dx, cy + dy
+            if 0 <= col < grid_width and 0 <= row < grid_height:
+                valid_cells.append([col, row])
+                syn = pesos_s[i] if pesos_s else 1.0
+                eff_weights.append(syn * peso_d)
+        if not valid_cells:
+            continue
+        centroid_col = sum(c for c, _ in valid_cells) / len(valid_cells)
+        centroid_row = sum(r for _, r in valid_cells) / len(valid_cells)
+        avg_eff = sum(eff_weights) / len(eff_weights)
+        result.append({
+            "centroid": [centroid_col, centroid_row],
+            "avg_effective": round(avg_eff, 4),
+            "cells": valid_cells,
+        })
+    return result
+
+
 def get_mask_info(
     grid_width: int = 50,
     grid_height: int = 50,
@@ -967,7 +1220,24 @@ def get_mask_info(
         entry = {k: v for k, v in preset.items() if k != "mask"}
         entry["preview_grid"] = _compute_preview_grid(
             preset["mask"], grid_width, grid_height,
+            random_weights=preset.get("random_weights", True),
         )
         entry["mask_stats"] = _compute_mask_stats(preset["mask"])
+        entry["dendrites"] = _compute_dendrite_info(preset["mask"], grid_width, grid_height)
         result.append(entry)
     return result
+
+
+def preview_deamon_wiring(
+    wiring: DeamonWiringDef,
+    grid_width: int = 50,
+    grid_height: int = 50,
+) -> dict[str, Any]:
+    """Compute preview_grid, mask_stats and dendrites for an inline deamon wiring."""
+    mask = compile_deamon_wiring(wiring)
+    random_weights = not wiring.get("fixed", False)
+    return {
+        "preview_grid": _compute_preview_grid(mask, grid_width, grid_height, random_weights=random_weights),
+        "mask_stats": _compute_mask_stats(mask),
+        "dendrites": _compute_dendrite_info(mask, grid_width, grid_height),
+    }

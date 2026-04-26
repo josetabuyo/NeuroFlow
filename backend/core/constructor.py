@@ -193,6 +193,7 @@ class Constructor:
                     pesos_explicitos: list[float] | None = def_dendrita.get("pesos_sinapsis")  # type: ignore[assignment]
 
                     sinapsis_list: list[Sinapsis] = []
+                    noise_amp = def_dendrita.get("random_noise")  # None for presets
                     for i, (dx, dy) in enumerate(offsets):
                         nx = (x + dx) % width
                         ny = (y + dy) % height
@@ -200,12 +201,14 @@ class Constructor:
                             self.key_by_coord(nx, ny)
                         )
 
-                        if pesos_explicitos is not None:
-                            peso = pesos_explicitos[i]
-                        elif random_weights:
-                            peso = random.uniform(0.2, 1.0)
+                        base = pesos_explicitos[i] if pesos_explicitos is not None else 1.0
+                        if not random_weights:
+                            peso = base
+                        elif noise_amp is not None:
+                            scale = random.uniform(1.0 - noise_amp, 1.0) if noise_amp > 0 else 1.0
+                            peso = base * scale
                         else:
-                            peso = 1.0
+                            peso = base * random.uniform(0.2, 1.0)
                         sinapsis_list.append(
                             Sinapsis(neurona_entrante=neurona_fuente, peso=peso)
                         )

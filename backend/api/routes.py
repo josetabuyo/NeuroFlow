@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request
 
-from core.masks import get_mask_info
+from core.masks import get_mask_info, preview_deamon_wiring
 from core.ascii_renderer import get_available_fonts
 from db import save_config, get_latest, get_history
 
@@ -96,6 +96,13 @@ async def save_template_config(
     config = await request.json()
     sid = save_config(template_id, preset, config)
     return {"id": sid}
+
+
+@router.post("/preview-wiring")
+async def preview_wiring(request: Request) -> dict:
+    """Compute preview_grid and mask_stats for an inline deamon wiring definition."""
+    wiring = await request.json()
+    return preview_deamon_wiring(wiring)
 
 
 @router.get("/templates/{template_id}/config/latest")
