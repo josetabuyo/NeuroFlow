@@ -170,14 +170,24 @@ class BrainTensor:
 
         if self.process_mode == "sum":
             tension = dendrita_para_calc.sum(dim=1).clamp(-1.0, 1.0)  # [NR]
-        elif self.process_mode == "avg_vs_avg":
+        elif self.process_mode in ("avg_vs_avg", "avg_vs_avg_normalized"):
             pos_mask = dendrita_para_calc > 0
             neg_mask = dendrita_para_calc < 0
             pos_sum = (dendrita_para_calc * pos_mask).sum(dim=1)
             pos_cnt = pos_mask.sum(dim=1).clamp(min=1.0)
             neg_sum = (dendrita_para_calc * neg_mask).sum(dim=1)
             neg_cnt = neg_mask.sum(dim=1).clamp(min=1.0)
-            tension = (pos_sum / pos_cnt + neg_sum / neg_cnt).clamp(-1.0, 1.0)  # [NR]
+            pos_avg = pos_sum / pos_cnt
+            neg_avg = neg_sum / neg_cnt
+            raw = pos_avg + neg_avg
+            if self.process_mode == "avg_vs_avg_normalized":
+                # Divide by total scale so only the ratio exc/inh matters,
+                # not the absolute magnitudes. pos_avg >= 0, neg_avg <= 0,
+                # so normalizer = pos_avg - neg_avg = |pos_avg| + |neg_avg|.
+                normalizer = (pos_avg - neg_avg).clamp(min=1e-8)
+                tension = (raw / normalizer).clamp(-1.0, 1.0)
+            else:
+                tension = raw.clamp(-1.0, 1.0)
         else:
             # min_vs_max: max(0, positives) + min(0, negatives)
             max_vals = dendrita_para_calc.max(dim=1).values.clamp(min=0.0)  # [NR]

@@ -80,6 +80,7 @@ async def get_metadata() -> dict:
         "process_modes": [
             {"id": "min_vs_max", "name": "Min vs Max", "description": "Best excitatory vs best inhibitory"},
             {"id": "avg_vs_avg", "name": "Avg vs Avg", "description": "Average excitatory vs average inhibitory"},
+            {"id": "avg_vs_avg_normalized", "name": "Avg vs Avg (Norm)", "description": "Ratio exc/inh — only balance matters, not absolute scale"},
             {"id": "sum", "name": "Sum", "description": "All dendrites summed and clamped"},
         ],
         "input_sources": [
