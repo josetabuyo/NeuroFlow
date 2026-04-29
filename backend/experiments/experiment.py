@@ -472,27 +472,29 @@ class Experiment(Experimento):
             if self.background_noise > 0:
                 frame = apply_white_noise(frame, noise_prob=self.background_noise, rng=self._rng)
 
-        self._current_input_frame = frame
+        if self.input_portion is not None:
+            ph, pw = self.input_portion
+            n_ty = res // ph
+            n_tx = res // pw
+            # Mean of each tile: (n_ty, n_tx)
+            tile_means = (
+                frame[: n_ty * ph, : n_tx * pw]
+                .reshape(n_ty, ph, n_tx, pw)
+                .mean(axis=(1, 3))
+                .astype(np.float32)
+            )
+            # Expand spatially: each pixel (px,py) gets mean of its tile
+            # kron replicates each tile value over a ph×pw block
+            tiled = np.kron(tile_means, np.ones((ph, pw), dtype=np.float32))
+            projected = np.zeros((res, res), dtype=np.float32)
+            projected[: n_ty * ph, : n_tx * pw] = tiled
+            self._current_input_frame = projected
+            flat = torch.from_numpy(projected.flatten())
+        else:
+            self._current_input_frame = frame
+            flat = torch.from_numpy(frame.flatten()).float()
 
         if self.brain_tensor is not None:
-            if self.input_portion is not None:
-                ph, pw = self.input_portion
-                n_ty = res // ph
-                n_tx = res // pw
-                n_tiles = n_ty * n_tx
-                n_neurons = res * res
-                tile_means = (
-                    frame[: n_ty * ph, : n_tx * pw]
-                    .reshape(n_ty, ph, n_tx, pw)
-                    .mean(axis=(1, 3))
-                    .flatten()
-                )
-                reps = -(-n_neurons // n_tiles)  # ceil division
-                flat = torch.from_numpy(
-                    np.tile(tile_means, reps)[:n_neurons].astype(np.float32)
-                )
-            else:
-                flat = torch.from_numpy(frame.flatten()).float()
             start = self._input_start_idx
             end = start + len(flat)
             self.brain_tensor.valores[start:end] = flat
