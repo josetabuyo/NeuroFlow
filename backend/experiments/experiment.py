@@ -145,6 +145,7 @@ class Experiment(Experimento):
         self.input_resolution: int = 20
         self.frames_per_char: int = 10
         self.dendrite_input_weight: float = 0.2
+        self.input_portion: tuple[int, int] | None = None
         self._font_id: str = "press_start_2p"
         self._font_size: int = 10
         self._char_images: dict[str, np.ndarray] = {}
@@ -222,10 +223,16 @@ class Experiment(Experimento):
             self.input_density = float(input_cfg.get("density", 1.0))
             self._font_id = input_cfg.get("font", "press_start_2p")
             self._font_size = input_cfg.get("font_size", 10)
+            portion_raw = input_cfg.get("portion")
+            if portion_raw is not None:
+                self.input_portion = (int(portion_raw[0]), int(portion_raw[1]))
+            else:
+                self.input_portion = None
         else:
             self.input_text = ""
             self.input_resolution = 0
             self.input_density = 1.0
+            self.input_portion = None
 
         # ── Noise (opt-in) ──
         noise_cfg = config.get("noise")
@@ -468,7 +475,24 @@ class Experiment(Experimento):
         self._current_input_frame = frame
 
         if self.brain_tensor is not None:
-            flat = torch.from_numpy(frame.flatten()).float()
+            if self.input_portion is not None:
+                ph, pw = self.input_portion
+                n_ty = res // ph
+                n_tx = res // pw
+                n_tiles = n_ty * n_tx
+                n_neurons = res * res
+                tile_means = (
+                    frame[: n_ty * ph, : n_tx * pw]
+                    .reshape(n_ty, ph, n_tx, pw)
+                    .mean(axis=(1, 3))
+                    .flatten()
+                )
+                reps = -(-n_neurons // n_tiles)  # ceil division
+                flat = torch.from_numpy(
+                    np.tile(tile_means, reps)[:n_neurons].astype(np.float32)
+                )
+            else:
+                flat = torch.from_numpy(frame.flatten()).float()
             start = self._input_start_idx
             end = start + len(flat)
             self.brain_tensor.valores[start:end] = flat
