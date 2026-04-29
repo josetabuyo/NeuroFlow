@@ -355,24 +355,37 @@ class Experiment(Experimento):
             tissue_list = list(self.regiones["tissue"].neuronas.values())
 
             if self.input_portion is not None:
-                # Each tissue neuron connects to one ph×pw block determined by
-                # its grid position (periodic): bx = x % n_tx, by = y % n_ty.
-                ph, pw = self.input_portion
+                # Divide both the tissue grid and the input grid into
+                # n_div_y × n_div_x equal regions. Each tissue neuron in
+                # region (ry, rx) connects fully to every input neuron in the
+                # corresponding input region (ry, rx).
+                n_div_y, n_div_x = self.input_portion
                 res = self.input_resolution
-                n_tx = res // pw
-                n_ty = res // ph
                 inp_by_id = {n.id: n for n in input_neuron_list}
+
+                # Precompute input neurons for each region
+                inp_regions: dict[tuple[int, int], list] = {}
+                for ry in range(n_div_y):
+                    for rx in range(n_div_x):
+                        py0 = ry * res // n_div_y
+                        py1 = (ry + 1) * res // n_div_y
+                        px0 = rx * res // n_div_x
+                        px1 = (rx + 1) * res // n_div_x
+                        inp_regions[(ry, rx)] = [
+                            inp_by_id[f"inp_{py * res + px}"]
+                            for py in range(py0, py1)
+                            for px in range(px0, px1)
+                        ]
+
                 for tissue_n in tissue_list:
                     x_str, y_str = tissue_n.id[1:].split("y")
-                    tx, ty = int(x_str) % n_tx, int(y_str) % n_ty
-                    sinapsis_list: list[Sinapsis] = []
-                    for row in range(ph):
-                        for col in range(pw):
-                            px, py = tx * pw + col, ty * ph + row
-                            inp_n = inp_by_id[f"inp_{py * res + px}"]
-                            sinapsis_list.append(
-                                Sinapsis(neurona_entrante=inp_n, peso=random.uniform(0.2, 1.0))
-                            )
+                    tx, ty = int(x_str), int(y_str)
+                    rx = min(tx * n_div_x // self.width, n_div_x - 1)
+                    ry = min(ty * n_div_y // self.height, n_div_y - 1)
+                    sinapsis_list: list[Sinapsis] = [
+                        Sinapsis(neurona_entrante=inp_n, peso=random.uniform(0.2, 1.0))
+                        for inp_n in inp_regions[(ry, rx)]
+                    ]
                     tissue_n.dendritas.append(
                         Dendrita(sinapsis=sinapsis_list, peso=self.dendrite_input_weight)
                     )
