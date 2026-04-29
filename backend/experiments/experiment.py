@@ -353,19 +353,41 @@ class Experiment(Experimento):
         if self.input_enabled and not is_wolfram:
             input_neuron_list = list(self.regiones["input"].neuronas.values())
             tissue_list = list(self.regiones["tissue"].neuronas.values())
-            k = max(1, round(len(input_neuron_list) * self.input_density))
-            for tissue_n in tissue_list:
-                sampled = random.sample(input_neuron_list, k) if k < len(input_neuron_list) else input_neuron_list
-                sinapsis_list: list[Sinapsis] = []
-                for inp_n in sampled:
-                    peso = random.uniform(0.2, 1.0)
-                    sinapsis_list.append(
-                        Sinapsis(neurona_entrante=inp_n, peso=peso)
+
+            if self.input_portion is not None:
+                # Each tissue neuron connects to one ph×pw block determined by
+                # its grid position (periodic): bx = x % n_tx, by = y % n_ty.
+                ph, pw = self.input_portion
+                res = self.input_resolution
+                n_tx = res // pw
+                n_ty = res // ph
+                inp_by_id = {n.id: n for n in input_neuron_list}
+                for tissue_n in tissue_list:
+                    x_str, y_str = tissue_n.id[1:].split("y")
+                    tx, ty = int(x_str) % n_tx, int(y_str) % n_ty
+                    sinapsis_list: list[Sinapsis] = []
+                    for row in range(ph):
+                        for col in range(pw):
+                            px, py = tx * pw + col, ty * ph + row
+                            inp_n = inp_by_id[f"inp_{py * res + px}"]
+                            sinapsis_list.append(
+                                Sinapsis(neurona_entrante=inp_n, peso=random.uniform(0.2, 1.0))
+                            )
+                    tissue_n.dendritas.append(
+                        Dendrita(sinapsis=sinapsis_list, peso=self.dendrite_input_weight)
                     )
-                dendrita = Dendrita(
-                    sinapsis=sinapsis_list, peso=self.dendrite_input_weight
-                )
-                tissue_n.dendritas.append(dendrita)
+            else:
+                k = max(1, round(len(input_neuron_list) * self.input_density))
+                for tissue_n in tissue_list:
+                    sampled = random.sample(input_neuron_list, k) if k < len(input_neuron_list) else input_neuron_list
+                    sinapsis_list = []
+                    for inp_n in sampled:
+                        sinapsis_list.append(
+                            Sinapsis(neurona_entrante=inp_n, peso=random.uniform(0.2, 1.0))
+                        )
+                    tissue_n.dendritas.append(
+                        Dendrita(sinapsis=sinapsis_list, peso=self.dendrite_input_weight)
+                    )
 
         # ── Initialization ──
         if is_wolfram:
@@ -472,29 +494,10 @@ class Experiment(Experimento):
             if self.background_noise > 0:
                 frame = apply_white_noise(frame, noise_prob=self.background_noise, rng=self._rng)
 
-        if self.input_portion is not None:
-            ph, pw = self.input_portion
-            n_ty = res // ph
-            n_tx = res // pw
-            # Mean of each tile: (n_ty, n_tx)
-            tile_means = (
-                frame[: n_ty * ph, : n_tx * pw]
-                .reshape(n_ty, ph, n_tx, pw)
-                .mean(axis=(1, 3))
-                .astype(np.float32)
-            )
-            # Expand spatially: each pixel (px,py) gets mean of its tile
-            # kron replicates each tile value over a ph×pw block
-            tiled = np.kron(tile_means, np.ones((ph, pw), dtype=np.float32))
-            projected = np.zeros((res, res), dtype=np.float32)
-            projected[: n_ty * ph, : n_tx * pw] = tiled
-            self._current_input_frame = projected
-            flat = torch.from_numpy(projected.flatten())
-        else:
-            self._current_input_frame = frame
-            flat = torch.from_numpy(frame.flatten()).float()
+        self._current_input_frame = frame
 
         if self.brain_tensor is not None:
+            flat = torch.from_numpy(frame.flatten()).float()
             start = self._input_start_idx
             end = start + len(flat)
             self.brain_tensor.valores[start:end] = flat
