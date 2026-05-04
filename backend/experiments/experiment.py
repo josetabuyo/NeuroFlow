@@ -856,22 +856,30 @@ class Experiment(Experimento):
         return self._current_label.reshape(self.output_height, self.output_width).tolist()
 
     def get_region_frames(self) -> dict[str, list[list[float]]]:
-        """Return all region grids keyed by region ID."""
-        result: dict[str, list[list[float]]] = {}
+        """Return all region grids keyed by region ID, in config declaration order."""
+        frames: dict[str, list[list[float]] | None] = {}
 
         frame = self.get_frame()
-        if frame:
-            result[self._tissue_id] = [[round(v) for v in row] for row in frame]
+        frames[self._tissue_id] = [[round(v) for v in row] for row in frame] if frame else None
 
         if self._input_id:
             input_frame = self.get_input_frame()
-            if input_frame is not None:
-                result[self._input_id] = [[round(v) for v in row] for row in input_frame]
+            frames[self._input_id] = (
+                [[round(v) for v in row] for row in input_frame] if input_frame is not None else None
+            )
 
         if self._output_id:
             output_frame = self.get_output_frame()
-            if output_frame is not None:
-                result[self._output_id] = [[round(v, 3) for v in row] for row in output_frame]
+            frames[self._output_id] = (
+                [[round(v, 3) for v in row] for row in output_frame] if output_frame is not None else None
+            )
+
+        # Emit in config declaration order
+        result: dict[str, list[list[float]]] = {}
+        for region in self._config.get("regions", []):
+            rid = region.get("id")
+            if rid and rid in frames and frames[rid] is not None:
+                result[rid] = frames[rid]  # type: ignore[assignment]
 
         return result
 

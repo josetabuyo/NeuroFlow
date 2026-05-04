@@ -11,8 +11,10 @@ const GAP       = 44;
 const MARGIN    = 28;
 const UNIT_PX   = 8;
 
+const MAX_PS = 48;  // cap so tiny grids (1×2) don't get enormous cells
+
 function autoPixelSize(gw: number, gh: number): number {
-  return Math.max(4, Math.floor(TARGET_PX / Math.max(gw, gh)));
+  return Math.min(MAX_PS, Math.max(4, Math.floor(TARGET_PX / Math.max(gw, gh))));
 }
 
 type Boxes = Record<string, BoxLayout>;
