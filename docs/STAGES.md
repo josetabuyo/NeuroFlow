@@ -217,67 +217,79 @@ the nociceptor provides a local error signal; the tissue routes it as inhibitory
 
 1. **Output region** — regular neurons with no local wiring, fed from tissue via a
    learned connection. The `Experiment` class must instantiate these and include them
-   in the `BrainTensor` compilation.
+   in the `BrainTensor` compilation alongside the tissue + input neurons.
 
-2. **Nociceptor source** — a new `source.type: "error_diff"` that computes
-   `diff(target_frame, output_activation)` each step and writes it into
-   the nociceptor `NeuronaEntrada` neurons. The target can be:
-   - the clean input frame (for Input Mimic)
-   - an externally injected signal (for future motor agents)
+2. **Label source** — a new `source.type: "label"` (for Experiment 1) that injects
+   the ground-truth class signal directly into the output region as `NeuronaEntrada`.
+   Knows which class is currently shown from the input source frame counter.
 
-3. **Multi-region BrainTensor** — currently `BrainTensor` is built from a single
-   tissue + input block. It needs to handle output and nociceptor regions:
-   - output neurons live in the same tensor (indices after tissue)
-   - nociceptor neurons are `NeuronaEntrada` (masked from `procesar()` updates)
-   - the nociceptor→tissue connection uses `weight < 0` and `es_input_syn=True`
-     so `conn_exclude_range` can be applied if needed
+3. **Error-diff source** — a new `source.type: "error_diff"` (for Experiment 2) that
+   computes `diff(target_frame, output_activation)` each step and injects the result
+   into a nociceptor region.
 
-4. **WebSocket frame** — add `output_grid` and optionally `nociceptor_grid`
-   to the frame sent to the client each step.
+4. **Multi-region BrainTensor** — extend `BrainTensor` compilation to handle
+   output and nociceptor regions in the same tensor block:
+   - output neurons: indices `[tissue_end : tissue_end + output_n]`
+   - nociceptor neurons: `NeuronaEntrada`, excluded from `procesar()` updates
+   - nociceptor→tissue connection: `weight < 0`, `es_input_syn=True`
+
+5. **WebSocket frame** — add `output_grid` (and optionally `label_grid`,
+   `nociceptor_grid`) to the frame sent to the client each step.
 
 #### Frontend
 
-5. **Output canvas** — a second `PixelCanvas` (or a `Scene` with two grids side by side)
+6. **Output canvas** — a second `PixelCanvas` alongside the tissue canvas,
    showing output region activation.
 
-6. **Nociceptor overlay** — optional: show nociceptor activity as an overlay on the
-   input canvas (red = error pixels).
-
-7. **Config template: `input_mimic.json`** — first ITON experiment (see below).
+7. **Label/nociceptor overlay** — optional: show label signal on output canvas,
+   and error pixels on input canvas.
 
 ---
 
-### Experiment 1: Input Mimic
+### Experiment 1: Supervised Classifier ← **start here**
 
-**Goal:** The output layer learns to reproduce the input pattern, filtering noise
-as a spontaneous side effect of routing through the stable daemon tissue.
+The simplest ITON case: no `error_diff` computation needed. The supervision
+signal is the class label itself, injected directly into the output region as a
+`NeuronaEntrada`. The nociceptor is implicit — wrong output neurons have low
+tension, so they don't reinforce; only the correct output neuron, if it fires, does.
 
 **Signal flow:**
 
 ```
-input (noisy)  →  tissue (stable daemon)  →  output (learned)
-                                                    ↓
-nociceptor ← diff(input_clean, output) ← compare
-     ↓
-tissue (inhibitory feedback: suppress neurons that fired wrongly)
+input (pattern A or B)
+  ↓  fixed connection
+tissue (frozen daemon)
+  ↓  learned connection  (tissue→output weights)
+output (N neurons, one per class)
+
+label source → output[correct_class] = 1, others = 0  (injected as NeuronaEntrada)
 ```
 
-**Why this is interesting:**
-- No backpropagation — the nociceptor provides a purely local error signal
-- Noise filtering emerges from the daemon's stabilizing dynamics
-- The system learns to reconstruct patterns without supervised labels
-- Direct applications: denoising, pattern completion, anomaly detection
+The tissue→output weights learn via Hebbian rule:
+`dW = lr * tension_output * (tissue_activation - weight)`
 
-**Config template sketch:**
+- When class A shown → label injects output[A]=1 → output[A] fires → tension > 0
+  → weights from active tissue neurons to output[A] strengthen.
+- output[B] is clamped to 0 by the label → no tension → no update.
+- After training: tissue pattern for A strongly drives output[A] and not output[B].
+
+**Why this before Input Mimic:**
+- No `error_diff` computation — no need to compare two grids
+- The label source is mechanically identical to the existing `ascii` input source
+- It directly validates the tissue→output learning path
+- Very similar to Dynamic SOM: same frozen tissue, same Hebbian rule, just one
+  extra region downstream
+
+**Config template sketch (`supervised_classifier.json`):**
 
 ```json
 {
-  "description": "Input Mimic: tissue learns to relay clean input to output via nociceptive feedback.",
+  "description": "Supervised classifier: label signal clamps output neurons to ground truth; tissue→output weights learn Hebbianly.",
   "regions": [
     { "id": "input", "grid": { "width": 20, "height": 20 },
       "source": { "type": "ascii", "text": "HALF_TOP,HALF_BOT",
-                  "frames_per_char": 10,
-                  "noise": { "background": 0.15, "shift": false } } },
+                  "frames_per_char": 15,
+                  "noise": { "background": 0.05, "shift": false } } },
     { "id": "tissue", "grid": { "width": 50, "height": 50 },
       "wiring": { "deamon": { "shape": "square",
                               "excitatory": { "offset": 1, "noise": 0.5, "weights": [1,1,1] },
@@ -285,37 +297,44 @@ tissue (inhibitory feedback: suppress neurons that fired wrongly)
                                               "weights": [1,1,1,1,1,1,1,1,1,1,1,1] } },
                   "dendrite_exc_weight": 0.9, "dendrite_inh_weight": -1,
                   "process_mode": "avg_vs_avg_normalized" } },
-    { "id": "output", "grid": { "width": 20, "height": 20 } },
-    { "id": "nociceptor", "grid": { "width": 20, "height": 20 },
-      "source": { "type": "error_diff", "compare": ["input", "output"] } }
+    { "id": "output", "grid": { "width": 1, "height": 2 },
+      "source": { "type": "label", "follows": "input" } }
   ],
   "connections": [
-    { "from": "input",      "to": "tissue",  "type": "full", "weight": 0.35,
+    { "from": "input",  "to": "tissue", "type": "full", "weight": 0.35,
       "density": 0.4, "learning": { "rate": 0.0 } },
-    { "from": "tissue",     "to": "output",  "type": "full", "weight": 1.0,
-      "density": 0.4, "learning": { "rate": 0.01,
-                                    "exclude_range": [-0.1, 0.1] } },
-    { "from": "nociceptor", "to": "tissue",  "type": "full", "weight": -0.3,
-      "density": 0.4, "learning": { "rate": 0.0 } }
+    { "from": "tissue", "to": "output", "type": "full", "weight": 0.5,
+      "density": 1.0, "learning": { "rate": 0.02 } }
   ]
 }
 ```
 
 **Implementation order:**
 1. Output region in `Experiment` + `BrainTensor`
-2. `error_diff` nociceptor source
+2. `label` source type — N `NeuronaEntrada` neurons, one per class
 3. `output_grid` in WebSocket frame
 4. Output canvas in the UI
-5. `input_mimic.json` config template
-6. Validate: noisy input → reconstructed clean output after N steps
+5. `supervised_classifier.json` config template
+6. Validate: after N steps, each output neuron responds selectively to one input class
 
 ---
 
-### Experiment 2: Output with lateral connections (Level 2)
+### Experiment 2: Input Mimic (unsupervised)
+
+After the supervised classifier is validated, move to unsupervised reconstruction.
+The label source is replaced by an `error_diff` nociceptor that computes
+`diff(input_clean, output)` and inhibits the tissue neurons responsible for
+reconstruction errors.
+
+**Requires:** `error_diff` source, nociceptor→tissue inhibitory connection.
+
+---
+
+### Experiment 3: Output with lateral connections (Level 2)
 
 After Input Mimic is validated, add a daemon connectome to the output region so it
-self-organizes topographically as well. The output layer then becomes a second SOM
-layer that learns to compress the tissue representation.
+self-organizes topographically — a second SOM layer that compresses the tissue
+representation.
 
 ---
 
