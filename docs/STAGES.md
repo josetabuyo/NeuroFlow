@@ -9,10 +9,12 @@ emulating simple creatures such as *Aplysia* or the zebrafish.
 ## Summary
 
 ```
-Stage 1   Stage 2       Stage 3              Stage 4      Stage 5
-Daemon  → Dynamic SOM → Motor/Nociceptor  → Tuning     → Motor Agents
-(✓)       (next)        (theoretical)       (genetic)    (simulation)
+Stage 1   Stage 2       Stage 3   Stage 4      Stage 5
+Daemon  → Dynamic SOM → ITON    → Tuning     → Motor Agents
+(✓)       (✓)           (next)    (genetic)    (simulation)
 ```
+
+**ITON** = Input · Tissue · Output · Nociceptor
 
 ---
 
@@ -46,9 +48,9 @@ with respect to competitive exclusion (see [Vision](VISION.md#paralelo-con-las-n
 
 ---
 
-## Stage 2: Dynamic SOM
+## Stage 2: Dynamic SOM ✓
 
-**Status:** Essentially complete. Pending: metric formalization and tuning.
+**Status:** Complete (May 2026).
 
 **Objective:** Implement a Self-Organizing Map (SOM)
 using NeuroFlow's connectionist model and observe whether the system
@@ -141,103 +143,179 @@ connectome and is stable before any input is presented.
 frozen daemon layer. Only the interface weights (input → daemon, daemon → output)
 need to be trained.
 
-### Pending before closing Stage 2
+---
 
-- Formalize metrics: center-of-mass displacement, daemon bias index per pattern
-- Tuning: optimal `lr_input`, `density`, `frames_per_char` for clean separation
-- Document the similarity-gradient effect quantitatively
+## Stage 3: ITON — Input · Tissue · Output · Nociceptor
+
+**Status:** Next (May 2026).
+
+**Objective:** Add output (motor) and error-signal (nociceptor) regions on top of the
+frozen daemon tissue. Build a minimal learning loop that does not require backpropagation:
+the nociceptor provides a local error signal; the tissue routes it as inhibitory feedback.
 
 ---
 
-## Stage 3: Motor & Nociceptor
-
-**Status:** Planned.
-
-**Objective:** Add output (motor) and error-signal (nociceptor) regions to the
-connectionist model. Build progressively from the simplest useful case to a
-simulated living creature.
-
----
-
-### Architecture: three regions
+### Architecture
 
 ```
-Input region  →  Processing region  →  Output (motor) region
-                      ↓
-              Nociceptor region  (error signal, negative weight)
+┌──────────┐    connection     ┌──────────┐    connection    ┌──────────┐
+│  input   │ ─────────────→   │  tissue  │ ──────────────→  │  output  │
+│ (source) │  weight > 0       │ (daemon) │  weight > 0      │  (read)  │
+└──────────┘                  └──────────┘                   └──────────┘
+                                    ↑                              │
+                              weight < 0                     compare vs
+                                    │                         target
+                              ┌─────────────┐                    │
+                              │ nociceptor  │ ←──────────────────┘
+                              │  (error)    │   diff(target, output)
+                              └─────────────┘
 ```
 
-- **Input region:** existing NeuronaEntrada layer
-- **Processing region:** existing daemon tissue (lateral exc/inh connectome, frozen)
-- **Output region:** new — motor neurons that read from the processing layer
-- **Nociceptor region:** new — receives error signal, feeds back with negative weight
+| Region | Type | Lateral wiring | Learns |
+|--------|------|---------------|--------|
+| **input** | `NeuronaEntrada` — driven by source | none | no |
+| **tissue** | daemon neurons — local exc/inh connectome | frozen daemon mask | no (prior from Stage 2) |
+| **output** | regular neurons — no local wiring | none (Level 1), daemon mask (Level 2) | yes — `tissue→output` connection weights |
+| **nociceptor** | `NeuronaEntrada` — driven by error signal | none | no |
+
+**Connection flow in the canonical schema:**
+
+```json
+{
+  "regions": [
+    { "id": "input",       "grid": {...}, "source": {...} },
+    { "id": "tissue",      "grid": {...}, "wiring": { "deamon": {...} } },
+    { "id": "output",      "grid": {...} },
+    { "id": "nociceptor",  "grid": {...}, "source": { "type": "error_diff" } }
+  ],
+  "connections": [
+    { "from": "input",      "to": "tissue",  "weight":  0.35, "learning": { "rate": 0.0 } },
+    { "from": "tissue",     "to": "output",  "weight":  1.0,  "learning": { "rate": 0.01 } },
+    { "from": "nociceptor", "to": "tissue",  "weight": -0.5,  "learning": { "rate": 0.0 } }
+  ]
+}
+```
 
 ---
 
-### Motor region — two levels of complexity
+### What already works (inherited from Stage 2)
 
-#### Level 1 (implement first): Simple output layer
-- No lateral connections between output neurons
-- Each output neuron connects to the processing region only (distant connections)
-- Fully connected by default, with parametrizable `density`
-- Equivalent to the output layer of a simple feedforward net
-- Weights learned via the same Hebbian mechanism, same `lr_output` multiplier
-
-#### Level 2 (implement after Level 1 is validated): Output layer with lateral connections
-- Output neurons have excitatory-center / inhibitory-surround lateral connections
-- This allows the output layer to self-organize topographically as well
-- Same mask system as the processing region
+| Feature | Where |
+|---------|-------|
+| Canonical `regions[]` + `connections[]` schema | `experiment.py` — `_to_canonical()` |
+| Multiple regions with independent grids | `experiment.py` — `setup()` |
+| Directed connections with per-type learning | `brain_tensor.py` — `es_input_syn`, `learn()` |
+| `conn_exclude_range` dead zone on connection dendrites | `brain_tensor.py`, `experiment.py` |
+| Per-neuron centroid jitter on local wiring | `constructor.py` — `centroid_jitter` |
+| JSON editor with smart-quote and newline sanitization | `JsonConfigEditor.tsx` |
 
 ---
 
-### Nociceptor region
+### What needs to be built
 
-The nociceptor is a region that carries an **error signal** — the difference between
-what was expected and what was produced. It is not a special mechanism; it is another
-input region with **negative dendrite weight**, so it inhibits rather than excites.
+#### Backend
 
-- Acts exactly like the input region, but with negative weight
-- Provides gradient-free error feedback: active nociceptor pixels suppress the
-  neurons that fired when they should not have
+1. **Output region** — regular neurons with no local wiring, fed from tissue via a
+   learned connection. The `Experiment` class must instantiate these and include them
+   in the `BrainTensor` compilation.
 
-**No special "pleasure" connections exist in biology** — pleasure is the absence of
-nociceptive inhibition, or the reduction of it. This may emerge naturally from the
-model without explicit implementation.
+2. **Nociceptor source** — a new `source.type: "error_diff"` that computes
+   `diff(target_frame, output_activation)` each step and writes it into
+   the nociceptor `NeuronaEntrada` neurons. The target can be:
+   - the clean input frame (for Input Mimic)
+   - an externally injected signal (for future motor agents)
+
+3. **Multi-region BrainTensor** — currently `BrainTensor` is built from a single
+   tissue + input block. It needs to handle output and nociceptor regions:
+   - output neurons live in the same tensor (indices after tissue)
+   - nociceptor neurons are `NeuronaEntrada` (masked from `procesar()` updates)
+   - the nociceptor→tissue connection uses `weight < 0` and `es_input_syn=True`
+     so `conn_exclude_range` can be applied if needed
+
+4. **WebSocket frame** — add `output_grid` and optionally `nociceptor_grid`
+   to the frame sent to the client each step.
+
+#### Frontend
+
+5. **Output canvas** — a second `PixelCanvas` (or a `Scene` with two grids side by side)
+   showing output region activation.
+
+6. **Nociceptor overlay** — optional: show nociceptor activity as an overlay on the
+   input canvas (red = error pixels).
+
+7. **Config template: `input_mimic.json`** — first ITON experiment (see below).
 
 ---
 
 ### Experiment 1: Input Mimic
 
-**Config template name:** `Input Mimic`
+**Goal:** The output layer learns to reproduce the input pattern, filtering noise
+as a spontaneous side effect of routing through the stable daemon tissue.
 
-**Goal:** Train a system that reproduces its input at the output layer,
-filtering noise as a spontaneous effect of its operation.
+**Signal flow:**
 
-**Architecture:**
 ```
-Input (noisy pattern)
-  ↓ input dendrite (positive weight)
-Processing region (daemon tissue, frozen recurrent weights)
-  ↓ output dendrite (learned)
-Output region (no lateral connections)
-  ↓ compare with clean input
-Nociceptor region ← diff(input, output): pixels that differ = 1
-  ↓ nociceptor dendrite (negative weight, same as input dendrite path)
-Processing region (inhibitory feedback)
+input (noisy)  →  tissue (stable daemon)  →  output (learned)
+                                                    ↓
+nociceptor ← diff(input_clean, output) ← compare
+     ↓
+tissue (inhibitory feedback: suppress neurons that fired wrongly)
 ```
 
 **Why this is interesting:**
-- The system learns to reconstruct its input without supervised labels
-- Noise filtering emerges spontaneously: noisy input → stable daemon state → clean output
-- The nociceptor provides a local error signal without backpropagation
-- Has direct utility: denoising, pattern completion, anomaly detection
+- No backpropagation — the nociceptor provides a purely local error signal
+- Noise filtering emerges from the daemon's stabilizing dynamics
+- The system learns to reconstruct patterns without supervised labels
+- Direct applications: denoising, pattern completion, anomaly detection
+
+**Config template sketch:**
+
+```json
+{
+  "description": "Input Mimic: tissue learns to relay clean input to output via nociceptive feedback.",
+  "regions": [
+    { "id": "input", "grid": { "width": 20, "height": 20 },
+      "source": { "type": "ascii", "text": "HALF_TOP,HALF_BOT",
+                  "frames_per_char": 10,
+                  "noise": { "background": 0.15, "shift": false } } },
+    { "id": "tissue", "grid": { "width": 50, "height": 50 },
+      "wiring": { "deamon": { "shape": "square",
+                              "excitatory": { "offset": 1, "noise": 0.5, "weights": [1,1,1] },
+                              "inhibitory": { "offset": 6, "noise": 0.5, "sectors": 12,
+                                              "weights": [1,1,1,1,1,1,1,1,1,1,1,1] } },
+                  "dendrite_exc_weight": 0.9, "dendrite_inh_weight": -1,
+                  "process_mode": "avg_vs_avg_normalized" } },
+    { "id": "output", "grid": { "width": 20, "height": 20 } },
+    { "id": "nociceptor", "grid": { "width": 20, "height": 20 },
+      "source": { "type": "error_diff", "compare": ["input", "output"] } }
+  ],
+  "connections": [
+    { "from": "input",      "to": "tissue",  "type": "full", "weight": 0.35,
+      "density": 0.4, "learning": { "rate": 0.0 } },
+    { "from": "tissue",     "to": "output",  "type": "full", "weight": 1.0,
+      "density": 0.4, "learning": { "rate": 0.01,
+                                    "exclude_range": [-0.1, 0.1] } },
+    { "from": "nociceptor", "to": "tissue",  "type": "full", "weight": -0.3,
+      "density": 0.4, "learning": { "rate": 0.0 } }
+  ]
+}
+```
 
 **Implementation order:**
-1. Add output region to `Experiment` class (Level 1: no lateral connections, parametrizable density)
-2. Add nociceptor region (error diff projected as negative-weight input)
-3. Create `input_mimic.json` config template
-4. Add output grid visualization to the UI (second canvas or overlay)
-5. Validate: noisy input → reconstructed clean output after training
+1. Output region in `Experiment` + `BrainTensor`
+2. `error_diff` nociceptor source
+3. `output_grid` in WebSocket frame
+4. Output canvas in the UI
+5. `input_mimic.json` config template
+6. Validate: noisy input → reconstructed clean output after N steps
+
+---
+
+### Experiment 2: Output with lateral connections (Level 2)
+
+After Input Mimic is validated, add a daemon connectome to the output region so it
+self-organizes topographically as well. The output layer then becomes a second SOM
+layer that learns to compress the tissue representation.
 
 ---
 
