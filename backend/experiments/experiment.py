@@ -1,14 +1,15 @@
 """Unified NeuroFlow experiment.
 
 Supports all features through opt-in config sections:
-  - grid + wiring (required)
-  - input (optional: ASCII/synthetic input stream)
-  - noise (optional: background, shift, inter-char)
-  - learning (optional: Hebbian weight updates)
-  - spiking (optional: spike frequency adaptation)
+  - regions[].wiring (required: at least one region with wiring)
+  - regions[].source (optional: ASCII/synthetic input stream)
+  - regions[].noise (optional: background, shift, inter-char)
+  - regions[].spiking (optional: spike frequency adaptation)
+  - connections[].learning_rate (optional: Hebbian updates on inter-region dendrites)
+  - regions[].wiring.learning_rate (optional: Hebbian updates on intra-region dendrites)
 
-Config is nested JSON. Section present = feature enabled.
-Section absent = feature disabled.
+Config is canonical JSON (regions + connections). Legacy flat format (grid/wiring/input/
+learning/noise/spiking at top level) is auto-converted via _to_canonical().
 """
 
 from __future__ import annotations
@@ -87,43 +88,125 @@ def _detect_daemons(
     return len(sizes), daemon_indices, noise_indices, sizes
 
 
-def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
-    """Validate config, warn on missing required fields, fill safe defaults.
+def _to_canonical(config: dict[str, Any]) -> dict[str, Any]:
+    """Convert a legacy or already-canonical config to the canonical regions/connections format.
 
-    Required fields get warnings + defaults.
-    Optional feature sections are never added — absent means disabled.
+    Already canonical (has 'regions' key) → returned as-is.
+    Legacy (has 'grid' key at top level) → converted according to the mapping table.
+
+    Legacy → canonical mapping:
+      grid                         → regions[tissue].grid
+      wiring.*                     → regions[tissue].wiring.*
+      input.resolution             → regions[input].grid = {width, height}
+      input.text/frames_per_char/  → regions[input].source.*
+        font/font_size/density
+      input.dendrite_input_weight  → connections[0].weight
+      input.portion                → connections[0].type="portion", .portion=[…]
+      learning.rate * lr_input     → connections[0].learning_rate  (if > 0)
+      learning.rate * max(lr_exc,  → regions[tissue].wiring.learning_rate (if > 0)
+        lr_inh)
+      noise.*                      → regions[tissue].noise.*
+      spiking.*                    → regions[tissue].spiking.*
+      daemon.*                     → regions[tissue].daemon.*
     """
+    if "regions" in config:
+        return config
+
     config = {**config}
 
-    grid = config.get("grid")
-    if grid is None:
-        logger.warning("config missing 'grid' section, defaulting to {width: 50, height: 50}")
+    # Fill safe defaults for missing required legacy fields
+    if "grid" not in config:
+        logger.warning("config missing 'grid', defaulting to {width: 50, height: 50}")
         config["grid"] = {"width": 50, "height": 50}
-    else:
-        grid = {**grid}
-        if "width" not in grid:
-            logger.warning("grid.width missing, defaulting to 50")
-            grid["width"] = 50
-        if "height" not in grid:
-            logger.warning("grid.height missing, defaulting to 50")
-            grid["height"] = 50
-        config["grid"] = grid
-
-    wiring = config.get("wiring")
-    if wiring is None:
-        logger.warning("config missing 'wiring' section, defaulting to {mask: 'deamon_3_en_50', process_mode: 'min_vs_max'}")
+    if "wiring" not in config:
+        logger.warning("config missing 'wiring', defaulting to mask='deamon_3_en_50', process_mode='min_vs_max'")
         config["wiring"] = {"mask": "deamon_3_en_50", "process_mode": "min_vs_max"}
-    else:
-        wiring = {**wiring}
-        if "mask" not in wiring and "deamon" not in wiring:
-            logger.warning("wiring.mask missing, defaulting to 'deamon_3_en_50'")
-            wiring["mask"] = "deamon_3_en_50"
-        if "process_mode" not in wiring:
-            logger.warning("wiring.process_mode missing, defaulting to 'min_vs_max'")
-            wiring["process_mode"] = "min_vs_max"
-        config["wiring"] = wiring
 
-    return config
+    grid = {**config["grid"]}
+    grid.setdefault("width", 50)
+    grid.setdefault("height", 50)
+
+    wiring: dict[str, Any] = {**config["wiring"]}
+    if "mask" not in wiring and "deamon" not in wiring:
+        logger.warning("wiring.mask missing, defaulting to 'deamon_3_en_50'")
+        wiring["mask"] = "deamon_3_en_50"
+    wiring.setdefault("process_mode", "min_vs_max")
+
+    input_cfg: dict[str, Any] | None = config.get("input")
+    learning_cfg: dict[str, Any] | None = config.get("learning")
+    noise_cfg = config.get("noise")
+    spiking_cfg = config.get("spiking")
+    daemon_cfg = config.get("daemon")
+
+    # Apply learning rates: effective_wiring = rate * max(lr_exc, lr_inh)
+    if learning_cfg is not None:
+        base_rate = float(learning_cfg.get("rate", 1.0))
+        lr_exc = float(learning_cfg.get("lr_exc", 1.0))
+        lr_inh = float(learning_cfg.get("lr_inh", 1.0))
+        effective_wiring = base_rate * max(lr_exc, lr_inh)
+        if effective_wiring > 0:
+            wiring["learning_rate"] = effective_wiring
+
+    # Build tissue region
+    tissue: dict[str, Any] = {"id": "tissue", "grid": grid, "wiring": wiring}
+    if spiking_cfg:
+        tissue["spiking"] = spiking_cfg
+    if daemon_cfg:
+        tissue["daemon"] = daemon_cfg
+
+    regions: list[dict[str, Any]] = [tissue]
+    connections: list[dict[str, Any]] = []
+
+    if input_cfg is not None:
+        resolution = int(input_cfg.get("resolution", 20))
+        source: dict[str, Any] = {
+            "type": "ascii",
+            "text": input_cfg.get("text", "") or "",
+            "frames_per_char": int(input_cfg.get("frames_per_char", 10)),
+        }
+        for key in ("font", "font_size"):
+            if key in input_cfg:
+                source[key] = input_cfg[key]
+        if noise_cfg:
+            source["noise"] = noise_cfg
+
+        regions.append({
+            "id": "input",
+            "grid": {"width": resolution, "height": resolution},
+            "source": source,
+        })
+
+        conn: dict[str, Any] = {
+            "from": "input",
+            "to": "tissue",
+            "type": "full",
+            "weight": float(input_cfg.get("dendrite_input_weight", 0.2)),
+        }
+        if "density" in input_cfg:
+            conn["density"] = float(input_cfg["density"])
+        portion = input_cfg.get("portion")
+        if portion is not None:
+            conn["type"] = "portion"
+            conn["portion"] = list(portion)
+
+        if learning_cfg is not None:
+            base_rate = float(learning_cfg.get("rate", 1.0))
+            lr_input = float(learning_cfg.get("lr_input", 1.0))
+            effective_input = base_rate * lr_input
+            if effective_input > 0:
+                conn["learning"] = {"rate": effective_input}
+
+        connections.append(conn)
+
+    canonical: dict[str, Any] = {}
+    for key in ("name", "description"):
+        if key in config:
+            canonical[key] = config[key]
+    canonical["regions"] = regions
+    if connections:
+        canonical["connections"] = connections
+
+    return canonical
 
 
 class Experiment(Experimento):
@@ -167,40 +250,59 @@ class Experiment(Experimento):
         self._tension_fns: list[tuple[str, float]] = []
 
         # Learning state
+        # In canonical mode: lr=1.0 always; lr_exc/lr_inh = wiring.learning_rate;
+        # lr_input = connections[0].learning_rate. Set to 0 to freeze.
         self.learning_enabled: bool = False
-        self.learning_rate: float = 0.01
-        self.lr_exc: float = 1.0
-        self.lr_inh: float = 1.0
-        self.lr_input: float = 1.0
+        self.learning_rate: float = 1.0
+        self.lr_exc: float = 0.0
+        self.lr_inh: float = 0.0
+        self.lr_input: float = 0.0
+        self._conn_exclude_range: tuple[float, float] | None = None
 
         # Spiking state
         self.adaptation_enabled: bool = False
         self.up_ticks: int = 5
         self.down_ticks: int = 5
 
+        # Daemon detection config
+        self._daemon_threshold: float = _DAEMON_THRESHOLD
+        self._min_daemon_size: int = _MIN_DAEMON_SIZE
+
         # Daemon stats
         self._daemon_history: deque[int] = deque(maxlen=_STABILITY_WINDOW)
         self._last_history_gen: int = -1
 
     def setup(self, config: dict[str, Any]) -> None:
-        """Build the network from a nested config.
+        """Build the network from a config (canonical or legacy).
 
-        Required sections: grid, wiring (auto-defaulted with warnings).
-        Optional sections: input, noise, learning, spiking.
+        Canonical: has 'regions' key.
+        Legacy: has 'grid' key at top level — auto-converted via _to_canonical().
+
+        Required: at least one region with 'wiring'.
+        Optional: regions with 'source', 'noise', 'spiking', 'daemon'; connections[].
         """
-        config = _validate_config(config)
+        config = _to_canonical(config)
         self._config = config
         self.generation = 0
 
+        # Find tissue region (first with wiring) and optional input source region
+        tissue_cfg = next((r for r in config["regions"] if "wiring" in r), None)
+        if tissue_cfg is None:
+            raise ValueError("config must have at least one region with 'wiring'")
+
+        source_region = next((r for r in config["regions"] if "source" in r), None)
+        connections = config.get("connections", [])
+        input_conn = connections[0] if connections else None
+
         # ── Grid ──
-        grid = config["grid"]
-        self.width = grid["width"]
-        self.height = grid["height"]
+        grid = tissue_cfg["grid"]
+        self.width = int(grid.get("width", 50))
+        self.height = int(grid.get("height", 50))
 
         # ── Wiring ──
-        wiring = config["wiring"]
+        wiring = tissue_cfg["wiring"]
         mask_id: str = wiring.get("mask", "")
-        self.process_mode = wiring["process_mode"]
+        self.process_mode = wiring.get("process_mode", "min_vs_max")
 
         self.dendrite_exc_weight = wiring.get("dendrite_exc_weight")
         self.dendrite_inh_weight = wiring.get("dendrite_inh_weight")
@@ -211,22 +313,52 @@ class Experiment(Experimento):
         else:
             self._tension_fns = []
 
-        # ── Input (opt-in) ──
-        input_cfg = config.get("input")
-        self.input_enabled = input_cfg is not None
+        # ── Learning ──
+        # wiring.learning_rate → internal tissue dendrites (exc + inh)
+        # connections[0].learning.rate → inter-region dendrites (input)
+        # connections[0].learning.exclude_range → dead zone for input weights
+        wiring_lr = wiring.get("learning_rate")
 
-        if input_cfg:
-            self.input_text = input_cfg.get("text", "") or ""
-            self.input_resolution = input_cfg.get("resolution", 20)
-            self.frames_per_char = max(1, input_cfg.get("frames_per_char", 10))
-            self.dendrite_input_weight = input_cfg.get("dendrite_input_weight", 0.2)
-            self.input_density = float(input_cfg.get("density", 1.0))
-            self._font_id = input_cfg.get("font", "press_start_2p")
-            self._font_size = input_cfg.get("font_size", 10)
-            portion_raw = input_cfg.get("portion")
-            if portion_raw is not None:
-                self.input_portion = (int(portion_raw[0]), int(portion_raw[1]))
+        conn_learning = input_conn.get("learning") if input_conn else None
+        if isinstance(conn_learning, dict):
+            conn_lr: float | None = float(conn_learning.get("rate", 0.0))
+            er = conn_learning.get("exclude_range")
+            self._conn_exclude_range = (float(er[0]), float(er[1])) if er else None
+        else:
+            # backward compat: bare learning_rate on connection
+            raw = input_conn.get("learning_rate") if input_conn else None
+            conn_lr = float(raw) if raw is not None else None
+            self._conn_exclude_range = None
+
+        self.learning_rate = 1.0
+        self.lr_exc = float(wiring_lr) if wiring_lr is not None else 0.0
+        self.lr_inh = float(wiring_lr) if wiring_lr is not None else 0.0
+        self.lr_input = float(conn_lr) if conn_lr is not None else 0.0
+        self.learning_enabled = self.lr_exc > 0 or self.lr_inh > 0 or self.lr_input > 0
+
+        # ── Input (opt-in) ──
+        self.input_enabled = source_region is not None
+
+        if source_region is not None:
+            source = source_region["source"]
+            input_grid = source_region["grid"]
+            self.input_resolution = int(input_grid.get("width", 20))
+            self.input_text = source.get("text", "") or ""
+            self.frames_per_char = max(1, int(source.get("frames_per_char", 10)))
+            self._font_id = source.get("font", "press_start_2p")
+            self._font_size = int(source.get("font_size", 10))
+
+            if input_conn is not None:
+                self.dendrite_input_weight = float(input_conn.get("weight", 0.2))
+                self.input_density = float(input_conn.get("density", 1.0))
+                if input_conn.get("type") == "portion":
+                    pr = input_conn["portion"]
+                    self.input_portion = (int(pr[0]), int(pr[1]))
+                else:
+                    self.input_portion = None
             else:
+                self.dendrite_input_weight = 0.2
+                self.input_density = 1.0
                 self.input_portion = None
         else:
             self.input_text = ""
@@ -234,54 +366,51 @@ class Experiment(Experimento):
             self.input_density = 1.0
             self.input_portion = None
 
-        # ── Noise (opt-in) ──
-        noise_cfg = config.get("noise")
+        # ── Noise (opt-in) — lives in source because it affects input rendering ──
+        noise_cfg = source_region["source"].get("noise") if source_region else None
         if noise_cfg:
             self.background_noise = float(noise_cfg.get("background", 0.0))
-            self.shift_noise = noise_cfg.get("shift", False)
-            self.inter_char_noise = noise_cfg.get("inter_char", False)
+            self.shift_noise = bool(noise_cfg.get("shift", False))
+            self.inter_char_noise = bool(noise_cfg.get("inter_char", False))
         else:
             self.background_noise = 0.0
             self.shift_noise = False
             self.inter_char_noise = False
 
-        # ── Learning (opt-in) ──
-        learning_cfg = config.get("learning")
-        self.learning_enabled = learning_cfg is not None
-        if learning_cfg:
-            self.learning_rate = learning_cfg.get("rate", 1.0)
-            self.lr_exc   = learning_cfg.get("lr_exc",   1.0)
-            self.lr_inh   = learning_cfg.get("lr_inh",   1.0)
-            self.lr_input = learning_cfg.get("lr_input", 1.0)
-        else:
-            self.lr_exc = self.lr_inh = self.lr_input = 1.0
-
         # ── Spiking (opt-in) ──
-        spiking_cfg = config.get("spiking")
+        spiking_cfg = tissue_cfg.get("spiking")
         self.adaptation_enabled = spiking_cfg is not None
         if spiking_cfg:
-            self.up_ticks = spiking_cfg.get("up_ticks", 5)
-            self.down_ticks = spiking_cfg.get("down_ticks", 5)
+            self.up_ticks = int(spiking_cfg.get("up_ticks", 5))
+            self.down_ticks = int(spiking_cfg.get("down_ticks", 5))
         else:
             self.up_ticks = 5
             self.down_ticks = 5
+
+        # ── Daemon detection config (opt-in) ──
+        daemon_cfg = tissue_cfg.get("daemon")
+        if daemon_cfg:
+            self._daemon_threshold = float(daemon_cfg.get("threshold", _DAEMON_THRESHOLD))
+            self._min_daemon_size = int(daemon_cfg.get("min_size", _MIN_DAEMON_SIZE))
+        else:
+            self._daemon_threshold = _DAEMON_THRESHOLD
+            self._min_daemon_size = _MIN_DAEMON_SIZE
 
         # ── Mask setup ──
         if "deamon" in wiring:
             self._mask_type = "kohonen"
             deamon_cfg = wiring["deamon"]
-            # fixed: true → exact pesos_sinapsis, no random scaling
-            # default → pesos_sinapsis × random[0.2, 1.0] per neuron (enables daemon formation)
             self._random_weights = not deamon_cfg.get("fixed", False)
             raw_mask = compile_deamon_wiring(deamon_cfg)
+            centroid_cfg = deamon_cfg.get("centroid") or {}
+            self._centroid_jitter = 1 if centroid_cfg.get("random") else 0
         else:
             self._mask_type = get_mask_type(mask_id)
             self._random_weights = get_random_weights(mask_id)
             raw_mask = get_mask(mask_id)
+            self._centroid_jitter = 0
 
         # Apply flat dendrite-weight override when specified in wiring config.
-        # Works for both preset masks and inline deamon specs (compile_deamon_wiring
-        # always outputs ±1.0 for peso_dendrita — the gradient lives in pesos_sinapsis).
         has_override = (
             self.dendrite_exc_weight is not None or self.dendrite_inh_weight is not None
         )
@@ -347,6 +476,7 @@ class Experiment(Experimento):
             self.height,
             mask,
             random_weights=self._random_weights,
+            centroid_jitter=self._centroid_jitter,
         )
 
         # ── Input dendrites ──
@@ -363,7 +493,6 @@ class Experiment(Experimento):
                 res = self.input_resolution
                 inp_by_id = {n.id: n for n in input_neuron_list}
 
-                # Precompute input neurons for each region
                 inp_regions: dict[tuple[int, int], list] = {}
                 for ry in range(n_div_y):
                     for rx in range(n_div_x):
@@ -528,6 +657,7 @@ class Experiment(Experimento):
                 lr_exc=self.lr_exc,
                 lr_inh=self.lr_inh,
                 lr_input=self.lr_input,
+                conn_exclude_range=self._conn_exclude_range,
             )
 
         self.generation += 1
@@ -597,11 +727,11 @@ class Experiment(Experimento):
 
         n_tissue = self.width * self.height
         vals = self.brain_tensor.valores[:n_tissue]
-        active = int((vals > _DAEMON_THRESHOLD).sum().item())
+        active = int((vals > self._daemon_threshold).sum().item())
 
-        # Daemon detection
         count, daemon_indices, noise_indices, sizes = _detect_daemons(
-            self.brain_tensor.valores, self.width, self.height, _DAEMON_THRESHOLD
+            self.brain_tensor.valores, self.width, self.height,
+            self._daemon_threshold, self._min_daemon_size,
         )
         avg_size = round(sum(sizes) / len(sizes), 1) if sizes else 0.0
 
@@ -746,132 +876,136 @@ class Experiment(Experimento):
     def update_config(self, config: dict[str, Any]) -> bool:
         """Apply config changes to a running experiment.
 
+        Accepts both canonical and legacy format — converts via _to_canonical().
         Returns True if only soft updates were applied (no rebuild needed).
         """
         if self.brain_tensor is None:
             return False
 
-        hard_keys = {"grid", "wiring"}
-        hard_input_keys = {"resolution", "dendrite_input_weight"}
+        new_config = _to_canonical(config)
+        old_config = self._config  # always canonical after setup()
+
+        old_tissue = next((r for r in old_config.get("regions", []) if "wiring" in r), {})
+        new_tissue = next((r for r in new_config.get("regions", []) if "wiring" in r), {})
+        old_connections = old_config.get("connections", [])
+        new_connections = new_config.get("connections", [])
+        old_conn = old_connections[0] if old_connections else {}
+        new_conn = new_connections[0] if new_connections else {}
 
         needs_reconnect = False
-        if "grid" in config:
-            old_grid = self._config.get("grid", {})
-            new_grid = config["grid"]
-            if new_grid.get("width") != old_grid.get("width") or new_grid.get("height") != old_grid.get("height"):
-                needs_reconnect = True
 
-        if "wiring" in config and not needs_reconnect:
-            old_wiring = self._config.get("wiring", {})
-            new_wiring = config["wiring"]
+        if new_tissue.get("grid") != old_tissue.get("grid"):
+            needs_reconnect = True
+
+        if not needs_reconnect:
+            old_wiring = old_tissue.get("wiring", {})
+            new_wiring = new_tissue.get("wiring", {})
             for k in ("mask", "dendrite_exc_weight", "dendrite_inh_weight"):
                 if new_wiring.get(k) != old_wiring.get(k):
                     needs_reconnect = True
                     break
 
-        if "input" in config and not needs_reconnect:
-            new_input = config.get("input") or {}
-            old_input = self._config.get("input") or {}
-            for k in hard_input_keys:
-                if new_input.get(k) != old_input.get(k):
-                    needs_reconnect = True
-                    break
-            input_was_enabled = self._config.get("input") is not None
-            input_now_enabled = config.get("input") is not None
-            if input_was_enabled != input_now_enabled:
+        if not needs_reconnect:
+            old_has_source = any("source" in r for r in old_config.get("regions", []))
+            new_has_source = any("source" in r for r in new_config.get("regions", []))
+            if old_has_source != new_has_source:
                 needs_reconnect = True
+            elif new_has_source:
+                old_src = next((r for r in old_config["regions"] if "source" in r), {})
+                new_src = next((r for r in new_config["regions"] if "source" in r), {})
+                if old_src.get("grid") != new_src.get("grid"):
+                    needs_reconnect = True
+                elif old_conn.get("weight") != new_conn.get("weight"):
+                    needs_reconnect = True
 
         if needs_reconnect:
-            self.setup(config)
+            self.setup(new_config)
             return False
 
-        # Soft updates
-        if "learning" in config:
-            learning_cfg = config["learning"]
-            if learning_cfg:
-                self.learning_enabled = True
-                self.learning_rate = learning_cfg.get("rate", self.learning_rate)
-                self.lr_exc   = learning_cfg.get("lr_exc",   self.lr_exc)
-                self.lr_inh   = learning_cfg.get("lr_inh",   self.lr_inh)
-                self.lr_input = learning_cfg.get("lr_input", self.lr_input)
+        # ── Soft updates ──
+        new_wiring = new_tissue.get("wiring", {})
+
+        if "process_mode" in new_wiring:
+            self.process_mode = new_wiring["process_mode"]
+            if self.brain_tensor is not None:
+                self.brain_tensor.process_mode = self.process_mode
+
+        if "tension_function" in new_wiring:
+            tf = new_wiring["tension_function"]
+            if tf and isinstance(tf, dict):
+                self._tension_fns = [(k, float(v)) for k, v in tf.items()]
             else:
-                self.learning_enabled = False
-        elif "learning" not in config and self._config.get("learning") is not None and config.get("learning") is None:
-            self.learning_enabled = False
+                self._tension_fns = []
+            if self.brain_tensor is not None:
+                self.brain_tensor.tension_fns = self._tension_fns
 
-        if "noise" in config:
-            noise_cfg = config["noise"]
-            if noise_cfg:
-                self.background_noise = float(noise_cfg.get("background", 0.0))
-                self.shift_noise = noise_cfg.get("shift", False)
-                self.inter_char_noise = noise_cfg.get("inter_char", False)
-            else:
-                self.background_noise = 0.0
-                self.shift_noise = False
-                self.inter_char_noise = False
+        wiring_lr = new_wiring.get("learning_rate")
+        conn_lr = new_conn.get("learning_rate")
+        self.learning_rate = 1.0
+        self.lr_exc = float(wiring_lr) if wiring_lr is not None else 0.0
+        self.lr_inh = float(wiring_lr) if wiring_lr is not None else 0.0
+        self.lr_input = float(conn_lr) if conn_lr is not None else 0.0
+        self.learning_enabled = self.lr_exc > 0 or self.lr_inh > 0 or self.lr_input > 0
 
-        if "spiking" in config:
-            spiking_cfg = config["spiking"]
-            if spiking_cfg:
-                self.adaptation_enabled = True
-                self.up_ticks = spiking_cfg.get("up_ticks", self.up_ticks)
-                self.down_ticks = spiking_cfg.get("down_ticks", self.down_ticks)
-                if self.brain_tensor is not None:
-                    self.brain_tensor.adaptation_enabled = True
-                    self.brain_tensor.max_active_steps = self.up_ticks
-                    self.brain_tensor.refractory_steps = self.down_ticks
-            else:
-                self.adaptation_enabled = False
-                if self.brain_tensor is not None:
-                    self.brain_tensor.adaptation_enabled = False
+        new_noise = new_tissue.get("noise")
+        if new_noise:
+            self.background_noise = float(new_noise.get("background", 0.0))
+            self.shift_noise = bool(new_noise.get("shift", False))
+            self.inter_char_noise = bool(new_noise.get("inter_char", False))
+        else:
+            self.background_noise = 0.0
+            self.shift_noise = False
+            self.inter_char_noise = False
 
-        wiring_cfg = config.get("wiring")
-        if wiring_cfg:
-            if "process_mode" in wiring_cfg:
-                self.process_mode = wiring_cfg["process_mode"]
-                if self.brain_tensor is not None:
-                    self.brain_tensor.process_mode = self.process_mode
-            if "tension_function" in wiring_cfg:
-                tf = wiring_cfg["tension_function"]
-                if tf and isinstance(tf, dict):
-                    self._tension_fns = [(k, float(v)) for k, v in tf.items()]
-                else:
-                    self._tension_fns = []
-                if self.brain_tensor is not None:
-                    self.brain_tensor.tension_fns = self._tension_fns
+        new_spiking = new_tissue.get("spiking")
+        if new_spiking:
+            self.adaptation_enabled = True
+            self.up_ticks = int(new_spiking.get("up_ticks", self.up_ticks))
+            self.down_ticks = int(new_spiking.get("down_ticks", self.down_ticks))
+            if self.brain_tensor is not None:
+                self.brain_tensor.adaptation_enabled = True
+                self.brain_tensor.max_active_steps = self.up_ticks
+                self.brain_tensor.refractory_steps = self.down_ticks
+        else:
+            self.adaptation_enabled = False
+            if self.brain_tensor is not None:
+                self.brain_tensor.adaptation_enabled = False
 
-        input_cfg = config.get("input")
-        if input_cfg and self.input_enabled:
-            font_changed = False
-            if "font" in input_cfg and input_cfg["font"] != self._font_id:
-                self._font_id = input_cfg["font"]
-                font_changed = True
-            if "font_size" in input_cfg and input_cfg["font_size"] != self._font_size:
-                self._font_size = input_cfg["font_size"]
-                font_changed = True
+        if self.input_enabled:
+            new_src = next((r for r in new_config.get("regions", []) if "source" in r), None)
+            if new_src:
+                source = new_src["source"]
 
-            text_changed = False
-            if "text" in input_cfg:
-                new_text = input_cfg["text"] or ""
-                if new_text != self.input_text:
-                    self.input_text = new_text
-                    text_changed = True
-                    self._char_index = 0
-                    self._frame_in_char = 0
-                    self._in_gap = False
+                font_changed = False
+                if "font" in source and source["font"] != self._font_id:
+                    self._font_id = source["font"]
+                    font_changed = True
+                if "font_size" in source and source["font_size"] != self._font_size:
+                    self._font_size = int(source["font_size"])
+                    font_changed = True
 
-            if "frames_per_char" in input_cfg:
-                self.frames_per_char = max(1, input_cfg["frames_per_char"])
+                text_changed = False
+                if "text" in source:
+                    new_text = source["text"] or ""
+                    if new_text != self.input_text:
+                        self.input_text = new_text
+                        text_changed = True
+                        self._char_index = 0
+                        self._frame_in_char = 0
+                        self._in_gap = False
 
-            if (font_changed or text_changed) and not self._is_synthetic_input():
-                self._char_images = {}
-                for char in set(self.input_text):
-                    self._char_images[char] = render_char(
-                        char, self.input_resolution,
-                        font_id=self._font_id, font_size=self._font_size,
-                    )
+                if "frames_per_char" in source:
+                    self.frames_per_char = max(1, int(source["frames_per_char"]))
 
-        self._config = config
+                if (font_changed or text_changed) and not self._is_synthetic_input():
+                    self._char_images = {}
+                    for char in set(self.input_text):
+                        self._char_images[char] = render_char(
+                            char, self.input_resolution,
+                            font_id=self._font_id, font_size=self._font_size,
+                        )
+
+        self._config = new_config
         return True
 
     def reset(self) -> None:

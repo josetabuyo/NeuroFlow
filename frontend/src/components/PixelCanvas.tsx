@@ -11,6 +11,8 @@ interface PixelCanvasProps {
   inputRow?: number;
   outputRow?: number;
   connectionMap?: (number | null)[][] | null;
+  /** Semi-transparent green overlay showing learned weights (for input layer inspection). */
+  weightOverlay?: number[][] | null;
   inspectedCell?: { x: number; y: number } | null;
   onCellClick: (x: number, y: number) => void;
   onCellDrag?: (x: number, y: number) => void;
@@ -68,6 +70,7 @@ export function PixelCanvas({
   inputRow,
   outputRow,
   connectionMap,
+  weightOverlay,
   inspectedCell,
   onCellClick,
   onCellDrag,
@@ -165,7 +168,23 @@ export function PixelCanvas({
         );
       }
     }
-  }, [grid, tensionGrid, tensionMode, width, height, inputRow, outputRow, connectionMap, inspectedCell, getCellSize]);
+
+    // Draw weight overlay (learned input weights on input layer)
+    if (weightOverlay && weightOverlay.length > 0) {
+      ctx.globalAlpha = 0.65;
+      for (let row = 0; row < Math.min(height, weightOverlay.length); row++) {
+        for (let col = 0; col < Math.min(width, (weightOverlay[row]?.length ?? 0)); col++) {
+          const w = Math.max(0, Math.min(1, weightOverlay[row][col]));
+          if (w > 0.02) {
+            const g = Math.round(w * 255);
+            ctx.fillStyle = `rgb(0, ${g}, 0)`;
+            ctx.fillRect(col * cellSize, row * cellSize, cellSize - 1, cellSize - 1);
+          }
+        }
+      }
+      ctx.globalAlpha = 1.0;
+    }
+  }, [grid, tensionGrid, tensionMode, width, height, inputRow, outputRow, connectionMap, weightOverlay, inspectedCell, getCellSize]);
 
   useEffect(() => {
     draw();
@@ -238,8 +257,7 @@ export function PixelCanvas({
       ref={containerRef}
       style={{
         width: "100%",
-        aspectRatio: `${width} / ${height}`,
-        maxHeight: "70vh",
+        height: "100%",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",

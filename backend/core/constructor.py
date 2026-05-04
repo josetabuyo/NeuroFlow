@@ -166,6 +166,7 @@ class Constructor:
         mascara: list[dict[str, object]],
         *,
         random_weights: bool = True,
+        centroid_jitter: int = 0,
     ) -> None:
         """Apply a connection mask to every neuron in the 2D grid.
 
@@ -186,6 +187,8 @@ class Constructor:
         for y in range(height):
             for x in range(width):
                 neurona_destino = brain.get_neurona(self.key_by_coord(x, y))
+                jdx = random.randint(-centroid_jitter, centroid_jitter) if centroid_jitter else 0
+                jdy = random.randint(-centroid_jitter, centroid_jitter) if centroid_jitter else 0
 
                 for def_dendrita in mascara:
                     peso_dendrita: float = def_dendrita["peso_dendrita"]  # type: ignore[assignment]
@@ -195,8 +198,8 @@ class Constructor:
                     sinapsis_list: list[Sinapsis] = []
                     noise_amp = def_dendrita.get("random_noise")  # None for presets
                     for i, (dx, dy) in enumerate(offsets):
-                        nx = (x + dx) % width
-                        ny = (y + dy) % height
+                        nx = (x + dx + jdx) % width
+                        ny = (y + dy + jdy) % height
                         neurona_fuente = brain.get_neurona(
                             self.key_by_coord(nx, ny)
                         )

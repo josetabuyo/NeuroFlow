@@ -275,6 +275,14 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
             "random_noise": inh_noise if inh_noise is not None else 0.5,
         })
 
+    centroid = wiring.get("centroid")
+    if centroid:
+        explicit = centroid.get("shift", [0, 0])
+        sdx, sdy = int(explicit[0]), int(explicit[1])
+        if sdx != 0 or sdy != 0:
+            for dendrite in mask:
+                dendrite["offsets"] = _shift(dendrite["offsets"], sdx, sdy)
+
     return mask
 
 

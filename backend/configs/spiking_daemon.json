@@ -3,16 +3,21 @@
   "description": "Daemons with spike frequency adaptation (ON/OFF cycling). Shows the 'lava lamp' effect: daemons birth, migrate, and die. Dynamism without organization.",
   "config": {
     "description": "Spike frequency adaptation forces ON/OFF cycling. After up_ticks active steps, neurons enter refractory for down_ticks steps. Creates beautiful dynamic patterns but does NOT produce topological organization alone.",
-    "grid": { "width": 50, "height": 50 },
-    "wiring": {
-      "mask": "deamon_e3_g2_i12_de1_di1",
-      "dendrite_exc_weight": 0.9,
-      "dendrite_inh_weight": -1,
-      "process_mode": "avg_vs_avg"
-    },
-    "spiking": {
-      "up_ticks": 5,
-      "down_ticks": 5
-    }
+    "regions": [
+      {
+        "id": "tissue",
+        "grid": { "width": 50, "height": 50 },
+        "wiring": {
+          "mask": "deamon_e3_g2_i12_de1_di1",
+          "dendrite_exc_weight": 0.9,
+          "dendrite_inh_weight": -1,
+          "process_mode": "avg_vs_avg"
+        },
+        "spiking": {
+          "up_ticks": 5,
+          "down_ticks": 5
+        }
+      }
+    ]
   }
 }

@@ -188,15 +188,22 @@ export function Sidebar({
   const isInitializing = state === "initializing";
 
   const masks = metadata?.masks ?? [];
+
+  // Support both canonical (regions[]) and legacy (wiring at top level)
+  const anyConfig = config as Record<string, unknown>;
+  const effectiveWiring: Record<string, unknown> | undefined = Array.isArray(anyConfig.regions)
+    ? (anyConfig.regions as Array<Record<string, unknown>>).find(r => r.wiring)?.wiring as Record<string, unknown> | undefined
+    : config.wiring as Record<string, unknown> | undefined;
+
   const activeMask = masks.length > 0
-    ? (masks.find((m) => m.id === config.wiring?.mask) ?? null)
+    ? (masks.find((m) => m.id === effectiveWiring?.mask) ?? null)
     : null;
 
   const hasMasks = masks.length > 0;
 
   const [deamonPreview, setDeamonPreview] = useState<{ preview_grid: (number | null)[][], mask_stats: Record<string, unknown>, dendrites?: DendriteInfo[] } | null>(null);
 
-  const deamonWiring = (config.wiring as Record<string, unknown> | undefined)?.deamon;
+  const deamonWiring = effectiveWiring?.deamon;
   useEffect(() => {
     if (!deamonWiring) { setDeamonPreview(null); return; }
     fetch("/api/preview-wiring", {

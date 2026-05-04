@@ -11,6 +11,12 @@ export interface MaskStats {
   inhibition_radius: number;
 }
 
+export interface DendriteInfo {
+  centroid: [number, number];   // [col, row] in grid coords (float)
+  avg_effective: number;        // average effective weight (signed)
+  cells: [number, number][];    // [col, row] grid coords of each synapse
+}
+
 export interface MaskPresetInfo {
   id: string;
   name: string;
@@ -20,6 +26,7 @@ export interface MaskPresetInfo {
   dendrites_inh: number;
   preview_grid?: (number | null)[][];
   mask_stats?: MaskStats;
+  dendrites?: DendriteInfo[];
 }
 
 export interface InputSourceInfo {
@@ -41,7 +48,69 @@ export interface ProcessModeInfo {
   description: string;
 }
 
-/* ── Nested config (native format everywhere) ── */
+/* ── Canonical config schema (regions + connections) ── */
+
+export interface RegionSource {
+  type: "ascii";
+  text?: string;
+  frames_per_char?: number;
+  font?: string;
+  font_size?: number;
+  density?: number;
+}
+
+export interface RegionWiring {
+  mask?: string;
+  dendrite_exc_weight?: number;
+  dendrite_inh_weight?: number;
+  process_mode?: string;
+  tension_function?: Record<string, number>;
+  learning_rate?: number;
+}
+
+export interface RegionNoise {
+  background?: number;
+  shift?: boolean;
+  inter_char?: boolean;
+}
+
+export interface RegionSpiking {
+  up_ticks?: number;
+  down_ticks?: number;
+}
+
+export interface RegionDaemon {
+  threshold?: number;
+  min_size?: number;
+}
+
+export interface Region {
+  id: string;
+  grid: { width: number; height: number };
+  source?: RegionSource;
+  wiring?: RegionWiring;
+  noise?: RegionNoise;
+  spiking?: RegionSpiking;
+  daemon?: RegionDaemon;
+}
+
+export interface Connection {
+  from: string;
+  to: string;
+  type: "full" | "portion";
+  weight: number;
+  portion?: [number, number];
+  learning_rate?: number;
+}
+
+export interface CanonicalExperimentConfig {
+  name?: string;
+  description?: string;
+  regions: Region[];
+  connections?: Connection[];
+}
+
+/* ── Legacy config format (used by frontend UI components) ── */
 
 export interface ExperimentConfig {
   description?: string;
@@ -61,6 +130,8 @@ export interface ExperimentConfig {
     dendrite_input_weight?: number;
     font?: string;
     font_size?: number;
+    density?: number;
+    portion?: [number, number];
   };
   noise?: {
     background?: number;
@@ -69,6 +140,9 @@ export interface ExperimentConfig {
   };
   learning?: {
     rate?: number;
+    lr_exc?: number;
+    lr_inh?: number;
+    lr_input?: number;
   };
   spiking?: {
     up_ticks?: number;

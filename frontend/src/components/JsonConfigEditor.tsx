@@ -207,6 +207,30 @@ const neuroTheme = EditorView.theme({
 
 const baseExtensions = [json(), neuroTheme, syntaxHighlighting(neuroHighlight), EditorView.lineWrapping];
 
+function sanitizeJsonControlChars(text: string): string {
+  // Replace typographic/smart quotes with straight ASCII quotes
+  const normalized = text
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
+
+  let inString = false;
+  let escaped = false;
+  let result = "";
+  for (let i = 0; i < normalized.length; i++) {
+    const ch = normalized[i];
+    if (escaped) { result += ch; escaped = false; continue; }
+    if (ch === "\\" && inString) { escaped = true; result += ch; continue; }
+    if (ch === '"') { inString = !inString; result += ch; continue; }
+    if (inString) {
+      if (ch === "\n") { result += "\\n"; continue; }
+      if (ch === "\r") { result += "\\r"; continue; }
+      if (ch === "\t") { result += "\\t"; continue; }
+    }
+    result += ch;
+  }
+  return result;
+}
+
 /* ── Component ──────────────────────────────────────────────────── */
 
 interface JsonConfigEditorProps {
@@ -252,17 +276,19 @@ export function JsonConfigEditor({ config, onChange, metadata }: JsonConfigEdito
       clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(() => {
         try {
-          const parsed = JSON.parse(value);
+          const parsed = JSON.parse(sanitizeJsonControlChars(value));
           if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
             setParseError("Config must be a JSON object");
             return;
           }
-          if (!parsed.grid || typeof parsed.grid.width !== "number" || typeof parsed.grid.height !== "number") {
-            setParseError("grid.width and grid.height are required");
+          const isCanonical = Array.isArray(parsed.regions);
+          const isLegacy = parsed.grid && parsed.wiring;
+          if (!isCanonical && !isLegacy) {
+            setParseError("Config must have either 'regions' (canonical) or 'grid' + 'wiring' (legacy)");
             return;
           }
-          if (!parsed.wiring || typeof parsed.wiring !== "object") {
-            setParseError("wiring section is required");
+          if (isLegacy && (typeof parsed.grid.width !== "number" || typeof parsed.grid.height !== "number")) {
+            setParseError("grid.width and grid.height are required");
             return;
           }
           setParseError(null);

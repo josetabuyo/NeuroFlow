@@ -253,12 +253,16 @@ class BrainTensor:
         lr_exc: float = 1.0,
         lr_inh: float = 1.0,
         lr_input: float = 1.0,
+        conn_exclude_range: tuple[float, float] | None = None,
     ) -> None:
         """Tension-modulated Hebbian learning with per-dendrite-type rates.
 
         Rule: dW = lr * lr_type * tension * (source_value - weight)
           - lr_exc/lr_inh/lr_input multiply the base rate for each synapse type.
           - Set a multiplier to 0.0 to freeze learning for that dendrite type.
+          - conn_exclude_range: dead zone for connection (inter-region) dendrites.
+            Synapses whose weight is within [lo, hi] are frozen; only weights
+            outside the range are updated.
         """
         NR = self.n_real
 
@@ -273,6 +277,12 @@ class BrainTensor:
         )  # [NR, max_syn]
 
         delta = lr * lr_map * tension * (source_vals - self.pesos_sinapsis)
+
+        if conn_exclude_range is not None:
+            lo, hi = conn_exclude_range
+            in_range = (self.pesos_sinapsis >= lo) & (self.pesos_sinapsis <= hi)
+            delta = delta.masked_fill(self.es_input_syn & in_range, 0.0)
+
         self.pesos_sinapsis = (self.pesos_sinapsis + delta * self.mascara_valida).clamp(0.0, 1.0)
 
     def procesar_n(self, n: int) -> None:

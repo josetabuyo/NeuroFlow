@@ -2,23 +2,38 @@
   "name": "Simple Figures SOM",
   "description": "SOM with simple synthetic patterns (halves, bars, dots). Configurable sharpening and learning. Progressive difficulty to validate the system before attempting ASCII.",
   "config": {
-    "description": "Synthetic binary patterns for SOM validation. Change input.text to try different patterns: HALF_TOP,HALF_BOT (easiest), BARS_H,BARS_V (orientation), DOT_TL,DOT_BR (sparse). Adjust tension_function and learning rate to find convergence.",
-    "grid": { "width": 50, "height": 50 },
-    "wiring": {
-      "mask": "deamon_e3_g2_i12_de1_di1",
-      "dendrite_exc_weight": 0.9,
-      "dendrite_inh_weight": -1,
-      "process_mode": "avg_vs_avg",
-      "tension_function": { "x_pow_3": 1.0 }
-    },
-    "input": {
-      "text": "HALF_TOP,HALF_BOT",
-      "resolution": 20,
-      "frames_per_char": 20,
-      "dendrite_input_weight": 0.2
-    },
-    "learning": {
-      "rate": 0.01
-    }
+    "description": "Synthetic binary patterns for SOM validation. Change source.text to try different patterns: HALF_TOP,HALF_BOT (easiest), BARS_H,BARS_V (orientation), DOT_TL,DOT_BR (sparse). Adjust tension_function and learning rate to find convergence.",
+    "regions": [
+      {
+        "id": "tissue",
+        "grid": { "width": 50, "height": 50 },
+        "wiring": {
+          "mask": "deamon_e3_g2_i12_de1_di1",
+          "dendrite_exc_weight": 0.9,
+          "dendrite_inh_weight": -1,
+          "process_mode": "avg_vs_avg",
+          "tension_function": { "x_pow_3": 1.0 },
+          "learning_rate": 0.01
+        }
+      },
+      {
+        "id": "input",
+        "grid": { "width": 20, "height": 20 },
+        "source": {
+          "type": "ascii",
+          "text": "HALF_TOP,HALF_BOT",
+          "frames_per_char": 20
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from": "input",
+        "to": "tissue",
+        "type": "full",
+        "weight": 0.2,
+        "learning_rate": 0.01
+      }
+    ]
   }
 }

@@ -20,6 +20,16 @@ const DEFAULT_CONFIG: ExperimentConfig = {
   },
 };
 
+function getConfigGrid(config: ExperimentConfig): { width: number; height: number } {
+  const any = config as Record<string, unknown>;
+  if (Array.isArray(any.regions)) {
+    const tissue = (any.regions as Array<Record<string, unknown>>).find(r => r.wiring);
+    const g = tissue?.grid as { width?: number; height?: number } | undefined;
+    return { width: g?.width ?? 50, height: g?.height ?? 50 };
+  }
+  return { width: config.grid?.width ?? 50, height: config.grid?.height ?? 50 };
+}
+
 const SIDEBAR_DEFAULT = 380;
 const SIDEBAR_MIN = 280;
 const SIDEBAR_MAX = 700;
@@ -241,7 +251,7 @@ function App() {
         .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
         .filter(
           (c) =>
-            c.x >= 0 && c.x < config.grid.width && c.y >= 0 && c.y < config.grid.height
+            c.x >= 0 && c.x < getConfigGrid(config).width && c.y >= 0 && c.y < getConfigGrid(config).height
         );
       paint(cells, value);
     },
@@ -386,8 +396,8 @@ function App() {
           {hasGrid ? (
             <Scene
               grid={grid}
-              hiddenW={config.grid.width}
-              hiddenH={config.grid.height}
+              hiddenW={getConfigGrid(config).width}
+              hiddenH={getConfigGrid(config).height}
               tensionGrid={tensionGrid}
               tensionMode={tensionMode}
               connectionMap={connectionMap}
