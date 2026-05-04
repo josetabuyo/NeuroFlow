@@ -286,11 +286,16 @@ class ExperimentSession:
                 [round(v, 3) for v in row] for row in tension_frame
             ]
 
-        input_frame = self.experiment.get_input_frame()
-        if input_frame is not None:
-            msg["input_frame"] = [
-                [round(v) for v in row] for row in input_frame
-            ]
+        region_frames = self.experiment.get_region_frames()
+        if region_frames:
+            msg["regions"] = region_frames
+            msg["tissue_id"] = self.experiment._tissue_id
+            if self.experiment._input_id:
+                msg["input_id"] = self.experiment._input_id
+
+        label_frames = self.experiment.get_label_frames()
+        if label_frames:
+            msg["labels"] = label_frames
 
         if steps is not None and elapsed_s is not None and elapsed_s > 0:
             msg["perf"] = {

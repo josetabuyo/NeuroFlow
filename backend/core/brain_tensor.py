@@ -45,6 +45,7 @@ class BrainTensor:
         es_exc_syn: torch.BoolTensor | None = None,
         es_inh_syn: torch.BoolTensor | None = None,
         es_input_syn: torch.BoolTensor | None = None,
+        es_output_syn: torch.BoolTensor | None = None,
     ) -> None:
         self.device = device
         self.process_mode = process_mode
@@ -102,6 +103,10 @@ class BrainTensor:
             self.es_input_syn = es_input_syn.to(device)
         else:
             self.es_input_syn = torch.zeros(NR, max_syn, dtype=torch.bool, device=device)
+        if es_output_syn is not None:
+            self.es_output_syn = es_output_syn.to(device)
+        else:
+            self.es_output_syn = torch.zeros(NR, max_syn, dtype=torch.bool, device=device)
 
         # Tension values (updated each procesar() call)
         self.tensiones = torch.zeros(self.N, device=device)
@@ -253,27 +258,27 @@ class BrainTensor:
         lr_exc: float = 1.0,
         lr_inh: float = 1.0,
         lr_input: float = 1.0,
+        lr_output: float = 1.0,
         conn_exclude_range: tuple[float, float] | None = None,
     ) -> None:
         """Tension-modulated Hebbian learning with per-dendrite-type rates.
 
         Rule: dW = lr * lr_type * tension * (source_value - weight)
-          - lr_exc/lr_inh/lr_input multiply the base rate for each synapse type.
+          - lr_exc/lr_inh/lr_input/lr_output multiply the base rate per synapse type.
           - Set a multiplier to 0.0 to freeze learning for that dendrite type.
           - conn_exclude_range: dead zone for connection (inter-region) dendrites.
-            Synapses whose weight is within [lo, hi] are frozen; only weights
-            outside the range are updated.
         """
         NR = self.n_real
 
         source_vals = self.valores[self.indices_fuente]  # [NR, max_syn]
         tension = self.tensiones[:NR].unsqueeze(1)       # [NR, 1]
 
-        # Per-synapse effective learning rate
+        # Per-synapse effective learning rate (types are mutually exclusive)
         lr_map = (
-            self.es_exc_syn.float()   * lr_exc +
-            self.es_inh_syn.float()   * lr_inh +
-            self.es_input_syn.float() * lr_input
+            self.es_exc_syn.float()    * lr_exc +
+            self.es_inh_syn.float()    * lr_inh +
+            self.es_input_syn.float()  * lr_input +
+            self.es_output_syn.float() * lr_output
         )  # [NR, max_syn]
 
         delta = lr * lr_map * tension * (source_vals - self.pesos_sinapsis)

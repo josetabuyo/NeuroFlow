@@ -21,8 +21,14 @@ interface UseExperimentReturn {
   tensionGrid: number[][] | null;
   tensionMode: boolean;
   inputFrame: number[][] | null;
+  outputGrid: number[][] | null;
+  labelGrid: number[][] | null;
   inputWeightGrid: number[][] | null;
   inputWeightDims: { width: number; height: number } | null;
+  regions: Record<string, number[][]>;
+  tissueId: string;
+  inputId: string | null;
+  labels: Record<string, number[][]>;
   state: ExperimentState;
   stats: ExperimentStats | null;
   perf: PerfMetrics | null;
@@ -74,8 +80,14 @@ export function useExperiment(): UseExperimentReturn {
   const [tensionGrid, setTensionGrid] = useState<number[][] | null>(null);
   const [tensionMode, setTensionMode] = useState(false);
   const [inputFrame, setInputFrame] = useState<number[][] | null>(null);
+  const [outputGrid, setOutputGrid] = useState<number[][] | null>(null);
+  const [labelGrid, setLabelGrid] = useState<number[][] | null>(null);
   const [inputWeightGrid, setInputWeightGrid] = useState<number[][] | null>(null);
   const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
+  const [regions, setRegions] = useState<Record<string, number[][]>>({});
+  const [tissueId, setTissueId] = useState<string>("tissue");
+  const [inputId, setInputId] = useState<string | null>(null);
+  const [labels, setLabels] = useState<Record<string, number[][]>>({});
   const [experimentActive, setExperimentActive] = useState(false);
   const [brushSize, setBrushSize] = useState(1);
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
@@ -107,6 +119,10 @@ export function useExperiment(): UseExperimentReturn {
           setPerf(msg.perf ?? null);
           setTensionGrid(msg.tension_grid ?? null);
           setInputFrame(msg.input_frame ?? null);
+          if (msg.regions) setRegions(msg.regions);
+          if (msg.tissue_id) setTissueId(msg.tissue_id);
+          if (msg.input_id !== undefined) setInputId(msg.input_id ?? null);
+          setLabels(msg.labels ?? {});
           if (msg.inspect) {
             setConnectionMap(msg.inspect.weight_grid);
             setInspectedCell({ x: msg.inspect.x, y: msg.inspect.y });
@@ -266,8 +282,14 @@ export function useExperiment(): UseExperimentReturn {
     tensionGrid,
     tensionMode,
     inputFrame,
+    outputGrid,
+    labelGrid,
     inputWeightGrid,
     inputWeightDims,
+    regions,
+    tissueId,
+    inputId,
+    labels,
     state,
     stats,
     perf,

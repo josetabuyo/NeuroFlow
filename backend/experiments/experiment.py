@@ -251,13 +251,25 @@ class Experiment(Experimento):
 
         # Learning state
         # In canonical mode: lr=1.0 always; lr_exc/lr_inh = wiring.learning_rate;
-        # lr_input = connections[0].learning_rate. Set to 0 to freeze.
+        # lr_input = connections[input→tissue].learning.rate
+        # lr_output = connections[tissue→output].learning.rate
         self.learning_enabled: bool = False
         self.learning_rate: float = 1.0
         self.lr_exc: float = 0.0
         self.lr_inh: float = 0.0
         self.lr_input: float = 0.0
+        self.lr_output: float = 0.0
         self._conn_exclude_range: tuple[float, float] | None = None
+
+        # Output region state
+        self.output_enabled: bool = False
+        self.output_width: int = 0
+        self.output_height: int = 0
+        self._output_start_idx: int = 0
+        self._output_n: int = 0
+        self._label_enabled: bool = False
+        self._n_classes: int = 0
+        self._current_label: torch.Tensor | None = None
 
         # Spiking state
         self.adaptation_enabled: bool = False
@@ -290,9 +302,36 @@ class Experiment(Experimento):
         if tissue_cfg is None:
             raise ValueError("config must have at least one region with 'wiring'")
 
-        source_region = next((r for r in config["regions"] if "source" in r), None)
+        source_region = next(
+            (r for r in config["regions"]
+             if "source" in r and r["source"].get("type") != "label"),
+            None,
+        )
+        output_region = next(
+            (r for r in config["regions"]
+             if "wiring" not in r and r.get("source", {}).get("type") == "label"),
+            None,
+        ) or next(
+            (r for r in config["regions"]
+             if "wiring" not in r and "source" not in r and r.get("id") == "output"),
+            None,
+        )
+
+        # Store region IDs for frame serialization
+        self._tissue_id: str = tissue_cfg.get("id") or "tissue"
+        self._input_id: str | None = source_region.get("id") if source_region else None
+        self._output_id: str | None = output_region.get("id") if output_region else None
+
         connections = config.get("connections", [])
-        input_conn = connections[0] if connections else None
+        input_conn = next(
+            (c for c in connections if c.get("to") == (tissue_cfg.get("id") or "tissue")),
+            connections[0] if connections else None,
+        )
+        output_conn = next(
+            (c for c in connections if c.get("from") == (tissue_cfg.get("id") or "tissue")
+             and c.get("to") != (tissue_cfg.get("id") or "tissue")),
+            None,
+        )
 
         # ── Grid ──
         grid = tissue_cfg["grid"]
@@ -330,11 +369,19 @@ class Experiment(Experimento):
             conn_lr = float(raw) if raw is not None else None
             self._conn_exclude_range = None
 
+        out_learning = output_conn.get("learning") if output_conn else None
+        if isinstance(out_learning, dict):
+            out_lr: float = float(out_learning.get("rate", 0.0))
+        else:
+            raw_out = output_conn.get("learning_rate") if output_conn else None
+            out_lr = float(raw_out) if raw_out is not None else 0.0
+
         self.learning_rate = 1.0
         self.lr_exc = float(wiring_lr) if wiring_lr is not None else 0.0
         self.lr_inh = float(wiring_lr) if wiring_lr is not None else 0.0
         self.lr_input = float(conn_lr) if conn_lr is not None else 0.0
-        self.learning_enabled = self.lr_exc > 0 or self.lr_inh > 0 or self.lr_input > 0
+        self.lr_output = out_lr
+        self.learning_enabled = self.lr_exc > 0 or self.lr_inh > 0 or self.lr_input > 0 or self.lr_output > 0
 
         # ── Input (opt-in) ──
         self.input_enabled = source_region is not None
@@ -365,6 +412,22 @@ class Experiment(Experimento):
             self.input_resolution = 0
             self.input_density = 1.0
             self.input_portion = None
+
+        # ── Output region (opt-in) ──
+        if output_region is not None:
+            out_grid = output_region.get("grid", {})
+            self.output_width = int(out_grid.get("width", 1))
+            self.output_height = int(out_grid.get("height", 2))
+            self._output_n = self.output_width * self.output_height
+            out_src = output_region.get("source", {})
+            self._label_enabled = out_src.get("type") == "label"
+            self.output_enabled = True
+        else:
+            self.output_enabled = False
+            self.output_width = 0
+            self.output_height = 0
+            self._output_n = 0
+            self._label_enabled = False
 
         # ── Noise (opt-in) — lives in source because it affects input rendering ──
         noise_cfg = source_region["source"].get("noise") if source_region else None
@@ -454,7 +517,12 @@ class Experiment(Experimento):
                 for idx in range(n_input):
                     input_neurons.append(NeuronaEntrada(id=f"inp_{idx}"))
 
-            all_neurons: list[Neurona] = tissue_neurons + input_neurons
+            output_neurons: list[Neurona] = []
+            if self.output_enabled:
+                for idx in range(self._output_n):
+                    output_neurons.append(Neurona(id=f"out_{idx}", umbral=0.0))
+
+            all_neurons: list[Neurona] = tissue_neurons + input_neurons + output_neurons
             self.brain = Brain(neuronas=all_neurons)
 
             region_tissue = Region(nombre="tissue")
@@ -467,6 +535,12 @@ class Experiment(Experimento):
                 for n_obj in input_neurons:
                     region_input.agregar(n_obj)
                 self.regiones["input"] = region_input
+
+            if self.output_enabled:
+                region_output = Region(nombre="output")
+                for n_obj in output_neurons:
+                    region_output.agregar(n_obj)
+                self.regiones["output"] = region_output
 
         # ── Wiring ──
         constructor = Constructor()
@@ -531,6 +605,21 @@ class Experiment(Experimento):
                         Dendrita(sinapsis=sinapsis_list, peso=self.dendrite_input_weight)
                     )
 
+        # ── Output dendrites (tissue → output) ──
+        if self.output_enabled and not is_wolfram and "output" in self.regiones:
+            tissue_list_out = list(self.regiones["tissue"].neuronas.values())
+            output_neuron_list = list(self.regiones["output"].neuronas.values())
+            out_weight = float(output_conn.get("weight", 0.5)) if output_conn else 0.5
+            out_density = float(output_conn.get("density", 1.0)) if output_conn else 1.0
+            k_out = max(1, round(len(tissue_list_out) * out_density))
+            for out_n in output_neuron_list:
+                sampled = random.sample(tissue_list_out, k_out) if k_out < len(tissue_list_out) else tissue_list_out
+                sinapsis_list = [
+                    Sinapsis(neurona_entrante=t_n, peso=random.uniform(0.2, 1.0))
+                    for t_n in sampled
+                ]
+                out_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=out_weight))
+
         # ── Initialization ──
         if is_wolfram:
             for neurona in self.brain.neuronas:
@@ -547,6 +636,11 @@ class Experiment(Experimento):
                     neurona.activar_external(random.random())
 
         # ── Compile ──
+        n_tissue = self.width * self.height
+        n_input = self.input_resolution * self.input_resolution if self.input_enabled else 0
+        self._input_start_idx = n_tissue
+        self._output_start_idx = n_tissue + n_input
+
         self.brain_tensor = ConstructorTensor.compilar(
             self.brain,
             max_active_steps=self.up_ticks,
@@ -554,6 +648,7 @@ class Experiment(Experimento):
             adaptation_enabled=self.adaptation_enabled,
             process_mode=self.process_mode,
             tension_fns=self._tension_fns,
+            output_start=self._output_start_idx if self.output_enabled else 0,
         )
 
         # ── Pre-render characters ──
@@ -574,6 +669,11 @@ class Experiment(Experimento):
         # ── Daemon stats ──
         self._daemon_history.clear()
         self._last_history_gen = -1
+
+        # ── Label init ──
+        self._current_label = None
+        if self._label_enabled:
+            self._update_label()
 
         # ── Project initial frame ──
         if self.input_enabled:
@@ -637,12 +737,26 @@ class Experiment(Experimento):
                 frame = apply_white_noise(frame, noise_prob=self.background_noise, rng=self._rng)
 
         self._current_input_frame = frame
+        self._update_label()
 
         if self.brain_tensor is not None:
             flat = torch.from_numpy(frame.flatten()).float()
             start = self._input_start_idx
             end = start + len(flat)
             self.brain_tensor.valores[start:end] = flat
+
+    def _update_label(self) -> None:
+        if not self._label_enabled or self._output_n == 0:
+            return
+        if self._is_synthetic_input():
+            n_classes = len([t.strip() for t in self.input_text.split(",")])
+        else:
+            n_classes = len(self.input_text)
+        self._n_classes = n_classes
+        label = torch.zeros(self._output_n)
+        class_idx = self._char_index % self._output_n
+        label[class_idx] = 1.0
+        self._current_label = label
 
     # ── Processing ──
 
@@ -651,12 +765,21 @@ class Experiment(Experimento):
             self._generate_and_project()
         self.brain_tensor.procesar()
 
+        # Label injection: override output neuron tension with ground-truth class signal
+        # so that learn() uses the label as the modulating signal for tissue→output weights.
+        if self._label_enabled and self._current_label is not None and self.brain_tensor is not None:
+            label_tension = self._current_label * 2.0 - 1.0  # [0,1] → [-1,+1]
+            o_start = self._output_start_idx
+            o_end = o_start + self._output_n
+            self.brain_tensor.tensiones[o_start:o_end] = label_tension.to(self.brain_tensor.device)
+
         if self.learning_enabled and self.brain_tensor is not None:
             self.brain_tensor.learn(
                 lr=self.learning_rate,
                 lr_exc=self.lr_exc,
                 lr_inh=self.lr_inh,
                 lr_input=self.lr_input,
+                lr_output=self.lr_output,
                 conn_exclude_range=self._conn_exclude_range,
             )
 
@@ -720,6 +843,46 @@ class Experiment(Experimento):
         if self._current_input_frame is not None:
             return self._current_input_frame.tolist()
         return None
+
+    def get_output_frame(self) -> list[list[float]] | None:
+        if not self.output_enabled or self.brain_tensor is None:
+            return None
+        vals = self.brain_tensor.valores[self._output_start_idx:self._output_start_idx + self._output_n]
+        return vals.reshape(self.output_height, self.output_width).tolist()
+
+    def get_label_frame(self) -> list[list[float]] | None:
+        if not self._label_enabled or self._current_label is None:
+            return None
+        return self._current_label.reshape(self.output_height, self.output_width).tolist()
+
+    def get_region_frames(self) -> dict[str, list[list[float]]]:
+        """Return all region grids keyed by region ID."""
+        result: dict[str, list[list[float]]] = {}
+
+        frame = self.get_frame()
+        if frame:
+            result[self._tissue_id] = [[round(v) for v in row] for row in frame]
+
+        if self._input_id:
+            input_frame = self.get_input_frame()
+            if input_frame is not None:
+                result[self._input_id] = [[round(v) for v in row] for row in input_frame]
+
+        if self._output_id:
+            output_frame = self.get_output_frame()
+            if output_frame is not None:
+                result[self._output_id] = [[round(v, 3) for v in row] for row in output_frame]
+
+        return result
+
+    def get_label_frames(self) -> dict[str, list[list[float]]] | None:
+        """Return label grids keyed by output region ID (None if no label source)."""
+        if not self._output_id or not self._label_enabled:
+            return None
+        label_frame = self.get_label_frame()
+        if label_frame is None:
+            return None
+        return {self._output_id: [[round(v) for v in row] for row in label_frame]}
 
     def get_stats(self) -> dict[str, Any]:
         if self.brain_tensor is None:

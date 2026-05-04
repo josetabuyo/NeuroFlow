@@ -179,6 +179,10 @@ export interface FrameMessage {
   tension_grid?: number[][];
   input_frame?: number[][];
   inspect?: ConnectionsMessage;
+  regions?: Record<string, number[][]>;
+  tissue_id?: string;
+  input_id?: string;
+  labels?: Record<string, number[][]>;
 }
 
 export interface StatusMessage {

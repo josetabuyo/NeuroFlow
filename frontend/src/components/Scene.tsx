@@ -1,4 +1,4 @@
-/** Scene — manages the canvas area with draggable/resizable layer boxes. */
+/** Scene — manages the canvas area with draggable/resizable region boxes. */
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { LayerBox, type BoxLayout } from "./LayerBox";
@@ -6,24 +6,28 @@ import { PixelCanvas } from "./PixelCanvas";
 import { BrushPalette } from "./BrushPalette";
 
 // ── Layout constants ────────────────────────────────────────────────────────
-const TARGET_PX = 360;   // target box side for auto-sizing
-const GAP       = 44;    // gap between boxes
-const MARGIN    = 28;    // min distance from scene edge
-const UNIT_PX   = 8;    // pixel size in 1:1 mode
+const TARGET_PX = 360;
+const GAP       = 44;
+const MARGIN    = 28;
+const UNIT_PX   = 8;
 
-/** Compute pixel-per-neuron size so the grid fits nicely in ~TARGET_PX. */
 function autoPixelSize(gw: number, gh: number): number {
   return Math.max(4, Math.floor(TARGET_PX / Math.max(gw, gh)));
 }
 
 type Boxes = Record<string, BoxLayout>;
 
-// ── Props ───────────────────────────────────────────────────────────────────
 interface SceneProps {
-  // Hidden layer
-  grid: number[][];
-  hiddenW: number;
-  hiddenH: number;
+  /** All region grids keyed by region id, in display order. */
+  regions: Record<string, number[][]>;
+  /** Which region is the interactive tissue (brush / inspect). */
+  tissueId: string;
+  /** Which region shows the learned weight overlay during inspection. */
+  inputId?: string | null;
+  /** Label grids keyed by region id (for output regions with a label source). */
+  labels?: Record<string, number[][]>;
+
+  // Tissue-specific overlays
   tensionGrid?: number[][] | null;
   tensionMode?: boolean;
   connectionMap?: (number | null)[][] | null;
@@ -34,19 +38,13 @@ interface SceneProps {
     total_dendritas: number;
     total_sinapsis: number;
   } | null;
-
-  // Input layer
-  inputFrame?: number[][] | null;
-  inputW?: number;
-  inputH?: number;
-  /** Learned input weights — shown as overlay on input layer when inspecting. */
   inputWeightGrid?: number[][] | null;
 
   // Interaction
   onCellClick: (x: number, y: number) => void;
   onCellDrag: (x: number, y: number) => void;
 
-  // BrushPalette props
+  // BrushPalette
   brushSize: number;
   brushMode: "activate" | "deactivate";
   inspectMode: boolean;
@@ -60,12 +58,14 @@ interface SceneProps {
   isInitializing?: boolean;
 }
 
-// ── Component ───────────────────────────────────────────────────────────────
 export function Scene({
-  grid, hiddenW, hiddenH,
+  regions,
+  tissueId,
+  inputId,
+  labels = {},
   tensionGrid, tensionMode,
   connectionMap, inspectedCell, inspectInfo,
-  inputFrame, inputW = 20, inputH = 20, inputWeightGrid,
+  inputWeightGrid,
   onCellClick, onCellDrag,
   brushSize, brushMode, inspectMode, canInspect,
   onIncrease, onDecrease, onToggleMode, onToggleInspect, onToggleTension,
@@ -76,106 +76,108 @@ export function Scene({
   const [boxes, setBoxes] = useState<Boxes>({});
   const [layoutKey, setLayoutKey] = useState(0);
 
-  const hasInput = !!(inputFrame && inputFrame.length > 0);
   const isInspecting = connectionMap != null;
 
-  // ── Derive actual input dims from the frame ────────────────────────────
-  const realInputW = hasInput ? (inputFrame![0]?.length ?? inputW) : inputW;
-  const realInputH = hasInput ? inputFrame!.length : inputH;
-
-  // ── Initialize layout ──────────────────────────────────────────────────
+  // ── Initialize / re-layout when regions change or layoutKey bumps ────────
   useEffect(() => {
-    if (grid.length === 0 || !containerRef.current) return;
+    const ids = Object.keys(regions);
+    if (ids.length === 0 || !containerRef.current) return;
     const { clientWidth: cw, clientHeight: ch } = containerRef.current;
 
-    const hps = autoPixelSize(hiddenW, hiddenH);
-    const hw = hps * hiddenW;
-    const hh = hps * hiddenH;
+    // Compute natural size per region
+    const sizes = ids.map(id => {
+      const grid = regions[id];
+      const gh = grid.length;
+      const gw = grid[0]?.length ?? 1;
+      const ps = autoPixelSize(gw, gh);
+      return { id, w: ps * gw, h: ps * gh };
+    });
 
-    const ips = autoPixelSize(realInputW, realInputH);
-    const iw = ips * realInputW;
-    const ih = ips * realInputH;
+    const totalW = sizes.reduce((s, r, i) => s + r.w + (i > 0 ? GAP : 0), 0);
+    let x = Math.max(MARGIN, Math.floor((cw - totalW) / 2));
 
-    const totalW = hw + (hasInput ? GAP + iw : 0);
-    const startX = Math.max(MARGIN, Math.floor((cw - totalW) / 2));
-
-    const newBoxes: Boxes = {
-      hidden: {
-        x: startX,
-        y: Math.max(MARGIN, Math.floor((ch - hh) / 2)),
-        w: hw,
-        h: hh,
-      },
-    };
-
-    if (hasInput) {
-      newBoxes.input = {
-        x: startX + hw + GAP,
-        y: Math.max(MARGIN, Math.floor((ch - ih) / 2)),
-        w: iw,
-        h: ih,
+    const newBoxes: Boxes = {};
+    for (const { id, w, h } of sizes) {
+      newBoxes[id] = {
+        x,
+        y: Math.max(MARGIN, Math.floor((ch - h) / 2)),
+        w,
+        h,
       };
+      x += w + GAP;
     }
-
     setBoxes(newBoxes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutKey, grid.length > 0]);
+  }, [layoutKey, Object.keys(regions).join(",")]);
 
-  // When input layer appears for the first time and hidden box is already placed
+  // Position any new region that appears after initial layout
   useEffect(() => {
-    if (!hasInput || !containerRef.current) return;
+    const ids = Object.keys(regions);
+    if (ids.length === 0 || !containerRef.current) return;
+    const { clientHeight: ch } = containerRef.current;
+
     setBoxes(prev => {
-      if (prev.input) return prev; // already positioned
-      const hidden = prev.hidden;
-      if (!hidden) return prev;
-      const { clientHeight: ch } = containerRef.current!;
-      const ips = autoPixelSize(realInputW, realInputH);
-      const iw = ips * realInputW;
-      const ih = ips * realInputH;
-      return {
-        ...prev,
-        input: {
-          x: hidden.x + hidden.w + GAP,
-          y: Math.max(MARGIN, Math.floor((ch - ih) / 2)),
-          w: iw,
-          h: ih,
-        },
-      };
+      const newEntries = ids.filter(id => !prev[id]);
+      if (newEntries.length === 0) return prev;
+
+      const updated = { ...prev };
+      // Place new regions to the right of the rightmost existing box
+      const rightmost = Object.values(prev).reduce(
+        (mx, b) => Math.max(mx, b.x + b.w),
+        MARGIN,
+      );
+      let x = rightmost + GAP;
+      for (const id of newEntries) {
+        const grid = regions[id];
+        const gh = grid.length;
+        const gw = grid[0]?.length ?? 1;
+        const ps = autoPixelSize(gw, gh);
+        const w = ps * gw;
+        const h = ps * gh;
+        updated[id] = {
+          x,
+          y: Math.max(MARGIN, Math.floor((ch - h) / 2)),
+          w,
+          h,
+        };
+        x += w + GAP;
+      }
+      return updated;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasInput]);
+  }, [Object.keys(regions).join(",")]);
 
-  // ── 1:1 mode — resize boxes so each neuron = UNIT_PX px ───────────────
+  // ── 1:1 mode ──────────────────────────────────────────────────────────────
   const toggleOneToOne = useCallback(() => {
     setOneToOne(prev => {
       const next = !prev;
       if (next) {
         setBoxes(b => {
           const n = { ...b };
-          if (n.hidden) n.hidden = { ...n.hidden, w: UNIT_PX * hiddenW, h: UNIT_PX * hiddenH };
-          if (n.input)  n.input  = { ...n.input,  w: UNIT_PX * realInputW, h: UNIT_PX * realInputH };
+          for (const id of Object.keys(n)) {
+            const grid = regions[id];
+            if (!grid) continue;
+            const gh = grid.length;
+            const gw = grid[0]?.length ?? 1;
+            n[id] = { ...n[id], w: UNIT_PX * gw, h: UNIT_PX * gh };
+          }
           return n;
         });
       }
       return next;
     });
-  }, [hiddenW, hiddenH, realInputW, realInputH]);
+  }, [regions]);
 
-  // ── Reset layout ───────────────────────────────────────────────────────
   const resetLayout = useCallback(() => {
     setOneToOne(false);
     setBoxes({});
     setLayoutKey(k => k + 1);
   }, []);
 
-  // ── Box update (move or resize) ────────────────────────────────────────
   const updateBox = useCallback((id: string, layout: BoxLayout) => {
     setBoxes(prev => ({ ...prev, [id]: layout }));
     setOneToOne(false);
   }, []);
-
-  const hiddenBox = boxes.hidden;
-  const inputBox  = boxes.input;
 
   return (
     <div
@@ -188,7 +190,7 @@ export function Scene({
       }}>
         <button
           onClick={toggleOneToOne}
-          title="Toggle 1:1 scale — all neurons the same pixel size"
+          title="Toggle 1:1 scale"
           style={{
             padding: "3px 9px",
             background: oneToOne ? "#4cc9f0" : "#14142a",
@@ -223,82 +225,104 @@ export function Scene({
         </button>
       </div>
 
-      {/* ── Hidden layer box ── */}
-      {hiddenBox && (
-        <LayerBox id="hidden" label="Hidden Layer" layout={hiddenBox} onUpdate={updateBox}>
-          <PixelCanvas
-            grid={grid}
-            tensionGrid={tensionGrid}
-            tensionMode={tensionMode}
-            width={hiddenW}
-            height={hiddenH}
-            connectionMap={connectionMap}
-            inspectedCell={inspectedCell}
-            onCellClick={onCellClick}
-            onCellDrag={onCellDrag}
-          />
-          {/* Inspect info overlay */}
-          {inspectInfo && inspectedCell && (
-            <div style={{
-              position: "absolute", top: 8, right: 8,
-              background: "rgba(10,10,20,0.92)",
-              border: "1px solid #2a2a3e",
-              borderRadius: 6,
-              padding: "8px 12px",
-              fontSize: "0.7rem",
-              fontFamily: "monospace",
-              color: "#ccc",
-              display: "flex", flexDirection: "column", gap: 3,
-              pointerEvents: "none",
-              zIndex: 10,
-            }}>
-              <div style={{ color: "#ffff00", fontWeight: 600, fontSize: "0.75rem", marginBottom: 2 }}>
-                Neuron ({inspectedCell.x}, {inspectedCell.y})
-              </div>
-              <div>
-                <span style={{ color: "#888" }}>Activation: </span>
-                <span style={{ color: inspectInfo.activation > 0.5 ? "#fff" : "#555" }}>
-                  {inspectInfo.activation.toFixed(2)}
-                </span>
-              </div>
-              <div>
-                <span style={{ color: "#888" }}>Tension: </span>
-                <span style={{ color: inspectInfo.tension > 0 ? "#ff8c00" : inspectInfo.tension < 0 ? "#5000ff" : "#555" }}>
-                  {inspectInfo.tension >= 0 ? "+" : ""}{inspectInfo.tension.toFixed(4)}
-                </span>
-              </div>
-              <div style={{ borderTop: "1px solid #1a1a2e", paddingTop: 3, marginTop: 2, color: "#666", fontSize: "0.6rem" }}>
-                {inspectInfo.total_dendritas} dendrites / {inspectInfo.total_sinapsis} synapses
-              </div>
-            </div>
-          )}
-        </LayerBox>
-      )}
+      {/* ── Region boxes ── */}
+      {Object.entries(regions).map(([id, grid]) => {
+        const box = boxes[id];
+        if (!box) return null;
 
-      {/* ── Input layer box ── */}
-      {inputBox && hasInput && (
-        <LayerBox
-          id="input"
-          label="Input Layer"
-          layout={inputBox}
-          onUpdate={updateBox}
-          highlighted={isInspecting}
-        >
-          {/*
-            weightOverlay shows the learned input weights for the inspected neuron
-            as a green overlay — same visual language as the connection map on the hidden layer.
-            Only shown during inspection (isInspecting). Not a duplicate: this is the
-            input-region counterpart of the hidden-layer connectionMap overlay.
-          */}
-          <PixelCanvas
-            grid={inputFrame!}
-            width={realInputW}
-            height={realInputH}
-            weightOverlay={isInspecting ? (inputWeightGrid ?? null) : null}
-            onCellClick={() => {}}
-          />
-        </LayerBox>
-      )}
+        const isTissue = id === tissueId;
+        const isInputRegion = id === inputId;
+        const gh = grid.length;
+        const gw = grid[0]?.length ?? 1;
+        const labelGrid = labels[id];
+
+        return (
+          <LayerBox
+            key={id}
+            id={id}
+            label={id}
+            layout={box}
+            onUpdate={updateBox}
+            highlighted={isInputRegion && isInspecting}
+          >
+            <PixelCanvas
+              grid={isTissue ? grid : grid}
+              tensionGrid={isTissue ? tensionGrid : undefined}
+              tensionMode={isTissue ? tensionMode : undefined}
+              width={gw}
+              height={gh}
+              connectionMap={isTissue ? connectionMap : undefined}
+              inspectedCell={isTissue ? inspectedCell : undefined}
+              weightOverlay={isInputRegion && isInspecting ? (inputWeightGrid ?? null) : null}
+              onCellClick={isTissue ? onCellClick : () => {}}
+              onCellDrag={isTissue ? onCellDrag : undefined}
+            />
+
+            {/* Inspect info overlay on tissue */}
+            {isTissue && inspectInfo && inspectedCell && (
+              <div style={{
+                position: "absolute", top: 8, right: 8,
+                background: "rgba(10,10,20,0.92)",
+                border: "1px solid #2a2a3e",
+                borderRadius: 6,
+                padding: "8px 12px",
+                fontSize: "0.7rem",
+                fontFamily: "monospace",
+                color: "#ccc",
+                display: "flex", flexDirection: "column", gap: 3,
+                pointerEvents: "none",
+                zIndex: 10,
+              }}>
+                <div style={{ color: "#ffff00", fontWeight: 600, fontSize: "0.75rem", marginBottom: 2 }}>
+                  Neuron ({inspectedCell.x}, {inspectedCell.y})
+                </div>
+                <div>
+                  <span style={{ color: "#888" }}>Activation: </span>
+                  <span style={{ color: inspectInfo.activation > 0.5 ? "#fff" : "#555" }}>
+                    {inspectInfo.activation.toFixed(2)}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: "#888" }}>Tension: </span>
+                  <span style={{ color: inspectInfo.tension > 0 ? "#ff8c00" : inspectInfo.tension < 0 ? "#5000ff" : "#555" }}>
+                    {inspectInfo.tension >= 0 ? "+" : ""}{inspectInfo.tension.toFixed(4)}
+                  </span>
+                </div>
+                <div style={{ borderTop: "1px solid #1a1a2e", paddingTop: 3, marginTop: 2, color: "#666", fontSize: "0.6rem" }}>
+                  {inspectInfo.total_dendritas} dendrites / {inspectInfo.total_sinapsis} synapses
+                </div>
+              </div>
+            )}
+
+            {/* Label column overlay for output regions */}
+            {labelGrid && labelGrid.length > 0 && (
+              <div style={{
+                position: "absolute", top: 0, right: -48,
+                display: "flex", flexDirection: "column",
+                gap: 2, zIndex: 5,
+              }}>
+                {labelGrid.map((row, ri) =>
+                  row.map((v, ci) => (
+                    <div key={`lbl-${ri}-${ci}`} style={{
+                      width: 40, height: box.h / (gh || 1) - 2,
+                      minHeight: 16,
+                      background: v > 0.5 ? "#4cc9f080" : "transparent",
+                      border: `1px solid ${v > 0.5 ? "#4cc9f0" : "#2a2a3e"}`,
+                      borderRadius: 2,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "0.5rem", color: v > 0.5 ? "#4cc9f0" : "#333",
+                      fontFamily: "monospace",
+                    }}>
+                      {v > 0.5 ? "▶" : ""}
+                    </div>
+                  ))
+                )}
+                <div style={{ fontSize: "0.45rem", color: "#444", textAlign: "center", marginTop: 2 }}>label</div>
+              </div>
+            )}
+          </LayerBox>
+        );
+      })}
 
       {/* ── BrushPalette ── */}
       <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", zIndex: 30 }}>

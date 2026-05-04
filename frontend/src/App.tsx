@@ -131,8 +131,11 @@ function App() {
     grid,
     tensionGrid,
     tensionMode,
-    inputFrame,
     inputWeightGrid,
+    regions,
+    tissueId,
+    inputId,
+    labels,
     state,
     stats,
     perf,
@@ -191,7 +194,7 @@ function App() {
       .catch(() => {});
   }, []);
 
-  const hasGrid = grid.length > 0;
+  const hasGrid = grid.length > 0 || Object.keys(regions).length > 0;
 
   // Soft config sync: update running experiment when certain nested fields change
   const prevConfigRef = useRef(config);
@@ -395,15 +398,15 @@ function App() {
         >
           {hasGrid ? (
             <Scene
-              grid={grid}
-              hiddenW={getConfigGrid(config).width}
-              hiddenH={getConfigGrid(config).height}
+              regions={regions}
+              tissueId={tissueId}
+              inputId={inputId}
+              labels={labels}
               tensionGrid={tensionGrid}
               tensionMode={tensionMode}
               connectionMap={connectionMap}
               inspectedCell={inspectedCell}
               inspectInfo={inspectInfo}
-              inputFrame={inputFrame}
               inputWeightGrid={inputWeightGrid}
               onCellClick={handleCellClick}
               onCellDrag={handleCellDrag}

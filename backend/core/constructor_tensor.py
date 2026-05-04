@@ -21,7 +21,7 @@ class ConstructorTensor:
     """Compiles a sequential Brain into a parallel BrainTensor."""
 
     @staticmethod
-    def compilar(brain: Brain, device: str = "cpu", max_active_steps: int = 5, refractory_steps: int = 5, adaptation_enabled: bool = False, process_mode: str = "min_vs_max", tension_fn: str = "", tension_fn_param: float = 1.0, tension_fns: list[tuple[str, float]] | None = None) -> BrainTensor:
+    def compilar(brain: Brain, device: str = "cpu", max_active_steps: int = 5, refractory_steps: int = 5, adaptation_enabled: bool = False, process_mode: str = "min_vs_max", tension_fn: str = "", tension_fn_param: float = 1.0, tension_fns: list[tuple[str, float]] | None = None, output_start: int = 0) -> BrainTensor:
         """Convert a sequential Brain into a parallel BrainTensor.
 
         Traverses the Brain ONCE and builds the tensors:
@@ -132,8 +132,15 @@ class ConstructorTensor:
         src_is_input = mascara_entrada[src_safe]  # [NR, max_syn]
 
         es_input_syn = src_is_input & mascara_valida           # source is NeuronaEntrada
-        es_exc_syn   = (~src_is_input) & (pesos_dendrita >= 0) & mascara_valida
-        es_inh_syn   = (~src_is_input) & (pesos_dendrita <  0) & mascara_valida
+        # Output synapses: destination neuron index >= output_start (tissue→output)
+        is_output_dest = torch.zeros(NR, max_syn, dtype=torch.bool)
+        if output_start > 0 and output_start < NR:
+            is_output_dest[output_start:] = mascara_valida[output_start:]
+        es_output_syn = is_output_dest
+        # Recurrent exc/inh: non-input source, not output destination
+        not_special = ~src_is_input & ~is_output_dest
+        es_exc_syn = not_special & (pesos_dendrita >= 0) & mascara_valida
+        es_inh_syn = not_special & (pesos_dendrita <  0) & mascara_valida
 
         return BrainTensor(
             valores=valores,
@@ -157,4 +164,5 @@ class ConstructorTensor:
             es_exc_syn=es_exc_syn,
             es_inh_syn=es_inh_syn,
             es_input_syn=es_input_syn,
+            es_output_syn=es_output_syn,
         )
