@@ -261,6 +261,11 @@ class Experiment(Experimento):
         self.lr_output: float = 0.0
         self._conn_exclude_range: tuple[float, float] | None = None
 
+        # Region IDs (set during setup)
+        self._tissue_id: str = "tissue"
+        self._input_id: str | None = None
+        self._output_id: str | None = None
+
         # Output region state
         self.output_enabled: bool = False
         self.output_width: int = 0
@@ -963,14 +968,27 @@ class Experiment(Experimento):
 
         return stats
 
-    def inspect(self, x: int, y: int) -> dict[str, Any]:
-        """Return connection weights from brain_tensor (live, trained weights)."""
+    def inspect(self, x: int, y: int, region_id: str | None = None) -> dict[str, Any]:
+        """Return connection weights for any neuron in any region."""
+        effective_region = region_id or self._tissue_id
+
         if self.brain_tensor is None:
             result = super().inspect(x, y)
             result["input_weight_grid"] = None
+            result["region_id"] = effective_region
             return result
 
-        neuron_idx = y * self.width + x
+        # Resolve global neuron index and whether this is a same-region inspection
+        if effective_region == self._output_id and self.output_enabled:
+            neuron_idx = self._output_start_idx + y * self.output_width + x
+            is_same_region_as_tissue = False
+        elif effective_region == self._input_id and self.input_enabled:
+            neuron_idx = self._input_start_idx + y * self.input_resolution + x
+            is_same_region_as_tissue = False
+        else:
+            neuron_idx = y * self.width + x
+            is_same_region_as_tissue = True
+
         n_input = (self.input_resolution * self.input_resolution) if self.input_enabled else 0
         input_start = self._input_start_idx
         input_end = input_start + n_input
@@ -1007,14 +1025,12 @@ class Experiment(Experimento):
         for row in range(self.height):
             fila: list[float | None] = []
             for col in range(self.width):
-                if col == x and row == y:
+                # Mark self only when inspecting a tissue neuron
+                if is_same_region_as_tissue and col == x and row == y:
                     fila.append(999)
                 else:
                     idx = row * self.width + col
-                    if idx in tissue_pesos:
-                        fila.append(tissue_pesos[idx])
-                    else:
-                        fila.append(None)
+                    fila.append(tissue_pesos.get(idx))
             weight_grid.append(fila)
 
         activation = self.brain_tensor.valores[neuron_idx].item()
@@ -1024,6 +1040,7 @@ class Experiment(Experimento):
             "type": "connections",
             "x": x,
             "y": y,
+            "region_id": effective_region,
             "activation": round(activation, 4),
             "tension": round(tension, 4),
             "total_dendritas": total_dendritas,
@@ -1031,7 +1048,7 @@ class Experiment(Experimento):
             "weight_grid": weight_grid,
         }
 
-        if self.input_enabled:
+        if self.input_enabled and n_input > 0:
             res = self.input_resolution
             input_grid: list[list[float]] = []
             for r in range(res):

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Dendrites top-left -->
+  <line x1="50" y1="50" x2="20" y2="20" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="20" y1="20" x2="8" y2="10" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="20" y1="20" x2="12" y2="30" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Dendrites top-right -->
+  <line x1="50" y1="50" x2="80" y2="22" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="80" y1="22" x2="92" y2="12" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="80" y1="22" x2="88" y2="32" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Dendrite left -->
+  <line x1="50" y1="50" x2="18" y2="50" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="18" y1="50" x2="6" y2="44" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="18" y1="50" x2="6" y2="56" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Axon going right-down -->
+  <line x1="50" y1="50" x2="75" y2="75" stroke="#7c3aed" stroke-width="3" stroke-linecap="round"/>
+  <line x1="75" y1="75" x2="92" y2="82" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/>
+  <line x1="75" y1="75" x2="82" y2="92" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Soma (cell body) -->
+  <circle cx="50" cy="50" r="13" fill="#7c3aed" opacity="0.9"/>
+  <circle cx="50" cy="50" r="7" fill="#c4b5fd"/>
+
+  <!-- Glow effect -->
+  <circle cx="50" cy="50" r="13" fill="none" stroke="#c4b5fd" stroke-width="1.5" opacity="0.5"/>
+</svg>

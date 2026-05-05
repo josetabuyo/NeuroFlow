@@ -29,6 +29,7 @@ class ExperimentSession:
         self.steps_per_tick: int = 1
         self._inspect_x: int | None = None
         self._inspect_y: int | None = None
+        self._inspect_region_id: str | None = None
 
     async def send(self, data: dict[str, Any]) -> None:
         """Send JSON data to the client."""
@@ -168,13 +169,15 @@ class ExperimentSession:
         y = message.get("y", 0)
         self._inspect_x = x
         self._inspect_y = y
-        result = self.experiment.inspect(x, y)
+        self._inspect_region_id = message.get("region_id")
+        result = self.experiment.inspect(x, y, region_id=self._inspect_region_id)
         await self.send(result)
 
     async def _handle_uninspect(self, _message: dict[str, Any]) -> None:
         """Stop live inspection."""
         self._inspect_x = None
         self._inspect_y = None
+        self._inspect_region_id = None
 
     async def _handle_reconnect(self, message: dict[str, Any]) -> None:
         """Full restart with new config."""
@@ -307,6 +310,7 @@ class ExperimentSession:
         if self._inspect_x is not None and self._inspect_y is not None:
             inspect_data = self.experiment.inspect(
                 self._inspect_x, self._inspect_y,
+                region_id=self._inspect_region_id,
             )
             msg["inspect"] = inspect_data
 

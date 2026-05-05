@@ -37,6 +37,7 @@ interface UseExperimentReturn {
   inspectMode: boolean;
   connectionMap: (number | null)[][] | null;
   inspectedCell: { x: number; y: number } | null;
+  inspectedRegionId: string | null;
   inspectInfo: {
     activation: number;
     tension: number;
@@ -54,7 +55,7 @@ interface UseExperimentReturn {
   play: (fps?: number, stepsPerTick?: number) => void;
   pause: () => void;
   reset: () => void;
-  inspect: (x: number, y: number) => void;
+  inspect: (x: number, y: number, regionId?: string) => void;
   toggleInspectMode: () => void;
   toggleTensionMode: () => void;
   increaseBrushSize: () => void;
@@ -70,6 +71,7 @@ export function useExperiment(): UseExperimentReturn {
   const [inspectMode, setInspectMode] = useState(false);
   const [connectionMap, setConnectionMap] = useState<(number | null)[][] | null>(null);
   const [inspectedCell, setInspectedCell] = useState<{ x: number; y: number } | null>(null);
+  const [inspectedRegionId, setInspectedRegionId] = useState<string | null>(null);
   const [inspectInfo, setInspectInfo] = useState<{
     activation: number;
     tension: number;
@@ -126,6 +128,7 @@ export function useExperiment(): UseExperimentReturn {
           if (msg.inspect) {
             setConnectionMap(msg.inspect.weight_grid);
             setInspectedCell({ x: msg.inspect.x, y: msg.inspect.y });
+            setInspectedRegionId(msg.inspect.region_id ?? null);
             setInspectInfo({
               activation: msg.inspect.activation,
               tension: msg.inspect.tension,
@@ -141,6 +144,7 @@ export function useExperiment(): UseExperimentReturn {
         case "connections":
           setConnectionMap(msg.weight_grid);
           setInspectedCell({ x: msg.x, y: msg.y });
+          setInspectedRegionId(msg.region_id ?? null);
           setInspectInfo({
             activation: msg.activation,
             tension: msg.tension,
@@ -228,6 +232,7 @@ export function useExperiment(): UseExperimentReturn {
   const reset = useCallback(() => {
     setConnectionMap(null);
     setInspectedCell(null);
+    setInspectedRegionId(null);
     setInspectInfo(null);
     setState("initializing");
     send({ action: "reset" });
@@ -241,8 +246,8 @@ export function useExperiment(): UseExperimentReturn {
   );
 
   const inspect = useCallback(
-    (x: number, y: number) => {
-      send({ action: "inspect", x, y });
+    (x: number, y: number, regionId?: string) => {
+      send({ action: "inspect", x, y, ...(regionId ? { region_id: regionId } : {}) });
     },
     [send]
   );
@@ -264,6 +269,7 @@ export function useExperiment(): UseExperimentReturn {
       if (prev) {
         setConnectionMap(null);
         setInspectedCell(null);
+        setInspectedRegionId(null);
         setInspectInfo(null);
         setInputWeightGrid(null);
         setInputWeightDims(null);
@@ -298,6 +304,7 @@ export function useExperiment(): UseExperimentReturn {
     inspectMode,
     connectionMap,
     inspectedCell,
+    inspectedRegionId,
     inspectInfo,
     brushSize,
     brushMode,

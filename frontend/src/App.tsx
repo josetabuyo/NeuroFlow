@@ -144,6 +144,7 @@ function App() {
     inspectMode,
     connectionMap,
     inspectedCell,
+    inspectedRegionId,
     inspectInfo,
     brushSize,
     brushMode,
@@ -262,14 +263,14 @@ function App() {
   );
 
   const handleCellClick = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, regionId?: string) => {
       if (inspectMode) {
-        inspect(x, y);
-      } else {
+        inspect(x, y, regionId);
+      } else if (!regionId || regionId === tissueId) {
         applyBrush(x, y);
       }
     },
-    [inspectMode, inspect, applyBrush]
+    [inspectMode, inspect, applyBrush, tissueId]
   );
 
   const handleCellDrag = useCallback(
@@ -406,6 +407,7 @@ function App() {
               tensionMode={tensionMode}
               connectionMap={connectionMap}
               inspectedCell={inspectedCell}
+              inspectedRegionId={inspectedRegionId}
               inspectInfo={inspectInfo}
               inputWeightGrid={inputWeightGrid}
               onCellClick={handleCellClick}

@@ -199,6 +199,7 @@ export interface ConnectionsMessage {
   type: "connections";
   x: number;
   y: number;
+  region_id?: string;
   activation: number;
   tension: number;
   total_dendritas: number;

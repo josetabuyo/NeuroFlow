@@ -34,6 +34,7 @@ interface SceneProps {
   tensionMode?: boolean;
   connectionMap?: (number | null)[][] | null;
   inspectedCell?: { x: number; y: number } | null;
+  inspectedRegionId?: string | null;
   inspectInfo?: {
     activation: number;
     tension: number;
@@ -43,7 +44,7 @@ interface SceneProps {
   inputWeightGrid?: number[][] | null;
 
   // Interaction
-  onCellClick: (x: number, y: number) => void;
+  onCellClick: (x: number, y: number, regionId?: string) => void;
   onCellDrag: (x: number, y: number) => void;
 
   // BrushPalette
@@ -66,7 +67,7 @@ export function Scene({
   inputId,
   labels = {},
   tensionGrid, tensionMode,
-  connectionMap, inspectedCell, inspectInfo,
+  connectionMap, inspectedCell, inspectedRegionId, inspectInfo,
   inputWeightGrid,
   onCellClick, onCellDrag,
   brushSize, brushMode, inspectMode, canInspect,
@@ -234,6 +235,7 @@ export function Scene({
 
         const isTissue = id === tissueId;
         const isInputRegion = id === inputId;
+        const isInspectedRegion = id === inspectedRegionId;
         const gh = grid.length;
         const gw = grid[0]?.length ?? 1;
         const labelGrid = labels[id];
@@ -245,23 +247,23 @@ export function Scene({
             label={id}
             layout={box}
             onUpdate={updateBox}
-            highlighted={isInputRegion && isInspecting}
+            highlighted={isInputRegion && inputWeightGrid != null}
           >
             <PixelCanvas
-              grid={isTissue ? grid : grid}
+              grid={grid}
               tensionGrid={isTissue ? tensionGrid : undefined}
               tensionMode={isTissue ? tensionMode : undefined}
               width={gw}
               height={gh}
               connectionMap={isTissue ? connectionMap : undefined}
-              inspectedCell={isTissue ? inspectedCell : undefined}
-              weightOverlay={isInputRegion && isInspecting ? (inputWeightGrid ?? null) : null}
-              onCellClick={isTissue ? onCellClick : () => {}}
+              inspectedCell={isInspectedRegion ? inspectedCell : undefined}
+              weightOverlay={isInputRegion ? (inputWeightGrid ?? null) : null}
+              onCellClick={(cx, cy) => onCellClick(cx, cy, id)}
               onCellDrag={isTissue ? onCellDrag : undefined}
             />
 
-            {/* Inspect info overlay on tissue */}
-            {isTissue && inspectInfo && inspectedCell && (
+            {/* Inspect info overlay on the inspected region's box */}
+            {isInspectedRegion && inspectInfo && inspectedCell && (
               <div style={{
                 position: "absolute", top: 8, right: 8,
                 background: "rgba(10,10,20,0.92)",
