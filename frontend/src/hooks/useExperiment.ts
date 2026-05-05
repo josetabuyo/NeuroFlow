@@ -26,6 +26,7 @@ interface UseExperimentReturn {
   inputWeightGrid: number[][] | null;
   inputWeightDims: { width: number; height: number } | null;
   regions: Record<string, number[][]>;
+  tensionRegions: Record<string, number[][]>;
   tissueId: string;
   inputId: string | null;
   labels: Record<string, number[][]>;
@@ -87,6 +88,7 @@ export function useExperiment(): UseExperimentReturn {
   const [inputWeightGrid, setInputWeightGrid] = useState<number[][] | null>(null);
   const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
   const [regions, setRegions] = useState<Record<string, number[][]>>({});
+  const [tensionRegions, setTensionRegions] = useState<Record<string, number[][]>>({});
   const [tissueId, setTissueId] = useState<string>("tissue");
   const [inputId, setInputId] = useState<string | null>(null);
   const [labels, setLabels] = useState<Record<string, number[][]>>({});
@@ -122,6 +124,7 @@ export function useExperiment(): UseExperimentReturn {
           setTensionGrid(msg.tension_grid ?? null);
           setInputFrame(msg.input_frame ?? null);
           if (msg.regions) setRegions(msg.regions);
+          if (msg.tension_regions) setTensionRegions(msg.tension_regions);
           if (msg.tissue_id) setTissueId(msg.tissue_id);
           if (msg.input_id !== undefined) setInputId(msg.input_id ?? null);
           setLabels(msg.labels ?? {});
@@ -293,6 +296,7 @@ export function useExperiment(): UseExperimentReturn {
     inputWeightGrid,
     inputWeightDims,
     regions,
+    tensionRegions,
     tissueId,
     inputId,
     labels,

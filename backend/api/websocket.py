@@ -296,6 +296,10 @@ class ExperimentSession:
             if self.experiment._input_id:
                 msg["input_id"] = self.experiment._input_id
 
+        tension_regions = self.experiment.get_region_tension_frames()
+        if tension_regions:
+            msg["tension_regions"] = tension_regions
+
         label_frames = self.experiment.get_label_frames()
         if label_frames:
             msg["labels"] = label_frames

@@ -888,6 +888,28 @@ class Experiment(Experimento):
 
         return result
 
+    def get_region_tension_frames(self) -> dict[str, list[list[float]]]:
+        """Return tension grids for all regions that have computed tensions, in config order."""
+        if self.brain_tensor is None:
+            return {}
+
+        raw: dict[str, list[list[float]]] = {}
+
+        n_tissue = self.width * self.height
+        t = self.brain_tensor.tensiones[:n_tissue]
+        raw[self._tissue_id] = [[round(v, 3) for v in row] for row in t.reshape(self.height, self.width).tolist()]
+
+        if self._output_id and self.output_enabled:
+            t_out = self.brain_tensor.tensiones[self._output_start_idx:self._output_start_idx + self._output_n]
+            raw[self._output_id] = [[round(v, 3) for v in row] for row in t_out.reshape(self.output_height, self.output_width).tolist()]
+
+        result: dict[str, list[list[float]]] = {}
+        for region in self._config.get("regions", []):
+            rid = region.get("id")
+            if rid and rid in raw:
+                result[rid] = raw[rid]
+        return result
+
     def get_label_frames(self) -> dict[str, list[list[float]]] | None:
         """Return label grids keyed by output region ID (None if no label source)."""
         if not self._output_id or not self._label_enabled:

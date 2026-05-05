@@ -1455,3 +1455,76 @@ INFO:     Finished server process [86522]
 INFO:     Started server process [75544]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+INFO:     127.0.0.1:52712 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52713 - "GET /api/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52715 - "WebSocket /ws/experiment" [accepted]
+INFO:     127.0.0.1:52712 - "GET /api/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52717 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:52720 - "WebSocket /ws/experiment" [accepted]
+INFO:     connection open
+INFO:api.websocket:WebSocket disconnected
+INFO:     connection closed
+INFO:     127.0.0.1:52713 - "GET /api/templates/ascii_som/config/history?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52712 - "GET /api/templates/ascii_som/config/history?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52722 - "POST /api/preview-wiring HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52753 - "GET /api/templates/supervised_classifier/config/history?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52756 - "POST /api/preview-wiring HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52753 - "OPTIONS /api/templates/supervised_classifier/config?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52753 - "POST /api/templates/supervised_classifier/config?preset=_default HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'experiments/experiment.py'. Reloading...
+INFO:     Shutting down
+INFO:api.websocket:WebSocket disconnected
+INFO:     connection closed
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [75544]
+INFO:     Started server process [93213]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api/websocket.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [93213]
+INFO:     Started server process [93234]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:53540 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53541 - "GET /api/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53540 - "GET /api/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53543 - "WebSocket /ws/experiment" [accepted]
+INFO:     127.0.0.1:53545 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     127.0.0.1:53548 - "WebSocket /ws/experiment" [accepted]
+INFO:     127.0.0.1:53540 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53550 - "GET /api/metadata HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:api.websocket:WebSocket disconnected
+INFO:     connection closed
+INFO:     127.0.0.1:53545 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53540 - "GET /api/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "WebSocket /ws/experiment" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53541 - "GET /api/templates/ascii_som/config/history?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53550 - "GET /api/templates/ascii_som/config/history?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53541 - "GET /api/templates/ascii_som/config/history?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53557 - "POST /api/preview-wiring HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53541 - "GET /api/templates/ascii_som/config/history?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53559 - "POST /api/preview-wiring HTTP/1.1" 200 OK
+INFO:api.websocket:WebSocket disconnected
+INFO:     connection closed
+INFO:api.websocket:WebSocket disconnected
+INFO:     connection closed
+INFO:     127.0.0.1:53552 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53582 - "GET /api/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53552 - "GET /api/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53584 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53586 - "WebSocket /ws/experiment" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53582 - "GET /api/templates/ascii_som/config/history?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53582 - "GET /api/templates/ascii_som/config/history?preset=_default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53589 - "WebSocket /ws/experiment" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53591 - "POST /api/preview-wiring HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53593 - "POST /api/preview-wiring HTTP/1.1" 200 OK

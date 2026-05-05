@@ -22,6 +22,8 @@ type Boxes = Record<string, BoxLayout>;
 interface SceneProps {
   /** All region grids keyed by region id, in display order. */
   regions: Record<string, number[][]>;
+  /** Tension grids keyed by region id — shown when tensionMode is on. */
+  tensionRegions?: Record<string, number[][]>;
   /** Which region is the interactive tissue (brush / inspect). */
   tissueId: string;
   /** Which region shows the learned weight overlay during inspection. */
@@ -29,8 +31,6 @@ interface SceneProps {
   /** Label grids keyed by region id (for output regions with a label source). */
   labels?: Record<string, number[][]>;
 
-  // Tissue-specific overlays
-  tensionGrid?: number[][] | null;
   tensionMode?: boolean;
   connectionMap?: (number | null)[][] | null;
   inspectedCell?: { x: number; y: number } | null;
@@ -63,10 +63,11 @@ interface SceneProps {
 
 export function Scene({
   regions,
+  tensionRegions = {},
   tissueId,
   inputId,
   labels = {},
-  tensionGrid, tensionMode,
+  tensionGrid: _tensionGrid, tensionMode,
   connectionMap, inspectedCell, inspectedRegionId, inspectInfo,
   inputWeightGrid,
   onCellClick, onCellDrag,
@@ -251,8 +252,8 @@ export function Scene({
           >
             <PixelCanvas
               grid={grid}
-              tensionGrid={isTissue ? tensionGrid : undefined}
-              tensionMode={isTissue ? tensionMode : undefined}
+              tensionGrid={tensionRegions[id] ?? undefined}
+              tensionMode={tensionMode}
               width={gw}
               height={gh}
               connectionMap={isTissue ? connectionMap : undefined}

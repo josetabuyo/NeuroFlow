@@ -133,6 +133,7 @@ function App() {
     tensionMode,
     inputWeightGrid,
     regions,
+    tensionRegions,
     tissueId,
     inputId,
     labels,
@@ -400,10 +401,10 @@ function App() {
           {hasGrid ? (
             <Scene
               regions={regions}
+              tensionRegions={tensionRegions}
               tissueId={tissueId}
               inputId={inputId}
               labels={labels}
-              tensionGrid={tensionGrid}
               tensionMode={tensionMode}
               connectionMap={connectionMap}
               inspectedCell={inspectedCell}

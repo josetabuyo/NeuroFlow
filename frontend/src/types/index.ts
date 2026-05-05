@@ -180,6 +180,7 @@ export interface FrameMessage {
   input_frame?: number[][];
   inspect?: ConnectionsMessage;
   regions?: Record<string, number[][]>;
+  tension_regions?: Record<string, number[][]>;
   tissue_id?: string;
   input_id?: string;
   labels?: Record<string, number[][]>;
