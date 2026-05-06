@@ -209,6 +209,45 @@ def _to_canonical(config: dict[str, Any]) -> dict[str, Any]:
     return canonical
 
 
+def _apply_mask_to_neuron_grid(
+    neurons: list[list["Neurona"]],
+    mask: list[dict],
+    random_weights: bool,
+) -> None:
+    """Apply a wiring mask spatially to a 2D grid of neurons.
+
+    Uses toroidal wrap-around for offsets, matching aplicar_mascara_2d behaviour.
+    """
+    height = len(neurons)
+    width = len(neurons[0]) if neurons else 0
+    if not width or not height:
+        return
+    for y in range(height):
+        for x in range(width):
+            dest = neurons[y][x]
+            for dend_def in mask:
+                peso_d: float = dend_def["peso_dendrita"]
+                offsets: list[tuple[int, int]] = dend_def["offsets"]
+                pesos_s: list[float] | None = dend_def.get("pesos_sinapsis")
+                noise_amp = dend_def.get("random_noise")
+                sinapsis_list: list[Sinapsis] = []
+                for i, (dx, dy) in enumerate(offsets):
+                    nx = (x + dx) % width
+                    ny = (y + dy) % height
+                    src = neurons[ny][nx]
+                    base = pesos_s[i] if pesos_s is not None else 1.0
+                    if not random_weights:
+                        peso = base
+                    elif noise_amp is not None:
+                        scale = random.uniform(1.0 - noise_amp, 1.0) if noise_amp > 0 else 1.0
+                        peso = base * scale
+                    else:
+                        peso = base * random.uniform(0.2, 1.0)
+                    sinapsis_list.append(Sinapsis(neurona_entrante=src, peso=peso))
+                if sinapsis_list:
+                    dest.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=peso_d))
+
+
 class Experiment(Experimento):
     """Unified NeuroFlow experiment with opt-in features."""
 
@@ -314,11 +353,11 @@ class Experiment(Experimento):
         )
         output_region = next(
             (r for r in config["regions"]
-             if "wiring" not in r and r.get("source", {}).get("type") == "label"),
+             if r is not tissue_cfg and r.get("source", {}).get("type") == "label"),
             None,
         ) or next(
             (r for r in config["regions"]
-             if "wiring" not in r and "source" not in r and r.get("id") == "output"),
+             if r is not tissue_cfg and "source" not in r and r.get("id") == "output"),
             None,
         )
 
@@ -347,6 +386,7 @@ class Experiment(Experimento):
         wiring = tissue_cfg["wiring"]
         mask_id: str = wiring.get("mask", "")
         self.process_mode = wiring.get("process_mode", "min_vs_max")
+        self.tissue_umbral: float = float(wiring.get("umbral", 0.0))
 
         self.dendrite_exc_weight = wiring.get("dendrite_exc_weight")
         self.dendrite_inh_weight = wiring.get("dendrite_inh_weight")
@@ -426,12 +466,14 @@ class Experiment(Experimento):
             self._output_n = self.output_width * self.output_height
             out_src = output_region.get("source", {})
             self._label_enabled = out_src.get("type") == "label"
+            self.output_umbral: float = float(output_region.get("umbral", 0.0))
             self.output_enabled = True
         else:
             self.output_enabled = False
             self.output_width = 0
             self.output_height = 0
             self._output_n = 0
+            self.output_umbral = 0.0
             self._label_enabled = False
 
         # ── Noise (opt-in) — lives in source because it affects input rendering ──
@@ -514,7 +556,7 @@ class Experiment(Experimento):
             for y in range(self.height):
                 for x in range(self.width):
                     tissue_neurons.append(
-                        Neurona(id=Constructor.key_by_coord(x, y), umbral=0.0)
+                        Neurona(id=Constructor.key_by_coord(x, y), umbral=self.tissue_umbral)
                     )
 
             input_neurons: list[Neurona] = []
@@ -525,7 +567,7 @@ class Experiment(Experimento):
             output_neurons: list[Neurona] = []
             if self.output_enabled:
                 for idx in range(self._output_n):
-                    output_neurons.append(Neurona(id=f"out_{idx}", umbral=0.0))
+                    output_neurons.append(Neurona(id=f"out_{idx}", umbral=self.output_umbral))
 
             all_neurons: list[Neurona] = tissue_neurons + input_neurons + output_neurons
             self.brain = Brain(neuronas=all_neurons)
@@ -624,6 +666,25 @@ class Experiment(Experimento):
                     for t_n in sampled
                 ]
                 out_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=out_weight))
+
+        # ── Output region internal wiring (opt-in) ──
+        # Add "wiring": {"deamon": {...}} to the output region config to wire the output
+        # neurons among themselves. Uses the same deamon/mask system as the tissue region.
+        # Remove the "wiring" key from the output region to disable completely.
+        out_wiring_cfg = output_region.get("wiring") if output_region else None
+        if out_wiring_cfg and self.output_enabled and self._output_id in self.regiones:
+            if "deamon" in out_wiring_cfg:
+                out_mask = compile_deamon_wiring(out_wiring_cfg["deamon"])
+                out_random_weights = not out_wiring_cfg["deamon"].get("fixed", False)
+            else:
+                out_mask = get_mask(out_wiring_cfg["mask"])
+                out_random_weights = get_random_weights(out_wiring_cfg["mask"])
+            output_neuron_list = list(self.regiones[self._output_id].neuronas.values())
+            out_grid = [
+                [output_neuron_list[y * self.output_width + x] for x in range(self.output_width)]
+                for y in range(self.output_height)
+            ]
+            _apply_mask_to_neuron_grid(out_grid, out_mask, out_random_weights)
 
         # ── Initialization ──
         if is_wolfram:
@@ -1116,6 +1177,12 @@ class Experiment(Experimento):
                     break
 
         if not needs_reconnect:
+            old_out = next((r for r in old_config.get("regions", []) if r.get("id") == self._output_id), {})
+            new_out = next((r for r in new_config.get("regions", []) if r.get("id") == self._output_id), {})
+            if old_out.get("wiring") != new_out.get("wiring"):
+                needs_reconnect = True
+
+        if not needs_reconnect:
             old_has_source = any("source" in r for r in old_config.get("regions", []))
             new_has_source = any("source" in r for r in new_config.get("regions", []))
             if old_has_source != new_has_source:
@@ -1133,31 +1200,78 @@ class Experiment(Experimento):
             return False
 
         # ── Soft updates ──
+        # Resolve connections the same way setup() does
+        new_input_conn = next(
+            (c for c in new_connections if c.get("to") == self._tissue_id),
+            new_connections[0] if new_connections else None,
+        )
+        new_output_conn = next(
+            (c for c in new_connections
+             if c.get("from") == self._tissue_id and c.get("to") != self._tissue_id),
+            None,
+        )
         new_wiring = new_tissue.get("wiring", {})
 
-        if "process_mode" in new_wiring:
-            self.process_mode = new_wiring["process_mode"]
-            if self.brain_tensor is not None:
-                self.brain_tensor.process_mode = self.process_mode
+        # process_mode — always sync (handles removal → revert to default)
+        self.process_mode = new_wiring.get("process_mode", "min_vs_max")
+        self.brain_tensor.process_mode = self.process_mode
 
-        if "tension_function" in new_wiring:
-            tf = new_wiring["tension_function"]
-            if tf and isinstance(tf, dict):
-                self._tension_fns = [(k, float(v)) for k, v in tf.items()]
-            else:
-                self._tension_fns = []
-            if self.brain_tensor is not None:
-                self.brain_tensor.tension_fns = self._tension_fns
+        # tension_function — always sync
+        tf = new_wiring.get("tension_function")
+        if tf and isinstance(tf, dict):
+            self._tension_fns = [(k, float(v)) for k, v in tf.items()]
+        else:
+            self._tension_fns = []
+        self.brain_tensor.tension_fns = self._tension_fns
 
+        # umbral tissue — soft update tensor in place
+        new_tissue_umbral = float(new_wiring.get("umbral", 0.0))
+        if new_tissue_umbral != self.tissue_umbral:
+            self.tissue_umbral = new_tissue_umbral
+            n_tissue = self.width * self.height
+            self.brain_tensor.umbrales[:n_tissue] = new_tissue_umbral
+
+        # umbral output — soft update tensor in place
+        new_out_region = next(
+            (r for r in new_config.get("regions", []) if r.get("id") == self._output_id), {}
+        )
+        new_output_umbral = float(new_out_region.get("umbral", 0.0))
+        if new_output_umbral != self.output_umbral and self.output_enabled:
+            self.output_umbral = new_output_umbral
+            o_start = self._output_start_idx
+            self.brain_tensor.umbrales[o_start:o_start + self._output_n] = new_output_umbral
+
+        # learning rates — canonical format: connection.learning.rate
         wiring_lr = new_wiring.get("learning_rate")
-        conn_lr = new_conn.get("learning_rate")
+        conn_learning = new_input_conn.get("learning") if new_input_conn else None
+        if isinstance(conn_learning, dict):
+            conn_lr: float | None = float(conn_learning.get("rate", 0.0))
+            er = conn_learning.get("exclude_range")
+            self._conn_exclude_range = (float(er[0]), float(er[1])) if er else None
+        else:
+            conn_lr = float(new_input_conn.get("learning_rate", 0.0)) if new_input_conn else None
+            self._conn_exclude_range = None
+        out_learning = new_output_conn.get("learning") if new_output_conn else None
+        if isinstance(out_learning, dict):
+            out_lr: float = float(out_learning.get("rate", 0.0))
+        else:
+            out_lr = float(new_output_conn.get("learning_rate", 0.0)) if new_output_conn else 0.0
         self.learning_rate = 1.0
         self.lr_exc = float(wiring_lr) if wiring_lr is not None else 0.0
         self.lr_inh = float(wiring_lr) if wiring_lr is not None else 0.0
         self.lr_input = float(conn_lr) if conn_lr is not None else 0.0
-        self.learning_enabled = self.lr_exc > 0 or self.lr_inh > 0 or self.lr_input > 0
+        self.lr_output = out_lr
+        self.learning_enabled = (
+            self.lr_exc > 0 or self.lr_inh > 0 or self.lr_input > 0 or self.lr_output > 0
+        )
 
-        new_noise = new_tissue.get("noise")
+        # noise — canonical: lives in source_region["source"]["noise"]
+        new_src_region = next(
+            (r for r in new_config.get("regions", [])
+             if "source" in r and r["source"].get("type") != "label"),
+            None,
+        )
+        new_noise = new_src_region["source"].get("noise") if new_src_region else None
         if new_noise:
             self.background_noise = float(new_noise.get("background", 0.0))
             self.shift_noise = bool(new_noise.get("shift", False))
@@ -1167,53 +1281,51 @@ class Experiment(Experimento):
             self.shift_noise = False
             self.inter_char_noise = False
 
+        # spiking
         new_spiking = new_tissue.get("spiking")
         if new_spiking:
             self.adaptation_enabled = True
             self.up_ticks = int(new_spiking.get("up_ticks", self.up_ticks))
             self.down_ticks = int(new_spiking.get("down_ticks", self.down_ticks))
-            if self.brain_tensor is not None:
-                self.brain_tensor.adaptation_enabled = True
-                self.brain_tensor.max_active_steps = self.up_ticks
-                self.brain_tensor.refractory_steps = self.down_ticks
+            self.brain_tensor.adaptation_enabled = True
+            self.brain_tensor.max_active_steps = self.up_ticks
+            self.brain_tensor.refractory_steps = self.down_ticks
         else:
             self.adaptation_enabled = False
-            if self.brain_tensor is not None:
-                self.brain_tensor.adaptation_enabled = False
+            self.brain_tensor.adaptation_enabled = False
 
-        if self.input_enabled:
-            new_src = next((r for r in new_config.get("regions", []) if "source" in r), None)
-            if new_src:
-                source = new_src["source"]
+        # input text / font / frames_per_char
+        if self.input_enabled and new_src_region:
+            source = new_src_region["source"]
 
-                font_changed = False
-                if "font" in source and source["font"] != self._font_id:
-                    self._font_id = source["font"]
-                    font_changed = True
-                if "font_size" in source and source["font_size"] != self._font_size:
-                    self._font_size = int(source["font_size"])
-                    font_changed = True
+            font_changed = False
+            if "font" in source and source["font"] != self._font_id:
+                self._font_id = source["font"]
+                font_changed = True
+            if "font_size" in source and source["font_size"] != self._font_size:
+                self._font_size = int(source["font_size"])
+                font_changed = True
 
-                text_changed = False
-                if "text" in source:
-                    new_text = source["text"] or ""
-                    if new_text != self.input_text:
-                        self.input_text = new_text
-                        text_changed = True
-                        self._char_index = 0
-                        self._frame_in_char = 0
-                        self._in_gap = False
+            text_changed = False
+            if "text" in source:
+                new_text = source["text"] or ""
+                if new_text != self.input_text:
+                    self.input_text = new_text
+                    text_changed = True
+                    self._char_index = 0
+                    self._frame_in_char = 0
+                    self._in_gap = False
 
-                if "frames_per_char" in source:
-                    self.frames_per_char = max(1, int(source["frames_per_char"]))
+            if "frames_per_char" in source:
+                self.frames_per_char = max(1, int(source["frames_per_char"]))
 
-                if (font_changed or text_changed) and not self._is_synthetic_input():
-                    self._char_images = {}
-                    for char in set(self.input_text):
-                        self._char_images[char] = render_char(
-                            char, self.input_resolution,
-                            font_id=self._font_id, font_size=self._font_size,
-                        )
+            if (font_changed or text_changed) and not self._is_synthetic_input():
+                self._char_images = {}
+                for char in set(self.input_text):
+                    self._char_images[char] = render_char(
+                        char, self.input_resolution,
+                        font_id=self._font_id, font_size=self._font_size,
+                    )
 
         self._config = new_config
         return True

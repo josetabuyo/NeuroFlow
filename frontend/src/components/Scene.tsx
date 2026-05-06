@@ -143,15 +143,20 @@ export function Scene({
   }, [Object.keys(regions).join(",")]);
 
   // ── Inspect popup boxes ─────────────────────────────────────────────
+  // Input neurons (NeuronaEntrada) have no connections — suppress the weight popup for them.
+  const isInputNeuron = !!inputId && inspectedRegionId === inputId;
+
   useEffect(() => {
-    if (!isInspecting) {
+    if (!isInspecting || isInputNeuron) {
       setBoxes(prev => {
         if (!prev["inspect:tissue"]) return prev;
         const { "inspect:tissue": _t, "inspect:input": _i, ...rest } = prev;
         return rest;
       });
-      setInfoPanelPos(null);
-      lastInspectedKeyRef.current = null;
+      if (!isInspecting) {
+        setInfoPanelPos(null);
+        lastInspectedKeyRef.current = null;
+      }
       return;
     }
     // Place inspect:tissue popup (once, next to tissue box)
@@ -164,7 +169,7 @@ export function Scene({
         "inspect:tissue": { x: tb.x + tb.w + GAP, y: tb.y, w: tb.w, h: tb.h },
       };
     });
-  }, [isInspecting, tissueId]);
+  }, [isInspecting, isInputNeuron, tissueId]);
 
   // Show/hide inspect:input box based on inputWeightGrid availability
   useEffect(() => {
@@ -256,19 +261,23 @@ export function Scene({
       <svg
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 15 }}
       >
-        {/* inspect:tissue → tissue box */}
-        {boxes["inspect:tissue"] && boxes[tissueId] && (() => {
-          const a = boxCenter(boxes["inspect:tissue"]);
-          const b = boxCenter(boxes[tissueId]);
-          return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} />;
-        })()}
+        {/* inspect:tissue → inspected neuron */}
+        {boxes["inspect:tissue"] && tCell && (
+          <line
+            x1={boxCenter(boxes["inspect:tissue"]).x} y1={boxCenter(boxes["inspect:tissue"]).y}
+            x2={tCell.x} y2={tCell.y}
+            stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
+          />
+        )}
 
-        {/* inspect:input → input box */}
-        {boxes["inspect:input"] && inputId && boxes[inputId] && (() => {
-          const a = boxCenter(boxes["inspect:input"]);
-          const b = boxCenter(boxes[inputId]);
-          return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} />;
-        })()}
+        {/* inspect:input → inspected neuron */}
+        {boxes["inspect:input"] && tCell && (
+          <line
+            x1={boxCenter(boxes["inspect:input"]).x} y1={boxCenter(boxes["inspect:input"]).y}
+            x2={tCell.x} y2={tCell.y}
+            stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
+          />
+        )}
 
         {/* info panel → inspected cell */}
         {infoPanelPos && tCell && (

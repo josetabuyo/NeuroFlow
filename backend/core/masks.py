@@ -206,12 +206,15 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
     mask: MaskDef = []
 
     if shape == "square_flower":
-        # ── Center (excitatory) ────────────────────────────────────────────
-        exc_dendrite = _build_exc_dendrite(wiring["excitatory"], _ring_sq)
-        if exc_dendrite:
-            mask.append(exc_dendrite)
+        # ── Center (excitatory, optional) ─────────────────────────────────
+        if "excitatory" in wiring:
+            exc_dendrite = _build_exc_dendrite(wiring["excitatory"], _ring_sq)
+            if exc_dendrite:
+                mask.append(exc_dendrite)
 
-        # ── Petals (inhibitory) ────────────────────────────────────────────
+        # ── Petals (inhibitory, optional) ──────────────────────────────────
+        if "inhibitory" not in wiring:
+            return mask
         inh = wiring["inhibitory"]
         petal_dist: int = inh["offset"]
         multiplier: int = inh.get("multiplier", 8)
@@ -247,9 +250,13 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
     # ── square / circular ──────────────────────────────────────────────────
     ring_fn = _ring_sq if shape == "square" else _ring_ci
 
-    exc_dendrite = _build_exc_dendrite(wiring["excitatory"], ring_fn)
-    if exc_dendrite:
-        mask.append(exc_dendrite)
+    if "excitatory" in wiring:
+        exc_dendrite = _build_exc_dendrite(wiring["excitatory"], ring_fn)
+        if exc_dendrite:
+            mask.append(exc_dendrite)
+
+    if "inhibitory" not in wiring:
+        return mask
 
     inh = wiring["inhibitory"]
     n_sectors = inh.get("sectors", 12)
