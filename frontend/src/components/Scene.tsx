@@ -97,18 +97,18 @@ export function Scene({
       return { id, w: ps * gw, h: ps * gh };
     });
 
-    const totalW = sizes.reduce((s, r, i) => s + r.w + (i > 0 ? GAP : 0), 0);
-    let x = Math.max(MARGIN, Math.floor((cw - totalW) / 2));
+    const totalH = sizes.reduce((s, r, i) => s + r.h + (i > 0 ? GAP : 0), 0);
+    let y = Math.max(MARGIN, Math.floor((ch - totalH) / 2));
 
     const newBoxes: Boxes = {};
     for (const { id, w, h } of sizes) {
       newBoxes[id] = {
-        x,
-        y: Math.max(MARGIN, Math.floor((ch - h) / 2)),
+        x: Math.max(MARGIN, Math.floor((cw - w) / 2)),
+        y,
         w,
         h,
       };
-      x += w + GAP;
+      y += h + GAP;
     }
     setBoxes(newBoxes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,12 +125,12 @@ export function Scene({
       if (newEntries.length === 0) return prev;
 
       const updated = { ...prev };
-      // Place new regions to the right of the rightmost existing box
-      const rightmost = Object.values(prev).reduce(
-        (mx, b) => Math.max(mx, b.x + b.w),
+      // Place new regions below the bottommost existing box
+      const bottommost = Object.values(prev).reduce(
+        (mx, b) => Math.max(mx, b.y + b.h),
         MARGIN,
       );
-      let x = rightmost + GAP;
+      let y = bottommost + GAP;
       for (const id of newEntries) {
         const grid = regions[id];
         const gh = grid.length;
@@ -138,13 +138,14 @@ export function Scene({
         const ps = autoPixelSize(gw, gh);
         const w = ps * gw;
         const h = ps * gh;
+        const { clientWidth: cw } = containerRef.current!;
         updated[id] = {
-          x,
-          y: Math.max(MARGIN, Math.floor((ch - h) / 2)),
+          x: Math.max(MARGIN, Math.floor((cw - w) / 2)),
+          y,
           w,
           h,
         };
-        x += w + GAP;
+        y += h + GAP;
       }
       return updated;
     });
