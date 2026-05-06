@@ -1070,7 +1070,7 @@ class Experiment(Experimento):
             "weight_grid": weight_grid,
         }
 
-        if self.input_enabled and n_input > 0:
+        if self.input_enabled and n_input > 0 and is_same_region_as_tissue:
             res = self.input_resolution
             input_grid: list[list[float]] = []
             for r in range(res):

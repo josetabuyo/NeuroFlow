@@ -20,7 +20,7 @@ interface LayerBoxProps {
   highlighted?: boolean;
 }
 
-const HEADER_H = 26;
+export const HEADER_H = 26;
 const HANDLE = 10;
 
 export function LayerBox({
