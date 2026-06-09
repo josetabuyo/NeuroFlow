@@ -177,9 +177,11 @@ function App() {
         setTemplates(tplData);
         setMetadata(metaData);
         if (tplData.length > 0) {
-          const firstId = tplData[0].id;
+          const savedId = localStorage.getItem("neuroflow_last_template");
+          const initialTpl = tplData.find((t) => t.id === savedId) ?? tplData[0];
+          const firstId = initialTpl.id;
           setSelectedTemplate(firstId);
-          setConfig(tplData[0].config);
+          setConfig(initialTpl.config);
 
           // Load history for first template
           fetch(`${API_URL}/api/templates/${firstId}/config/history?preset=_default`)
@@ -231,6 +233,7 @@ function App() {
   const handleSelectTemplate = useCallback(
     (id: string) => {
       setSelectedTemplate(id);
+      localStorage.setItem("neuroflow_last_template", id);
       const tpl = templates.find((t) => t.id === id);
       if (!tpl) return;
       setConfig(tpl.config);
