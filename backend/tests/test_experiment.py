@@ -12,6 +12,7 @@ Validates:
 import random
 
 import pytest
+import torch
 from core.constructor import Constructor
 from core.masks import (
     MASK_PRESETS,
@@ -552,3 +553,213 @@ class TestWolframMasks:
         exp.step()
         exp.setup(_nested_config(width=10, height=10, mask="simple"))
         assert exp._mask_type == "kohonen"
+
+
+def _wiring_region(rid: str, w: int, h: int, **wiring: object) -> dict:
+    cfg = {"mask": "simple", "process_mode": "min_vs_max"}
+    cfg.update(wiring)
+    return {"id": rid, "grid": {"width": w, "height": h}, "wiring": cfg}
+
+
+class TestArbitraryRegions:
+    """Config-driven layout: no region name is special, everything flows from config."""
+
+    def test_two_wiring_regions_distinct_modes(self) -> None:
+        random.seed(7)
+        config = {
+            "regions": [
+                _wiring_region("a", 8, 8, process_mode="min_vs_max"),
+                _wiring_region("b", 6, 6, process_mode="sum"),
+            ],
+            "connections": [
+                {"from": "a", "to": "b", "type": "full", "weight": 0.5, "density": 0.5},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+
+        a = exp._regions_by_id["a"]
+        b = exp._regions_by_id["b"]
+        # tissue (first wiring region) is laid out first
+        assert a.start == 0
+        assert a.end == 64
+        assert b.start == 64
+        assert b.end == 100
+        assert a.n + b.n == exp.brain_tensor.n_real
+
+        specs = {(s[0], s[1]): s[2] for s in exp.brain_tensor.region_specs}
+        assert specs[(0, 64)] == "min_vs_max"
+        assert specs[(64, 100)] == "sum"
+
+        for _ in range(5):
+            result = exp.step()
+            assert result["type"] == "frame"
+
+        frames = exp.get_region_frames()
+        assert set(frames.keys()) == {"a", "b"}
+        assert len(frames["b"]) == 6 and len(frames["b"][0]) == 6
+
+    def test_frames_emitted_in_declaration_order(self) -> None:
+        random.seed(7)
+        config = {
+            "regions": [
+                {"id": "src", "grid": {"width": 4, "height": 4},
+                 "source": {"type": "ascii", "text": "HALF_TOP,HALF_BOT", "frames_per_char": 3}},
+                _wiring_region("core", 10, 10),
+                _wiring_region("readout", 3, 3),
+            ],
+            "connections": [
+                {"from": "src", "to": "core", "type": "full", "weight": 0.4, "density": 1.0},
+                {"from": "core", "to": "readout", "type": "full", "weight": 0.5, "density": 1.0},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        exp.step()
+        frames = exp.get_region_frames()
+        assert list(frames.keys()) == ["src", "core", "readout"]
+        # core is the tissue → laid out at index 0
+        assert exp._regions_by_id["core"].start == 0
+
+    def test_three_chained_connections(self) -> None:
+        random.seed(7)
+        config = {
+            "regions": [
+                _wiring_region("r1", 6, 6),
+                _wiring_region("r2", 6, 6),
+                _wiring_region("r3", 6, 6),
+            ],
+            "connections": [
+                {"from": "r1", "to": "r2", "type": "full", "weight": 0.5, "density": 1.0},
+                {"from": "r2", "to": "r3", "type": "full", "weight": 0.5, "density": 1.0},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        # r2 neurons must have cross-region synapses from r1
+        bt = exp.brain_tensor
+        r2 = exp._regions_by_id["r2"]
+        cross_in_r2 = bt.es_cross_region[r2.start:r2.end].any().item()
+        assert cross_in_r2
+        for _ in range(5):
+            exp.step()
+
+
+class TestPerConnectionLearning:
+    """Learning rate resolves per-connection and per-region-wiring."""
+
+    def test_connection_learning_rate_only_on_that_connection(self) -> None:
+        random.seed(7)
+        config = {
+            "regions": [
+                _wiring_region("core", 8, 8),
+                _wiring_region("out", 4, 4),
+            ],
+            "connections": [
+                {"from": "core", "to": "out", "type": "full",
+                 "weight": 0.5, "density": 1.0, "learning": {"rate": 0.05}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        assert exp.learning_enabled is True
+
+        bt = exp.brain_tensor
+        out = exp._regions_by_id["out"]
+        # cross-region synapses into out carry the connection's rate
+        cross = bt.es_cross_region & (exp._lr_per_syn != 0)
+        assert cross[out.start:out.end].any().item()
+        # the learning rate value matches
+        cross_rates = exp._lr_per_syn[bt.es_cross_region]
+        nonzero = cross_rates[cross_rates != 0]
+        assert nonzero.numel() > 0
+        assert abs(nonzero[0].item() - 0.05) < 1e-6
+
+    def test_wiring_learning_rate_applies_intra_region(self) -> None:
+        random.seed(7)
+        config = {
+            "regions": [
+                _wiring_region("core", 8, 8, learning_rate=0.03),
+            ],
+            "connections": [],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        assert exp.learning_enabled is True
+        bt = exp.brain_tensor
+        # intra-region (non cross) synapses carry 0.03
+        intra = (~bt.es_cross_region) & bt.mascara_valida
+        rates = exp._lr_per_syn[intra]
+        nz = rates[rates != 0]
+        assert nz.numel() > 0
+        assert abs(nz[0].item() - 0.03) < 1e-6
+
+    def test_no_learning_when_all_rates_zero(self) -> None:
+        random.seed(7)
+        config = {
+            "regions": [
+                _wiring_region("core", 8, 8),
+                _wiring_region("out", 4, 4),
+            ],
+            "connections": [
+                {"from": "core", "to": "out", "type": "full",
+                 "weight": 0.5, "density": 1.0, "learning": {"rate": 0.0}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        assert exp.learning_enabled is False
+
+    def test_learning_changes_weights(self) -> None:
+        random.seed(7)
+        config = {
+            "regions": [
+                _wiring_region("core", 8, 8),
+                _wiring_region("out", 4, 4),
+            ],
+            "connections": [
+                {"from": "core", "to": "out", "type": "full",
+                 "weight": 0.5, "density": 1.0, "learning": {"rate": 0.1}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        out = exp._regions_by_id["out"]
+        bt = exp.brain_tensor
+        before = bt.pesos_sinapsis[out.start:out.end].clone()
+        for _ in range(10):
+            exp.step()
+        after = bt.pesos_sinapsis[out.start:out.end]
+        assert not torch.allclose(before, after)
+
+
+class TestSourceTypes:
+    """error_diff and label sources are dispatched generically."""
+
+    def test_error_diff_nociceptor_runs(self) -> None:
+        random.seed(7)
+        config = {
+            "regions": [
+                {"id": "input", "grid": {"width": 6, "height": 6},
+                 "source": {"type": "ascii", "text": "HALF_TOP,HALF_BOT", "frames_per_char": 3}},
+                _wiring_region("tissue", 10, 10),
+                _wiring_region("output", 6, 6),
+                {"id": "noci", "grid": {"width": 6, "height": 6},
+                 "source": {"type": "error_diff", "target": "input", "diff_mode": "abs"}},
+            ],
+            "connections": [
+                {"from": "input", "to": "tissue", "type": "full", "weight": 0.4, "density": 1.0},
+                {"from": "tissue", "to": "output", "type": "full", "weight": 0.5, "density": 1.0},
+                {"from": "noci", "to": "tissue", "type": "full", "weight": -0.5, "density": 0.3},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        noci = exp._regions_by_id["noci"]
+        # nociceptor is a NeuronaEntrada region (error source)
+        assert noci.is_entrada is True
+        for _ in range(10):
+            exp.step()
+        err = exp.brain_tensor.valores[noci.start:noci.end]
+        assert err.min().item() >= 0.0
+        assert err.max().item() <= 1.0

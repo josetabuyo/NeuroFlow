@@ -25,6 +25,8 @@ interface UseExperimentReturn {
   labelGrid: number[][] | null;
   inputWeightGrid: number[][] | null;
   inputWeightDims: { width: number; height: number } | null;
+  outputWeightGrid: (number | null)[][] | null;
+  nociceptorWeightGrid: (number | null)[][] | null;
   regions: Record<string, number[][]>;
   tensionRegions: Record<string, number[][]>;
   tissueId: string;
@@ -51,7 +53,7 @@ interface UseExperimentReturn {
   reconnect: (config: ExperimentConfig) => void;
   updateConfig: (config: Partial<ExperimentConfig>) => void;
   click: (x: number, y: number) => void;
-  paint: (cells: { x: number; y: number }[], value: number) => void;
+  paint: (cells: { x: number; y: number }[], value: number, regionId?: string) => void;
   step: (count?: number) => void;
   play: (fps?: number, stepsPerTick?: number) => void;
   pause: () => void;
@@ -87,6 +89,8 @@ export function useExperiment(): UseExperimentReturn {
   const [labelGrid, setLabelGrid] = useState<number[][] | null>(null);
   const [inputWeightGrid, setInputWeightGrid] = useState<number[][] | null>(null);
   const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
+  const [outputWeightGrid, setOutputWeightGrid] = useState<(number | null)[][] | null>(null);
+  const [nociceptorWeightGrid, setNociceptorWeightGrid] = useState<(number | null)[][] | null>(null);
   const [regions, setRegions] = useState<Record<string, number[][]>>({});
   const [tensionRegions, setTensionRegions] = useState<Record<string, number[][]>>({});
   const [tissueId, setTissueId] = useState<string>("tissue");
@@ -142,6 +146,8 @@ export function useExperiment(): UseExperimentReturn {
             if (msg.inspect.input_weight_width && msg.inspect.input_weight_height) {
               setInputWeightDims({ width: msg.inspect.input_weight_width, height: msg.inspect.input_weight_height });
             }
+            setOutputWeightGrid(msg.inspect.output_weight_grid ?? null);
+            setNociceptorWeightGrid(msg.inspect.nociceptor_weight_grid ?? null);
           }
           break;
         case "connections":
@@ -160,6 +166,8 @@ export function useExperiment(): UseExperimentReturn {
           } else {
             setInputWeightDims(null);
           }
+          setOutputWeightGrid(msg.output_weight_grid ?? null);
+          setNociceptorWeightGrid(msg.nociceptor_weight_grid ?? null);
           break;
         case "status":
           setState(msg.state);
@@ -242,8 +250,8 @@ export function useExperiment(): UseExperimentReturn {
   }, [send]);
 
   const paint = useCallback(
-    (cells: { x: number; y: number }[], value: number) => {
-      send({ action: "paint", cells, value });
+    (cells: { x: number; y: number }[], value: number, regionId?: string) => {
+      send({ action: "paint", cells, value, ...(regionId ? { region_id: regionId } : {}) });
     },
     [send]
   );
@@ -276,6 +284,8 @@ export function useExperiment(): UseExperimentReturn {
         setInspectInfo(null);
         setInputWeightGrid(null);
         setInputWeightDims(null);
+        setOutputWeightGrid(null);
+        setNociceptorWeightGrid(null);
         send({ action: "uninspect" });
       }
       return !prev;
@@ -295,6 +305,8 @@ export function useExperiment(): UseExperimentReturn {
     labelGrid,
     inputWeightGrid,
     inputWeightDims,
+    outputWeightGrid,
+    nociceptorWeightGrid,
     regions,
     tensionRegions,
     tissueId,

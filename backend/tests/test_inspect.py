@@ -171,8 +171,6 @@ class TestInspect:
         exp.height = 3
         exp.regiones = {}
         exp.generation = 0
-        exp.input_enabled = False
-        exp._input_start_idx = 9
 
         result = exp.inspect(1, 1)
         grid = result["weight_grid"]

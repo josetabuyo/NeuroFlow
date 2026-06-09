@@ -191,41 +191,65 @@ export function Sidebar({
 
   // Support both canonical (regions[]) and legacy (wiring at top level)
   const anyConfig = config as Record<string, unknown>;
-  const effectiveWiring: Record<string, unknown> | undefined = Array.isArray(anyConfig.regions)
-    ? (anyConfig.regions as Array<Record<string, unknown>>).find(r => r.wiring)?.wiring as Record<string, unknown> | undefined
-    : config.wiring as Record<string, unknown> | undefined;
-
-  const activeMask = masks.length > 0
-    ? (masks.find((m) => m.id === effectiveWiring?.mask) ?? null)
+  const legacyWiring: Record<string, unknown> | undefined = !Array.isArray(anyConfig.regions)
+    ? config.wiring as Record<string, unknown> | undefined
+    : undefined;
+  const activeMask = masks.length > 0 && legacyWiring?.mask
+    ? (masks.find((m) => m.id === legacyWiring.mask) ?? null)
     : null;
-
   const hasMasks = masks.length > 0;
 
-  const [deamonPreview, setDeamonPreview] = useState<{ preview_grid: (number | null)[][], mask_stats: Record<string, unknown>, dendrites?: DendriteInfo[] } | null>(null);
+  // Collect all regions with daemon wiring for the combo
+  const configKey = JSON.stringify(Array.isArray(anyConfig.regions) ? anyConfig.regions : legacyWiring);
+  const daemonRegions = useMemo((): Array<{ id: string; daemon: Record<string, unknown> }> => {
+    const result: Array<{ id: string; daemon: Record<string, unknown> }> = [];
+    if (Array.isArray(anyConfig.regions)) {
+      for (const r of anyConfig.regions as Array<Record<string, unknown>>) {
+        const w = r.wiring as Record<string, unknown> | undefined;
+        if (w?.deamon) result.push({ id: (r.id as string) || 'region', daemon: w.deamon as Record<string, unknown> });
+      }
+    } else if (legacyWiring?.deamon) {
+      result.push({ id: 'tissue', daemon: legacyWiring.deamon as Record<string, unknown> });
+    }
+    return result;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configKey]);
 
-  const deamonWiring = effectiveWiring?.deamon;
+  const [selectedDaemonId, setSelectedDaemonId] = useState<string>('');
+
   useEffect(() => {
-    if (!deamonWiring) { setDeamonPreview(null); return; }
+    if (daemonRegions.length === 0) { setSelectedDaemonId(''); return; }
+    if (!daemonRegions.find(r => r.id === selectedDaemonId)) setSelectedDaemonId(daemonRegions[0].id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daemonRegions]);
+
+  const selectedDaemon = daemonRegions.find(r => r.id === selectedDaemonId) ?? daemonRegions[0] ?? null;
+
+  const [daemonPreview, setDaemonPreview] = useState<{ preview_grid: (number | null)[][], mask_stats: Record<string, unknown>, dendrites?: DendriteInfo[] } | null>(null);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!selectedDaemon) { setDaemonPreview(null); return; }
     fetch("/api/preview-wiring", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(deamonWiring),
+      body: JSON.stringify(selectedDaemon.daemon),
     })
-      .then((r) => r.json())
-      .then(setDeamonPreview)
-      .catch(() => setDeamonPreview(null));
-  }, [JSON.stringify(deamonWiring)]);
+      .then(r => r.json())
+      .then(setDaemonPreview)
+      .catch(() => setDaemonPreview(null));
+  }, [JSON.stringify(selectedDaemon?.daemon)]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const previewGrid = deamonWiring
-    ? (deamonPreview?.preview_grid ?? null)
+  const previewGrid = selectedDaemon
+    ? (daemonPreview?.preview_grid ?? null)
     : (activeMask?.preview_grid ?? null);
 
-  const activeMaskStats = deamonWiring
-    ? (deamonPreview?.mask_stats ?? null)
+  const activeMaskStats = selectedDaemon
+    ? (daemonPreview?.mask_stats ?? null)
     : (activeMask?.mask_stats ?? null);
 
-  const activeDendrites: DendriteInfo[] | undefined = deamonWiring
-    ? (deamonPreview?.dendrites ?? undefined)
+  const activeDendrites: DendriteInfo[] | undefined = selectedDaemon
+    ? (daemonPreview?.dendrites ?? undefined)
     : (activeMask?.dendrites ?? undefined);
 
   const selectedTpl = useMemo(
@@ -385,20 +409,46 @@ export function Sidebar({
         {/* JSON Config Editor */}
         <JsonConfigEditor config={config} onChange={onConfigChange} metadata={metadata} />
 
-        {/* Mask preview */}
-        {hasMasks && previewGrid && (
+        {/* Daemon Preview */}
+        {(daemonRegions.length > 0 || (hasMasks && previewGrid)) && previewGrid && (
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <label
                 style={{
                   fontSize: "0.75rem",
                   textTransform: "uppercase",
                   color: "#888",
                   letterSpacing: "0.1em",
+                  flexShrink: 0,
                 }}
               >
-                Neuron Preview
+                Daemon Preview
               </label>
+              {daemonRegions.length > 1 && (
+                <select
+                  value={selectedDaemonId}
+                  onChange={e => setSelectedDaemonId(e.target.value)}
+                  style={{
+                    fontSize: "0.65rem",
+                    background: "#0d0d14",
+                    color: "#aaa",
+                    border: "1px solid #2a2a3e",
+                    borderRadius: "3px",
+                    padding: "1px 4px",
+                    cursor: "pointer",
+                    outline: "none",
+                  }}
+                >
+                  {daemonRegions.map(r => (
+                    <option key={r.id} value={r.id}>{r.id}</option>
+                  ))}
+                </select>
+              )}
+              {daemonRegions.length === 1 && (
+                <span style={{ fontSize: "0.65rem", color: "#555", fontFamily: "monospace" }}>
+                  {selectedDaemonId}
+                </span>
+              )}
               {activeMaskStats && (
                 <span
                   style={{

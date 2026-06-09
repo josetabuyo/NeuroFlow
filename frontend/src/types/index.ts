@@ -209,6 +209,12 @@ export interface ConnectionsMessage {
   input_weight_grid?: number[][] | null;
   input_weight_width?: number;
   input_weight_height?: number;
+  output_weight_grid?: (number | null)[][] | null;
+  output_weight_width?: number;
+  output_weight_height?: number;
+  nociceptor_weight_grid?: (number | null)[][] | null;
+  nociceptor_weight_width?: number;
+  nociceptor_weight_height?: number;
 }
 
 export type ServerMessage = FrameMessage | StatusMessage | ErrorMessage | ConnectionsMessage;

@@ -1,0 +1,74 @@
+{
+  "name": "Input Mimic",
+  "description": "ITON Exp 2: output tries to reconstruct the input; nociceptor fires on reconstruction error and inhibits tissue. Unsupervised.",
+  "config": {
+    "description": "Input mimic. Tissue frozen. Output learns to reconstruct input. Nociceptor fires on error, inhibits tissue.",
+    "regions": [
+      {
+        "id": "input",
+        "grid": { "width": 20, "height": 20 },
+        "source": {
+          "type": "ascii",
+          "text": "HALF_TOP,HALF_BOT",
+          "frames_per_char": 15,
+          "noise": { "background": 0.05, "shift": false, "inter_char": false }
+        }
+      },
+      {
+        "id": "tissue",
+        "grid": { "width": 50, "height": 50 },
+        "wiring": {
+          "deamon": {
+            "shape": "square",
+            "excitatory": { "offset": 1, "noise": 0.5, "weights": [1, 1, 1] },
+            "inhibitory": {
+              "offset": 6,
+              "noise": 0.5,
+              "sectors": 12,
+              "weights": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            }
+          },
+          "dendrite_exc_weight": 0.9,
+          "dendrite_inh_weight": -1,
+          "process_mode": "avg_vs_avg_normalized",
+          "tension_function": { "x": 1, "x_pow_3": 20, "x_pow_2": 3 }
+        }
+      },
+      {
+        "id": "output",
+        "grid": { "width": 20, "height": 20 }
+      },
+      {
+        "id": "nociceptor",
+        "grid": { "width": 20, "height": 20 },
+        "source": { "type": "error_diff", "target": "input", "diff_mode": "abs" }
+      }
+    ],
+    "connections": [
+      {
+        "from": "input",
+        "to": "tissue",
+        "type": "full",
+        "weight": 0.35,
+        "density": 0.4,
+        "learning": { "rate": 0.0 }
+      },
+      {
+        "from": "tissue",
+        "to": "output",
+        "type": "full",
+        "weight": 0.5,
+        "density": 1.0,
+        "learning": { "rate": 0.02 }
+      },
+      {
+        "from": "nociceptor",
+        "to": "tissue",
+        "type": "full",
+        "weight": -0.5,
+        "density": 0.3,
+        "learning": { "rate": 0.0 }
+      }
+    ]
+  }
+}

@@ -35,11 +35,13 @@ interface SceneProps {
     total_sinapsis: number;
   } | null;
   inputWeightGrid?: number[][] | null;
+  outputWeightGrid?: (number | null)[][] | null;
+  nociceptorWeightGrid?: (number | null)[][] | null;
 
   tensionMode?: boolean;
 
   onCellClick: (x: number, y: number, regionId?: string) => void;
-  onCellDrag: (x: number, y: number) => void;
+  onCellDrag: (x: number, y: number, regionId?: string) => void;
 
   brushSize: number;
   brushMode: "activate" | "deactivate";
@@ -65,7 +67,9 @@ export function Scene({
   inspectedRegionId,
   inspectInfo,
   inputWeightGrid,
+  outputWeightGrid,
   tensionMode,
+  nociceptorWeightGrid,
   onCellClick, onCellDrag,
   brushSize, brushMode, inspectMode, canInspect,
   onIncrease, onDecrease, onToggleMode, onToggleInspect, onToggleTension,
@@ -82,6 +86,8 @@ export function Scene({
   const lastInspectedKeyRef = useRef<string | null>(null);
 
   const isInspecting = connectionMap != null;
+  // Only show the tissue weight popup if there are actual non-null weights
+  const hasAnyTissueWeights = !!connectionMap?.some(row => row.some(v => v !== null));
 
   // ── Initialize layout ───────────────────────────────────────────────
   useEffect(() => {
@@ -159,7 +165,7 @@ export function Scene({
       }
       return;
     }
-    // Place inspect:tissue popup (once, next to tissue box)
+    // Place inspect:tissue popup (once per region change, next to tissue box)
     setBoxes(prev => {
       if (prev["inspect:tissue"]) return prev;
       const tb = prev[tissueId];
@@ -169,7 +175,7 @@ export function Scene({
         "inspect:tissue": { x: tb.x + tb.w + GAP, y: tb.y, w: tb.w, h: tb.h },
       };
     });
-  }, [isInspecting, isInputNeuron, tissueId]);
+  }, [isInspecting, isInputNeuron, tissueId, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show/hide inspect:input box based on inputWeightGrid availability
   useEffect(() => {
@@ -187,6 +193,43 @@ export function Scene({
       }
     });
   }, [inputWeightGrid !== null, isInspecting, inputId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show/hide inspect:output box based on outputWeightGrid availability
+  useEffect(() => {
+    if (!isInspecting) return;
+    setBoxes(prev => {
+      if (outputWeightGrid) {
+        if (prev["inspect:output"]) return prev;
+        const ob = inspectedRegionId ? prev[inspectedRegionId] : null;
+        if (!ob) return prev;
+        return { ...prev, "inspect:output": { x: ob.x + ob.w + GAP, y: ob.y, w: ob.w, h: ob.h } };
+      } else {
+        if (!prev["inspect:output"]) return prev;
+        const { "inspect:output": _, ...rest } = prev;
+        return rest;
+      }
+    });
+  }, [outputWeightGrid !== null, isInspecting, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show/hide inspect:nociceptor box based on nociceptorWeightGrid availability
+  useEffect(() => {
+    if (!isInspecting) return;
+    setBoxes(prev => {
+      if (nociceptorWeightGrid) {
+        if (prev["inspect:nociceptor"]) return prev;
+        // Place next to the inspected neuron's region box, below inspect:output if present
+        const anchor = inspectedRegionId ? prev[inspectedRegionId] : null;
+        if (!anchor) return prev;
+        const refX = prev["inspect:output"] ? prev["inspect:output"].x : anchor.x + anchor.w + GAP;
+        const refY = prev["inspect:output"] ? prev["inspect:output"].y + prev["inspect:output"].h + GAP : anchor.y;
+        return { ...prev, "inspect:nociceptor": { x: refX, y: refY, w: 120, h: 80 } };
+      } else {
+        if (!prev["inspect:nociceptor"]) return prev;
+        const { "inspect:nociceptor": _, ...rest } = prev;
+        return rest;
+      }
+    });
+  }, [nociceptorWeightGrid !== null, isInspecting, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Position info panel when inspecting a new cell
   useEffect(() => {
@@ -262,7 +305,7 @@ export function Scene({
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 15 }}
       >
         {/* inspect:tissue → inspected neuron */}
-        {boxes["inspect:tissue"] && tCell && (
+        {boxes["inspect:tissue"] && hasAnyTissueWeights && tCell && (
           <line
             x1={boxCenter(boxes["inspect:tissue"]).x} y1={boxCenter(boxes["inspect:tissue"]).y}
             x2={tCell.x} y2={tCell.y}
@@ -276,6 +319,24 @@ export function Scene({
             x1={boxCenter(boxes["inspect:input"]).x} y1={boxCenter(boxes["inspect:input"]).y}
             x2={tCell.x} y2={tCell.y}
             stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
+          />
+        )}
+
+        {/* inspect:output → inspected neuron */}
+        {boxes["inspect:output"] && tCell && (
+          <line
+            x1={boxCenter(boxes["inspect:output"]).x} y1={boxCenter(boxes["inspect:output"]).y}
+            x2={tCell.x} y2={tCell.y}
+            stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
+          />
+        )}
+
+        {/* inspect:nociceptor → inspected neuron */}
+        {boxes["inspect:nociceptor"] && tCell && (
+          <line
+            x1={boxCenter(boxes["inspect:nociceptor"]).x} y1={boxCenter(boxes["inspect:nociceptor"]).y}
+            x2={tCell.x} y2={tCell.y}
+            stroke="#f43f5e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
           />
         )}
 
@@ -322,7 +383,7 @@ export function Scene({
               height={gh}
               inspectedCell={id === inspectedRegionId ? inspectedCell : undefined}
               onCellClick={(cx, cy) => onCellClick(cx, cy, id)}
-              onCellDrag={isTissue ? onCellDrag : undefined}
+              onCellDrag={(cx, cy) => onCellDrag(cx, cy, id)}
             />
 
             {/* Label column beside output regions */}
@@ -356,7 +417,7 @@ export function Scene({
       })}
 
       {/* ── Inspect popup: tissue weights ── */}
-      {boxes["inspect:tissue"] && connectionMap && (() => {
+      {boxes["inspect:tissue"] && connectionMap && hasAnyTissueWeights && (() => {
         const grid = regions[tissueId];
         const gw = grid?.[0]?.length ?? 1;
         const gh = grid?.length ?? 1;
@@ -397,6 +458,53 @@ export function Scene({
               width={gw}
               height={gh}
               weightGrid={inputWeightGrid as (number | null)[][]}
+              onCellClick={() => {}}
+            />
+          </LayerBox>
+        );
+      })()}
+
+      {/* ── Inspect popup: output (lateral) weights ── */}
+      {boxes["inspect:output"] && outputWeightGrid && inspectedRegionId && (() => {
+        const grid = regions[inspectedRegionId];
+        const gw = grid?.[0]?.length ?? 1;
+        const gh = grid?.length ?? 1;
+        return (
+          <LayerBox
+            id="inspect:output"
+            label={`lateral weights ← ${inspectedRegionId}`}
+            layout={boxes["inspect:output"]}
+            onUpdate={updateBox}
+            highlighted
+          >
+            <PixelCanvas
+              grid={[]}
+              width={gw}
+              height={gh}
+              weightGrid={outputWeightGrid}
+              onCellClick={() => {}}
+            />
+          </LayerBox>
+        );
+      })()}
+
+      {/* ── Inspect popup: nociceptor weights ── */}
+      {boxes["inspect:nociceptor"] && nociceptorWeightGrid && (() => {
+        const nw = nociceptorWeightGrid[0]?.length ?? 1;
+        const nh = nociceptorWeightGrid.length;
+        return (
+          <LayerBox
+            id="inspect:nociceptor"
+            label="weights ← nociceptor"
+            layout={boxes["inspect:nociceptor"]}
+            onUpdate={updateBox}
+            highlighted
+          >
+            <PixelCanvas
+              grid={[]}
+              width={nw}
+              height={nh}
+              weightGrid={nociceptorWeightGrid}
               onCellClick={() => {}}
             />
           </LayerBox>

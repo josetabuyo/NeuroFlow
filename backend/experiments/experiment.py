@@ -1,15 +1,18 @@
-"""Unified NeuroFlow experiment.
+"""Unified NeuroFlow experiment — config-driven, region-agnostic.
 
-Supports all features through opt-in config sections:
-  - regions[].wiring (required: at least one region with wiring)
-  - regions[].source (optional: ASCII/synthetic input stream)
-  - regions[].noise (optional: background, shift, inter-char)
-  - regions[].spiking (optional: spike frequency adaptation)
-  - connections[].learning_rate (optional: Hebbian updates on inter-region dendrites)
-  - regions[].wiring.learning_rate (optional: Hebbian updates on intra-region dendrites)
+The network is fully described by the canonical config (regions + connections):
 
-Config is canonical JSON (regions + connections). Legacy flat format (grid/wiring/input/
-learning/noise/spiking at top level) is auto-converted via _to_canonical().
+  - regions[].wiring  → Neurona cells with internal connections (daemon/mask),
+                         processed by BrainTensor every step.
+  - regions[].source  → NeuronaEntrada cells, values set externally each step:
+        "ascii"      → synthetic / rendered text patterns
+        "label"      → ground-truth class signal
+        "error_diff" → |target - output| diff (nociceptor)
+  - connections[]     → cross-region dendrites, with weight / density / learning.rate.
+
+A region may declare wiring AND/OR source (orthogonal). Nothing here is keyed on a
+specific region name — everything flows from the config. Legacy flat configs are
+auto-converted via _to_canonical().
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from __future__ import annotations
 import logging
 import random
 from collections import deque
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -39,6 +43,49 @@ _STABILITY_WINDOW = 20
 _DAEMON_THRESHOLD = 0.5
 _MIN_DAEMON_SIZE = 3
 
+_SOURCE_TYPES_NON_INPUT = {"label", "error_diff"}
+_SYNTHETIC_PATTERNS = {"HALF_TOP", "HALF_BOT", "BARS_H", "BARS_V", "DOT_TL", "DOT_BR"}
+
+
+@dataclass
+class RegionState:
+    """Everything the runtime needs to know about one region.
+
+    Spans [start, end) index into the global neuron tensor in declaration order.
+    """
+
+    id: str
+    start: int
+    end: int
+    width: int
+    height: int
+    is_entrada: bool
+    source_type: str | None = None
+    source_cfg: dict[str, Any] = field(default_factory=dict)
+    wiring_cfg: dict[str, Any] = field(default_factory=dict)
+    umbral: float = 0.0
+    process_mode: str = "min_vs_max"
+    tension_fns: list[tuple[str, float]] = field(default_factory=list)
+
+    # Runtime state (source regions)
+    char_index: int = 0
+    frame_in_char: int = 0
+    in_gap: bool = False
+    current_frame: np.ndarray | None = None
+    char_images: dict[str, np.ndarray] = field(default_factory=dict)
+
+    @property
+    def n(self) -> int:
+        return self.end - self.start
+
+    @property
+    def has_wiring(self) -> bool:
+        return bool(self.wiring_cfg)
+
+    @property
+    def is_ascii_input(self) -> bool:
+        return self.source_type == "ascii"
+
 
 def _detect_daemons(
     values: torch.Tensor,
@@ -47,10 +94,7 @@ def _detect_daemons(
     threshold: float,
     min_size: int = _MIN_DAEMON_SIZE,
 ) -> tuple[int, set[int], set[int], list[int]]:
-    """Detect daemons as connected components of active neurons (8-connectivity).
-
-    Returns (count, daemon_indices, noise_indices, sizes).
-    """
+    """Detect daemons as connected components of active neurons (8-connectivity)."""
     n = width * height
     active = (values[:n] > threshold).tolist()
     visited = [False] * n
@@ -89,32 +133,16 @@ def _detect_daemons(
 
 
 def _to_canonical(config: dict[str, Any]) -> dict[str, Any]:
-    """Convert a legacy or already-canonical config to the canonical regions/connections format.
+    """Convert a legacy flat config to the canonical regions/connections format.
 
-    Already canonical (has 'regions' key) → returned as-is.
-    Legacy (has 'grid' key at top level) → converted according to the mapping table.
-
-    Legacy → canonical mapping:
-      grid                         → regions[tissue].grid
-      wiring.*                     → regions[tissue].wiring.*
-      input.resolution             → regions[input].grid = {width, height}
-      input.text/frames_per_char/  → regions[input].source.*
-        font/font_size/density
-      input.dendrite_input_weight  → connections[0].weight
-      input.portion                → connections[0].type="portion", .portion=[…]
-      learning.rate * lr_input     → connections[0].learning_rate  (if > 0)
-      learning.rate * max(lr_exc,  → regions[tissue].wiring.learning_rate (if > 0)
-        lr_inh)
-      noise.*                      → regions[tissue].noise.*
-      spiking.*                    → regions[tissue].spiking.*
-      daemon.*                     → regions[tissue].daemon.*
+    Already canonical (has 'regions') → returned as-is.
+    Legacy (has top-level 'grid') → single tissue region + optional input region.
     """
     if "regions" in config:
         return config
 
     config = {**config}
 
-    # Fill safe defaults for missing required legacy fields
     if "grid" not in config:
         logger.warning("config missing 'grid', defaulting to {width: 50, height: 50}")
         config["grid"] = {"width": 50, "height": 50}
@@ -138,7 +166,6 @@ def _to_canonical(config: dict[str, Any]) -> dict[str, Any]:
     spiking_cfg = config.get("spiking")
     daemon_cfg = config.get("daemon")
 
-    # Apply learning rates: effective_wiring = rate * max(lr_exc, lr_inh)
     if learning_cfg is not None:
         base_rate = float(learning_cfg.get("rate", 1.0))
         lr_exc = float(learning_cfg.get("lr_exc", 1.0))
@@ -147,7 +174,6 @@ def _to_canonical(config: dict[str, Any]) -> dict[str, Any]:
         if effective_wiring > 0:
             wiring["learning_rate"] = effective_wiring
 
-    # Build tissue region
     tissue: dict[str, Any] = {"id": "tissue", "grid": grid, "wiring": wiring}
     if spiking_cfg:
         tissue["spiking"] = spiking_cfg
@@ -170,7 +196,7 @@ def _to_canonical(config: dict[str, Any]) -> dict[str, Any]:
         if noise_cfg:
             source["noise"] = noise_cfg
 
-        regions.append({
+        regions.insert(0, {
             "id": "input",
             "grid": {"width": resolution, "height": resolution},
             "source": source,
@@ -214,10 +240,7 @@ def _apply_mask_to_neuron_grid(
     mask: list[dict],
     random_weights: bool,
 ) -> None:
-    """Apply a wiring mask spatially to a 2D grid of neurons.
-
-    Uses toroidal wrap-around for offsets, matching aplicar_mascara_2d behaviour.
-    """
+    """Apply a wiring mask spatially to a 2D grid of neurons (toroidal wrap-around)."""
     height = len(neurons)
     width = len(neurons[0]) if neurons else 0
     if not width or not height:
@@ -248,464 +271,388 @@ def _apply_mask_to_neuron_grid(
                     dest.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=peso_d))
 
 
-class Experiment(Experimento):
-    """Unified NeuroFlow experiment with opt-in features."""
+def _compile_mask(wiring_cfg: dict[str, Any]) -> tuple[list[dict], bool]:
+    """Compile a wiring config into (mask, random_weights), applying weight overrides."""
+    if "deamon" in wiring_cfg:
+        deamon_cfg = wiring_cfg["deamon"]
+        random_weights = not deamon_cfg.get("fixed", False)
+        raw_mask = compile_deamon_wiring(deamon_cfg)
+    else:
+        mask_id = wiring_cfg.get("mask", "")
+        random_weights = get_random_weights(mask_id)
+        raw_mask = get_mask(mask_id)
 
-    _SYNTHETIC_PATTERNS = {
-        "HALF_TOP", "HALF_BOT", "BARS_H", "BARS_V", "DOT_TL", "DOT_BR",
-    }
+    exc_w = wiring_cfg.get("dendrite_exc_weight")
+    inh_w = wiring_cfg.get("dendrite_inh_weight")
+    if exc_w is None and inh_w is None:
+        return raw_mask, random_weights
+
+    mask: list[dict] = []
+    for d in raw_mask:
+        peso = d["peso_dendrita"]
+        if exc_w is not None and peso > 0:
+            mask.append({**d, "peso_dendrita": exc_w})
+        elif inh_w is not None and peso < 0:
+            mask.append({**d, "peso_dendrita": inh_w})
+        else:
+            mask.append(d)
+    return mask, random_weights
+
+
+def _tension_fns_of(wiring_cfg: dict[str, Any]) -> list[tuple[str, float]]:
+    tf = wiring_cfg.get("tension_function")
+    if tf and isinstance(tf, dict):
+        return [(k, float(v)) for k, v in tf.items()]
+    return []
+
+
+class Experiment(Experimento):
+    """Unified NeuroFlow experiment, fully driven by the canonical config."""
 
     def __init__(self) -> None:
         super().__init__()
         self._config: dict[str, Any] = {}
         self.brain_tensor = None
+        self._regions: list[RegionState] = []
+        self._regions_by_id: dict[str, RegionState] = {}
+        self._connections: list[dict[str, Any]] = []
+
+        # Tissue shortcuts (the first wiring region; used for grid/get_frame/stats)
+        self._tissue: RegionState | None = None
         self.process_mode: str = "min_vs_max"
 
-        # Input state
-        self.input_enabled: bool = False
-        self.input_text: str = ""
-        self.input_resolution: int = 20
-        self.frames_per_char: int = 10
-        self.dendrite_input_weight: float = 0.2
-        self.input_portion: tuple[int, int] | None = None
-        self._font_id: str = "press_start_2p"
-        self._font_size: int = 10
-        self._char_images: dict[str, np.ndarray] = {}
-        self._char_index: int = 0
-        self._frame_in_char: int = 0
-        self._in_gap: bool = False
-        self._current_input_frame: np.ndarray | None = None
-        self._input_start_idx: int = 0
-        self._rng: np.random.Generator = np.random.default_rng()
-
-        # Noise state
-        self.background_noise: float = 0.0
-        self.shift_noise: bool = False
-        self.inter_char_noise: bool = False
-
-        # Wiring overrides
-        self.dendrite_exc_weight: float | None = None
-        self.dendrite_inh_weight: float | None = None
-        self._tension_fns: list[tuple[str, float]] = []
-
-        # Learning state
-        # In canonical mode: lr=1.0 always; lr_exc/lr_inh = wiring.learning_rate;
-        # lr_input = connections[input→tissue].learning.rate
-        # lr_output = connections[tissue→output].learning.rate
+        # Learning
         self.learning_enabled: bool = False
-        self.learning_rate: float = 1.0
-        self.lr_exc: float = 0.0
-        self.lr_inh: float = 0.0
-        self.lr_input: float = 0.0
-        self.lr_output: float = 0.0
+        self._lr_per_syn: torch.Tensor | None = None
         self._conn_exclude_range: tuple[float, float] | None = None
 
-        # Region IDs (set during setup)
-        self._tissue_id: str = "tissue"
-        self._input_id: str | None = None
-        self._output_id: str | None = None
-
-        # Output region state
-        self.output_enabled: bool = False
-        self.output_width: int = 0
-        self.output_height: int = 0
-        self._output_start_idx: int = 0
-        self._output_n: int = 0
-        self._label_enabled: bool = False
-        self._n_classes: int = 0
-        self._current_label: torch.Tensor | None = None
-
-        # Spiking state
+        # Spiking
         self.adaptation_enabled: bool = False
         self.up_ticks: int = 5
         self.down_ticks: int = 5
 
-        # Daemon detection config
+        # Daemon detection
         self._daemon_threshold: float = _DAEMON_THRESHOLD
         self._min_daemon_size: int = _MIN_DAEMON_SIZE
-
-        # Daemon stats
         self._daemon_history: deque[int] = deque(maxlen=_STABILITY_WINDOW)
         self._last_history_gen: int = -1
 
+        self._is_wolfram: bool = False
+        self._n_classes: int = 0
+        self._rng: np.random.Generator = np.random.default_rng()
+
+    # ── Region helpers ──
+
+    def _wiring_regions(self) -> list[RegionState]:
+        return [r for r in self._regions if r.has_wiring]
+
+    def _processed_regions(self) -> list[RegionState]:
+        """Regions whose neurons are processed by BrainTensor (all non-NeuronaEntrada)."""
+        return [r for r in self._regions if not r.is_entrada]
+
+    def _region_specs(self) -> list[tuple[int, int, str, list]]:
+        """Per-region (start, end, mode, fns). Regions without wiring inherit the
+        tissue's process_mode/tension_fns (matching legacy output behaviour)."""
+        specs = []
+        for r in self._processed_regions():
+            if r.has_wiring:
+                specs.append((r.start, r.end, r.process_mode, r.tension_fns))
+            else:
+                specs.append((r.start, r.end, self.process_mode, self._tissue.tension_fns if self._tissue else []))
+        return specs
+
+    def _ascii_region(self) -> RegionState | None:
+        return next((r for r in self._regions if r.is_ascii_input), None)
+
+    def _label_target_classes(self, region: RegionState) -> int:
+        text = region.source_cfg.get("text", "") if region else ""
+        if not text:
+            return 0
+        if all(t.strip() in _SYNTHETIC_PATTERNS for t in text.split(",")):
+            return len([t for t in text.split(",")])
+        return len(text)
+
+    @property
+    def _tissue_id(self) -> str:
+        return self._tissue.id if self._tissue else "tissue"
+
+    @property
+    def _input_id(self) -> str | None:
+        r = self._ascii_region()
+        return r.id if r else None
+
+    @property
+    def input_enabled(self) -> bool:
+        return self._ascii_region() is not None
+
+    @property
+    def input_resolution(self) -> int:
+        r = self._ascii_region()
+        return r.width if r else 0
+
+    @property
+    def _input_start_idx(self) -> int:
+        r = self._ascii_region()
+        return r.start if r else (self._tissue.end if self._tissue else 0)
+
+    # ── Setup ──
+
     def setup(self, config: dict[str, Any]) -> None:
-        """Build the network from a config (canonical or legacy).
-
-        Canonical: has 'regions' key.
-        Legacy: has 'grid' key at top level — auto-converted via _to_canonical().
-
-        Required: at least one region with 'wiring'.
-        Optional: regions with 'source', 'noise', 'spiking', 'daemon'; connections[].
-        """
         config = _to_canonical(config)
         self._config = config
         self.generation = 0
 
-        # Find tissue region (first with wiring) and optional input source region
-        tissue_cfg = next((r for r in config["regions"] if "wiring" in r), None)
-        if tissue_cfg is None:
+        region_cfgs = config["regions"]
+        connections = config.get("connections", [])
+        self._connections = connections
+
+        if not any("wiring" in r for r in region_cfgs):
             raise ValueError("config must have at least one region with 'wiring'")
 
-        source_region = next(
-            (r for r in config["regions"]
-             if "source" in r and r["source"].get("type") != "label"),
-            None,
-        )
-        output_region = next(
-            (r for r in config["regions"]
-             if r is not tissue_cfg and r.get("source", {}).get("type") == "label"),
-            None,
-        ) or next(
-            (r for r in config["regions"]
-             if r is not tissue_cfg and "source" not in r and r.get("id") == "output"),
-            None,
+        # ── Spiking / daemon detection from the first wiring region ──
+        tissue_cfg = next(r for r in region_cfgs if "wiring" in r)
+        spiking_cfg = tissue_cfg.get("spiking")
+        self.adaptation_enabled = spiking_cfg is not None
+        self.up_ticks = int(spiking_cfg.get("up_ticks", 5)) if spiking_cfg else 5
+        self.down_ticks = int(spiking_cfg.get("down_ticks", 5)) if spiking_cfg else 5
+
+        daemon_cfg = tissue_cfg.get("daemon")
+        self._daemon_threshold = float(daemon_cfg.get("threshold", _DAEMON_THRESHOLD)) if daemon_cfg else _DAEMON_THRESHOLD
+        self._min_daemon_size = int(daemon_cfg.get("min_size", _MIN_DAEMON_SIZE)) if daemon_cfg else _MIN_DAEMON_SIZE
+
+        # Wolfram mode: only when single tissue region with a wolfram mask
+        wiring0 = tissue_cfg["wiring"]
+        self._is_wolfram = (
+            "mask" in wiring0
+            and get_mask_type(wiring0["mask"]) == "wolfram"
+            and "deamon" not in wiring0
         )
 
-        # Store region IDs for frame serialization
-        self._tissue_id: str = tissue_cfg.get("id") or "tissue"
-        self._input_id: str | None = source_region.get("id") if source_region else None
-        self._output_id: str | None = output_region.get("id") if output_region else None
+        if self._is_wolfram:
+            self._setup_wolfram(tissue_cfg)
+            return
 
-        connections = config.get("connections", [])
-        input_conn = next(
-            (c for c in connections if c.get("to") == (tissue_cfg.get("id") or "tissue")),
-            connections[0] if connections else None,
-        )
-        output_conn = next(
-            (c for c in connections if c.get("from") == (tissue_cfg.get("id") or "tissue")
-             and c.get("to") != (tissue_cfg.get("id") or "tissue")),
-            None,
-        )
+        # ── Build RegionStates ──
+        # Neuron layout (global tensor) puts the tissue region first so that
+        # get_grid/stats can read tissue at [0, width*height). The remaining
+        # regions follow in config declaration order. _regions itself keeps
+        # declaration order for frame emission.
+        self._regions = []
+        self._regions_by_id = {}
+        for rc in region_cfgs:
+            grid = rc.get("grid", {})
+            w = int(grid.get("width", 1))
+            h = int(grid.get("height", 1))
+            source = rc.get("source")
+            wiring_cfg = rc.get("wiring") or {}
+            rs = RegionState(
+                id=rc["id"],
+                start=0,
+                end=0,
+                width=w,
+                height=h,
+                is_entrada=source is not None and not wiring_cfg,
+                source_type=source.get("type") if source else None,
+                source_cfg=source or {},
+                wiring_cfg=wiring_cfg,
+                umbral=float(rc.get("umbral", 0.0)),
+                process_mode=wiring_cfg.get("process_mode", "min_vs_max"),
+                tension_fns=_tension_fns_of(wiring_cfg),
+            )
+            self._regions.append(rs)
+            self._regions_by_id[rs.id] = rs
 
-        # ── Grid ──
+        self._tissue = self._wiring_regions()[0]
+        self._mask_type = "kohonen"
+        self.process_mode = self._tissue.process_mode
+        self.width = self._tissue.width
+        self.height = self._tissue.height
+
+        # Assign spans tissue-first, then declaration order
+        layout = [self._tissue] + [r for r in self._regions if r is not self._tissue]
+        cursor = 0
+        for rs in layout:
+            n = rs.width * rs.height
+            rs.start = cursor
+            rs.end = cursor + n
+            cursor += n
+
+        # ── Build neurons (in layout order to match spans) ──
+        all_neurons: list[Neurona] = []
+        self.regiones = {}
+        for rs in layout:
+            region_obj = Region(nombre=rs.id)
+            for i in range(rs.n):
+                if rs.is_entrada:
+                    neuron = NeuronaEntrada(id=f"{rs.id}_{i}")
+                elif rs is self._tissue:
+                    x, y = i % rs.width, i // rs.width
+                    neuron = Neurona(id=Constructor.key_by_coord(x, y), umbral=rs.umbral)
+                else:
+                    neuron = Neurona(id=f"{rs.id}_{i}", umbral=rs.umbral)
+                all_neurons.append(neuron)
+                region_obj.agregar(neuron)
+            self.regiones[rs.id] = region_obj
+
+        self.brain = Brain(neuronas=all_neurons)
+
+        # ── Intra-region wiring ──
+        for rs in self._wiring_regions():
+            mask, random_weights = _compile_mask(rs.wiring_cfg)
+            if rs is self._tissue:
+                centroid_cfg = rs.wiring_cfg.get("deamon", {}).get("centroid") or {}
+                centroid_jitter = 1 if centroid_cfg.get("random") else 0
+                Constructor().aplicar_mascara_2d(
+                    self.brain, rs.width, rs.height, mask,
+                    random_weights=random_weights, centroid_jitter=centroid_jitter,
+                )
+            else:
+                neuron_list = list(self.regiones[rs.id].neuronas.values())
+                grid2d = [
+                    [neuron_list[y * rs.width + x] for x in range(rs.width)]
+                    for y in range(rs.height)
+                ]
+                _apply_mask_to_neuron_grid(grid2d, mask, random_weights)
+
+        # ── Cross-region connections ──
+        for conn in connections:
+            self._wire_connection(conn)
+
+        # ── Initialization ──
+        for rs in self._wiring_regions():
+            for neurona in self.regiones[rs.id].neuronas.values():
+                neurona.activar_external(random.random())
+
+        # ── Compile ──
+        self._compile()
+
+        # ── Source region init ──
+        for rs in self._regions:
+            if rs.is_ascii_input:
+                self._init_ascii_region(rs)
+
+        for rs in self._regions:
+            if rs.is_ascii_input:
+                self._inject_source(rs)
+
+        self._daemon_history.clear()
+        self._last_history_gen = -1
+
+    def _setup_wolfram(self, tissue_cfg: dict[str, Any]) -> None:
         grid = tissue_cfg["grid"]
         self.width = int(grid.get("width", 50))
         self.height = int(grid.get("height", 50))
+        self.process_mode = tissue_cfg["wiring"].get("process_mode", "min_vs_max")
 
-        # ── Wiring ──
-        wiring = tissue_cfg["wiring"]
-        mask_id: str = wiring.get("mask", "")
-        self.process_mode = wiring.get("process_mode", "min_vs_max")
-        self.tissue_umbral: float = float(wiring.get("umbral", 0.0))
-
-        self.dendrite_exc_weight = wiring.get("dendrite_exc_weight")
-        self.dendrite_inh_weight = wiring.get("dendrite_inh_weight")
-
-        tf = wiring.get("tension_function")
-        if tf and isinstance(tf, dict):
-            self._tension_fns = [(k, float(v)) for k, v in tf.items()]
-        else:
-            self._tension_fns = []
-
-        # ── Learning ──
-        # wiring.learning_rate → internal tissue dendrites (exc + inh)
-        # connections[0].learning.rate → inter-region dendrites (input)
-        # connections[0].learning.exclude_range → dead zone for input weights
-        wiring_lr = wiring.get("learning_rate")
-
-        conn_learning = input_conn.get("learning") if input_conn else None
-        if isinstance(conn_learning, dict):
-            conn_lr: float | None = float(conn_learning.get("rate", 0.0))
-            er = conn_learning.get("exclude_range")
-            self._conn_exclude_range = (float(er[0]), float(er[1])) if er else None
-        else:
-            # backward compat: bare learning_rate on connection
-            raw = input_conn.get("learning_rate") if input_conn else None
-            conn_lr = float(raw) if raw is not None else None
-            self._conn_exclude_range = None
-
-        out_learning = output_conn.get("learning") if output_conn else None
-        if isinstance(out_learning, dict):
-            out_lr: float = float(out_learning.get("rate", 0.0))
-        else:
-            raw_out = output_conn.get("learning_rate") if output_conn else None
-            out_lr = float(raw_out) if raw_out is not None else 0.0
-
-        self.learning_rate = 1.0
-        self.lr_exc = float(wiring_lr) if wiring_lr is not None else 0.0
-        self.lr_inh = float(wiring_lr) if wiring_lr is not None else 0.0
-        self.lr_input = float(conn_lr) if conn_lr is not None else 0.0
-        self.lr_output = out_lr
-        self.learning_enabled = self.lr_exc > 0 or self.lr_inh > 0 or self.lr_input > 0 or self.lr_output > 0
-
-        # ── Input (opt-in) ──
-        self.input_enabled = source_region is not None
-
-        if source_region is not None:
-            source = source_region["source"]
-            input_grid = source_region["grid"]
-            self.input_resolution = int(input_grid.get("width", 20))
-            self.input_text = source.get("text", "") or ""
-            self.frames_per_char = max(1, int(source.get("frames_per_char", 10)))
-            self._font_id = source.get("font", "press_start_2p")
-            self._font_size = int(source.get("font_size", 10))
-
-            if input_conn is not None:
-                self.dendrite_input_weight = float(input_conn.get("weight", 0.2))
-                self.input_density = float(input_conn.get("density", 1.0))
-                if input_conn.get("type") == "portion":
-                    pr = input_conn["portion"]
-                    self.input_portion = (int(pr[0]), int(pr[1]))
-                else:
-                    self.input_portion = None
-            else:
-                self.dendrite_input_weight = 0.2
-                self.input_density = 1.0
-                self.input_portion = None
-        else:
-            self.input_text = ""
-            self.input_resolution = 0
-            self.input_density = 1.0
-            self.input_portion = None
-
-        # ── Output region (opt-in) ──
-        if output_region is not None:
-            out_grid = output_region.get("grid", {})
-            self.output_width = int(out_grid.get("width", 1))
-            self.output_height = int(out_grid.get("height", 2))
-            self._output_n = self.output_width * self.output_height
-            out_src = output_region.get("source", {})
-            self._label_enabled = out_src.get("type") == "label"
-            self.output_umbral: float = float(output_region.get("umbral", 0.0))
-            self.output_enabled = True
-        else:
-            self.output_enabled = False
-            self.output_width = 0
-            self.output_height = 0
-            self._output_n = 0
-            self.output_umbral = 0.0
-            self._label_enabled = False
-
-        # ── Noise (opt-in) — lives in source because it affects input rendering ──
-        noise_cfg = source_region["source"].get("noise") if source_region else None
-        if noise_cfg:
-            self.background_noise = float(noise_cfg.get("background", 0.0))
-            self.shift_noise = bool(noise_cfg.get("shift", False))
-            self.inter_char_noise = bool(noise_cfg.get("inter_char", False))
-        else:
-            self.background_noise = 0.0
-            self.shift_noise = False
-            self.inter_char_noise = False
-
-        # ── Spiking (opt-in) ──
-        spiking_cfg = tissue_cfg.get("spiking")
-        self.adaptation_enabled = spiking_cfg is not None
-        if spiking_cfg:
-            self.up_ticks = int(spiking_cfg.get("up_ticks", 5))
-            self.down_ticks = int(spiking_cfg.get("down_ticks", 5))
-        else:
-            self.up_ticks = 5
-            self.down_ticks = 5
-
-        # ── Daemon detection config (opt-in) ──
-        daemon_cfg = tissue_cfg.get("daemon")
-        if daemon_cfg:
-            self._daemon_threshold = float(daemon_cfg.get("threshold", _DAEMON_THRESHOLD))
-            self._min_daemon_size = int(daemon_cfg.get("min_size", _MIN_DAEMON_SIZE))
-        else:
-            self._daemon_threshold = _DAEMON_THRESHOLD
-            self._min_daemon_size = _MIN_DAEMON_SIZE
-
-        # ── Mask setup ──
-        if "deamon" in wiring:
-            self._mask_type = "kohonen"
-            deamon_cfg = wiring["deamon"]
-            self._random_weights = not deamon_cfg.get("fixed", False)
-            raw_mask = compile_deamon_wiring(deamon_cfg)
-            centroid_cfg = deamon_cfg.get("centroid") or {}
-            self._centroid_jitter = 1 if centroid_cfg.get("random") else 0
-        else:
-            self._mask_type = get_mask_type(mask_id)
-            self._random_weights = get_random_weights(mask_id)
-            raw_mask = get_mask(mask_id)
-            self._centroid_jitter = 0
-
-        # Apply flat dendrite-weight override when specified in wiring config.
-        has_override = (
-            self.dendrite_exc_weight is not None or self.dendrite_inh_weight is not None
-        )
-        if has_override:
-            mask = []
-            for d in raw_mask:
-                peso = d["peso_dendrita"]
-                if self.dendrite_exc_weight is not None and peso > 0:
-                    mask.append({**d, "peso_dendrita": self.dendrite_exc_weight})
-                elif self.dendrite_inh_weight is not None and peso < 0:
-                    mask.append({**d, "peso_dendrita": self.dendrite_inh_weight})
-                else:
-                    mask.append(d)
-        else:
-            mask = raw_mask
-
-        # ── Neurons ──
-        is_wolfram = self._mask_type == "wolfram"
-        n_input = self.input_resolution * self.input_resolution if self.input_enabled else 0
-        self._input_start_idx = self.width * self.height
-
-        if is_wolfram:
-            constructor = Constructor()
-            self.brain, self.regiones = constructor.crear_grilla(
-                width=self.width,
-                height=self.height,
-                filas_entrada=[self.height - 1],
-                filas_salida=[],
-                umbral=0.99,
-            )
-        else:
-            tissue_neurons: list[Neurona] = []
-            for y in range(self.height):
-                for x in range(self.width):
-                    tissue_neurons.append(
-                        Neurona(id=Constructor.key_by_coord(x, y), umbral=self.tissue_umbral)
-                    )
-
-            input_neurons: list[Neurona] = []
-            if self.input_enabled:
-                for idx in range(n_input):
-                    input_neurons.append(NeuronaEntrada(id=f"inp_{idx}"))
-
-            output_neurons: list[Neurona] = []
-            if self.output_enabled:
-                for idx in range(self._output_n):
-                    output_neurons.append(Neurona(id=f"out_{idx}", umbral=self.output_umbral))
-
-            all_neurons: list[Neurona] = tissue_neurons + input_neurons + output_neurons
-            self.brain = Brain(neuronas=all_neurons)
-
-            region_tissue = Region(nombre="tissue")
-            for n_obj in tissue_neurons:
-                region_tissue.agregar(n_obj)
-            self.regiones = {"tissue": region_tissue}
-
-            if self.input_enabled:
-                region_input = Region(nombre="input")
-                for n_obj in input_neurons:
-                    region_input.agregar(n_obj)
-                self.regiones["input"] = region_input
-
-            if self.output_enabled:
-                region_output = Region(nombre="output")
-                for n_obj in output_neurons:
-                    region_output.agregar(n_obj)
-                self.regiones["output"] = region_output
-
-        # ── Wiring ──
+        mask_id = tissue_cfg["wiring"]["mask"]
+        mask = get_mask(mask_id)
         constructor = Constructor()
+        self.brain, self.regiones = constructor.crear_grilla(
+            width=self.width, height=self.height,
+            filas_entrada=[self.height - 1], filas_salida=[], umbral=0.99,
+        )
         constructor.aplicar_mascara_2d(
-            self.brain,
-            self.width,
-            self.height,
-            mask,
-            random_weights=self._random_weights,
-            centroid_jitter=self._centroid_jitter,
+            self.brain, self.width, self.height, mask,
+            random_weights=get_random_weights(mask_id),
         )
 
-        # ── Input dendrites ──
-        if self.input_enabled and not is_wolfram:
-            input_neuron_list = list(self.regiones["input"].neuronas.values())
-            tissue_list = list(self.regiones["tissue"].neuronas.values())
+        n = self.width * self.height
+        self._regions = [RegionState(
+            id=tissue_cfg.get("id", "tissue"), start=0, end=n,
+            width=self.width, height=self.height, is_entrada=False,
+            wiring_cfg=tissue_cfg["wiring"],
+            process_mode=self.process_mode,
+            tension_fns=_tension_fns_of(tissue_cfg["wiring"]),
+        )]
+        self._regions_by_id = {self._regions[0].id: self._regions[0]}
+        self._connections = []
+        self._tissue = self._regions[0]
 
-            if self.input_portion is not None:
-                # Divide both the tissue grid and the input grid into
-                # n_div_y × n_div_x equal regions. Each tissue neuron in
-                # region (ry, rx) connects fully to every input neuron in the
-                # corresponding input region (ry, rx).
-                n_div_y, n_div_x = self.input_portion
-                res = self.input_resolution
-                inp_by_id = {n.id: n for n in input_neuron_list}
+        for neurona in self.brain.neuronas:
+            neurona.activar_external(0.0)
+        self.brain.get_neurona(
+            f"x{self.width // 2}y{self.height - 1}"
+        ).activar_external(1.0)
 
-                inp_regions: dict[tuple[int, int], list] = {}
-                for ry in range(n_div_y):
-                    for rx in range(n_div_x):
-                        py0 = ry * res // n_div_y
-                        py1 = (ry + 1) * res // n_div_y
-                        px0 = rx * res // n_div_x
-                        px1 = (rx + 1) * res // n_div_x
-                        inp_regions[(ry, rx)] = [
-                            inp_by_id[f"inp_{py * res + px}"]
-                            for py in range(py0, py1)
-                            for px in range(px0, px1)
-                        ]
+        self._mask_type = "wolfram"
+        self._compile()
+        self._daemon_history.clear()
+        self._last_history_gen = -1
 
-                for tissue_n in tissue_list:
-                    x_str, y_str = tissue_n.id[1:].split("y")
-                    tx, ty = int(x_str), int(y_str)
-                    rx = min(tx * n_div_x // self.width, n_div_x - 1)
-                    ry = min(ty * n_div_y // self.height, n_div_y - 1)
-                    sinapsis_list: list[Sinapsis] = [
-                        Sinapsis(neurona_entrante=inp_n, peso=random.uniform(0.2, 1.0))
-                        for inp_n in inp_regions[(ry, rx)]
-                    ]
-                    tissue_n.dendritas.append(
-                        Dendrita(sinapsis=sinapsis_list, peso=self.dendrite_input_weight)
-                    )
-            else:
-                k = max(1, round(len(input_neuron_list) * self.input_density))
-                for tissue_n in tissue_list:
-                    sampled = random.sample(input_neuron_list, k) if k < len(input_neuron_list) else input_neuron_list
-                    sinapsis_list = []
-                    for inp_n in sampled:
-                        sinapsis_list.append(
-                            Sinapsis(neurona_entrante=inp_n, peso=random.uniform(0.2, 1.0))
-                        )
-                    tissue_n.dendritas.append(
-                        Dendrita(sinapsis=sinapsis_list, peso=self.dendrite_input_weight)
-                    )
+    def _wire_connection(self, conn: dict[str, Any]) -> None:
+        src = self._regions_by_id.get(conn.get("from"))
+        dst = self._regions_by_id.get(conn.get("to"))
+        if src is None or dst is None:
+            return
+        weight = float(conn.get("weight", 0.5))
+        density = float(conn.get("density", 1.0))
+        src_neurons = list(self.regiones[src.id].neuronas.values())
+        dst_neurons = list(self.regiones[dst.id].neuronas.values())
+        if not src_neurons or not dst_neurons:
+            return
 
-        # ── Output dendrites (tissue → output) ──
-        if self.output_enabled and not is_wolfram and "output" in self.regiones:
-            tissue_list_out = list(self.regiones["tissue"].neuronas.values())
-            output_neuron_list = list(self.regiones["output"].neuronas.values())
-            out_weight = float(output_conn.get("weight", 0.5)) if output_conn else 0.5
-            out_density = float(output_conn.get("density", 1.0)) if output_conn else 1.0
-            k_out = max(1, round(len(tissue_list_out) * out_density))
-            for out_n in output_neuron_list:
-                sampled = random.sample(tissue_list_out, k_out) if k_out < len(tissue_list_out) else tissue_list_out
-                sinapsis_list = [
-                    Sinapsis(neurona_entrante=t_n, peso=random.uniform(0.2, 1.0))
-                    for t_n in sampled
-                ]
-                out_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=out_weight))
+        if conn.get("type") == "portion" and conn.get("portion") and src.is_ascii_input:
+            self._wire_portion(conn, src, dst, weight, src_neurons, dst_neurons)
+            return
 
-        # ── Output region internal wiring (opt-in) ──
-        # Add "wiring": {"deamon": {...}} to the output region config to wire the output
-        # neurons among themselves. Uses the same deamon/mask system as the tissue region.
-        # Remove the "wiring" key from the output region to disable completely.
-        out_wiring_cfg = output_region.get("wiring") if output_region else None
-        if out_wiring_cfg and self.output_enabled and self._output_id in self.regiones:
-            if "deamon" in out_wiring_cfg:
-                out_mask = compile_deamon_wiring(out_wiring_cfg["deamon"])
-                out_random_weights = not out_wiring_cfg["deamon"].get("fixed", False)
-            else:
-                out_mask = get_mask(out_wiring_cfg["mask"])
-                out_random_weights = get_random_weights(out_wiring_cfg["mask"])
-            output_neuron_list = list(self.regiones[self._output_id].neuronas.values())
-            out_grid = [
-                [output_neuron_list[y * self.output_width + x] for x in range(self.output_width)]
-                for y in range(self.output_height)
+        k = max(1, round(len(src_neurons) * density))
+        for dst_n in dst_neurons:
+            sampled = random.sample(src_neurons, k) if k < len(src_neurons) else src_neurons
+            sinapsis_list = [
+                Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0))
+                for s in sampled
             ]
-            _apply_mask_to_neuron_grid(out_grid, out_mask, out_random_weights)
+            dst_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
 
-        # ── Initialization ──
-        if is_wolfram:
-            for neurona in self.brain.neuronas:
-                neurona.activar_external(0.0)
-            center_x = self.width // 2
-            bottom_y = self.height - 1
-            self.brain.get_neurona(
-                f"x{center_x}y{bottom_y}"
-            ).activar_external(1.0)
-        else:
-            tissue_region = self.regiones.get("tissue")
-            if tissue_region:
-                for neurona in tissue_region.neuronas.values():
-                    neurona.activar_external(random.random())
+    def _wire_portion(
+        self, conn: dict[str, Any], src: RegionState, dst: RegionState,
+        weight: float, src_neurons: list, dst_neurons: list,
+    ) -> None:
+        n_div_y, n_div_x = int(conn["portion"][0]), int(conn["portion"][1])
+        res = src.width
+        src_by_id = {n.id: n for n in src_neurons}
+        src_regions: dict[tuple[int, int], list] = {}
+        for ry in range(n_div_y):
+            for rx in range(n_div_x):
+                py0, py1 = ry * res // n_div_y, (ry + 1) * res // n_div_y
+                px0, px1 = rx * res // n_div_x, (rx + 1) * res // n_div_x
+                src_regions[(ry, rx)] = [
+                    src_by_id[f"{src.id}_{py * res + px}"]
+                    for py in range(py0, py1) for px in range(px0, px1)
+                ]
+        for dst_n in dst_neurons:
+            x_str, y_str = dst_n.id[1:].split("y")
+            tx, ty = int(x_str), int(y_str)
+            rx = min(tx * n_div_x // dst.width, n_div_x - 1)
+            ry = min(ty * n_div_y // dst.height, n_div_y - 1)
+            sinapsis_list = [
+                Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0))
+                for s in src_regions[(ry, rx)]
+            ]
+            dst_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
 
-        # ── Compile ──
-        n_tissue = self.width * self.height
-        n_input = self.input_resolution * self.input_resolution if self.input_enabled else 0
-        self._input_start_idx = n_tissue
-        self._output_start_idx = n_tissue + n_input
+    def _compile(self) -> None:
+        if self._is_wolfram:
+            self.brain_tensor = ConstructorTensor.compilar(
+                self.brain,
+                max_active_steps=self.up_ticks,
+                refractory_steps=self.down_ticks,
+                adaptation_enabled=self.adaptation_enabled,
+                process_mode=self.process_mode,
+                tension_fns=self._tissue.tension_fns if self._tissue else [],
+            )
+            self.learning_enabled = False
+            self._lr_per_syn = None
+            return
+
+        region_specs = self._region_specs()
+        conn_spans = [
+            (s.start, s.end, d.start, d.end)
+            for c in self._connections
+            for s in [self._regions_by_id.get(c.get("from"))]
+            for d in [self._regions_by_id.get(c.get("to"))]
+            if s is not None and d is not None
+        ]
 
         self.brain_tensor = ConstructorTensor.compilar(
             self.brain,
@@ -713,47 +660,83 @@ class Experiment(Experimento):
             refractory_steps=self.down_ticks,
             adaptation_enabled=self.adaptation_enabled,
             process_mode=self.process_mode,
-            tension_fns=self._tension_fns,
-            output_start=self._output_start_idx if self.output_enabled else 0,
+            tension_fns=self._tissue.tension_fns if self._tissue else [],
+            connections=conn_spans,
+            region_specs=region_specs,
         )
 
-        # ── Pre-render characters ──
-        self._char_images = {}
-        if self.input_enabled and not self._is_synthetic_input():
-            for char in set(self.input_text):
-                self._char_images[char] = render_char(
-                    char, self.input_resolution,
-                    font_id=self._font_id, font_size=self._font_size,
-                )
+        self._rebuild_lr_per_syn()
 
-        # ── Frame tracking ──
-        self._char_index = 0
-        self._frame_in_char = 0
-        self._in_gap = False
-        self._rng = np.random.default_rng()
+    def _rebuild_lr_per_syn(self) -> None:
+        """Build [NR, max_syn] effective learning rate per synapse.
 
-        # ── Daemon stats ──
-        self._daemon_history.clear()
-        self._last_history_gen = -1
+        Intra-region synapses use region.wiring.learning_rate; cross-region synapses
+        use connection.learning.rate. NeuronaEntrada have no synapses, so they never
+        appear. Recomputed from scratch on every soft update.
+        """
+        bt = self.brain_tensor
+        if bt is None:
+            return
+        NR = bt.n_real
+        max_syn = bt.pesos_sinapsis.shape[1]
+        lr = torch.zeros(NR, max_syn, dtype=torch.float32, device=bt.device)
+        src_safe = bt.indices_fuente.clamp(0, bt.mascara_entrada.shape[0] - 1)
+        dst_idx = torch.arange(NR, device=bt.device).unsqueeze(1).expand(NR, max_syn)
 
-        # ── Label init ──
-        self._current_label = None
-        if self._label_enabled:
-            self._update_label()
+        # Intra-region wiring synapses
+        for r in self._wiring_regions():
+            wlr = r.wiring_cfg.get("learning_rate")
+            if not wlr:
+                continue
+            in_region = (dst_idx >= r.start) & (dst_idx < r.end)
+            local = in_region & ~bt.es_cross_region & bt.mascara_valida
+            lr = torch.where(local, torch.full_like(lr, float(wlr)), lr)
 
-        # ── Project initial frame ──
-        if self.input_enabled:
-            self._generate_and_project()
+        # Cross-region connection synapses
+        exclude_range: tuple[float, float] | None = None
+        for c in self._connections:
+            s = self._regions_by_id.get(c.get("from"))
+            d = self._regions_by_id.get(c.get("to"))
+            if s is None or d is None:
+                continue
+            learning = c.get("learning")
+            if isinstance(learning, dict):
+                rate = float(learning.get("rate", 0.0))
+                er = learning.get("exclude_range")
+                if er:
+                    exclude_range = (float(er[0]), float(er[1]))
+            else:
+                rate = float(c.get("learning_rate", 0.0))
+            if rate == 0.0:
+                continue
+            dst_in = (dst_idx >= d.start) & (dst_idx < d.end)
+            src_in = (src_safe >= s.start) & (src_safe < s.end)
+            conn_mask = dst_in & src_in & bt.mascara_valida
+            lr = torch.where(conn_mask, torch.full_like(lr, rate), lr)
 
-    # ── Input helpers ──
+        self._lr_per_syn = lr
+        self._conn_exclude_range = exclude_range
+        self.learning_enabled = bool((lr != 0).any().item())
 
-    def _is_synthetic_input(self) -> bool:
-        if not self.input_text:
+    # ── Source injection ──
+
+    def _init_ascii_region(self, rs: RegionState) -> None:
+        rs.char_index = 0
+        rs.frame_in_char = 0
+        rs.in_gap = False
+        rs.char_images = {}
+        text = rs.source_cfg.get("text", "") or ""
+        if text and not self._is_synthetic(text):
+            font_id = rs.source_cfg.get("font", "press_start_2p")
+            font_size = int(rs.source_cfg.get("font_size", 10))
+            for char in set(text):
+                rs.char_images[char] = render_char(char, rs.width, font_id=font_id, font_size=font_size)
+
+    @staticmethod
+    def _is_synthetic(text: str) -> bool:
+        if not text:
             return False
-        return all(
-            tok.strip() in self._SYNTHETIC_PATTERNS
-            for tok in self.input_text.split(",")
-        )
+        return all(tok.strip() in _SYNTHETIC_PATTERNS for tok in text.split(","))
 
     @staticmethod
     def _make_synthetic(name: str, res: int) -> np.ndarray:
@@ -765,111 +748,145 @@ class Experiment(Experimento):
         elif name == "BARS_H":
             for i in range(3):
                 y = int(res * (i + 1) / 4)
-                y0 = max(0, y - 1)
-                y1 = min(res, y + 2)
-                frame[y0:y1, :] = 1.0
+                frame[max(0, y - 1):min(res, y + 2), :] = 1.0
         elif name == "BARS_V":
             for i in range(3):
                 x = int(res * (i + 1) / 4)
-                x0 = max(0, x - 1)
-                x1 = min(res, x + 2)
-                frame[:, x0:x1] = 1.0
+                frame[:, max(0, x - 1):min(res, x + 2)] = 1.0
         elif name == "DOT_TL":
             frame[:5, :5] = 1.0
         elif name == "DOT_BR":
             frame[-5:, -5:] = 1.0
         return frame
 
-    def _generate_and_project(self) -> None:
-        res = self.input_resolution
+    def _inject_source(self, rs: RegionState) -> None:
+        if rs.source_type == "ascii":
+            self._inject_ascii(rs)
+        elif rs.source_type == "error_diff":
+            self._inject_error_diff(rs)
 
-        if not self.input_text:
+    def _inject_ascii(self, rs: RegionState) -> None:
+        res = rs.width
+        text = rs.source_cfg.get("text", "") or ""
+        noise = rs.source_cfg.get("noise") or {}
+        background = float(noise.get("background", 0.0))
+        shift = bool(noise.get("shift", False))
+
+        if not text or rs.in_gap:
             frame = self._rng.integers(0, 2, size=(res, res)).astype(np.float64)
-        elif self._in_gap:
-            frame = self._rng.integers(0, 2, size=(res, res)).astype(np.float64)
-        elif self._is_synthetic_input():
-            tokens = [t.strip() for t in self.input_text.split(",")]
-            pattern_name = tokens[self._char_index % len(tokens)]
-            frame = self._make_synthetic(pattern_name, res)
-            if self.background_noise > 0:
-                frame = apply_white_noise(frame, noise_prob=self.background_noise, rng=self._rng)
+        elif self._is_synthetic(text):
+            tokens = [t.strip() for t in text.split(",")]
+            frame = self._make_synthetic(tokens[rs.char_index % len(tokens)], res)
+            if background > 0:
+                frame = apply_white_noise(frame, noise_prob=background, rng=self._rng)
         else:
-            char = self.input_text[self._char_index]
-            base = self._char_images[char]
-            frame = base.copy()
-            if self.shift_noise:
+            frame = rs.char_images[text[rs.char_index]].copy()
+            if shift:
                 frame = apply_shift_noise(frame, self._rng)
-            if self.background_noise > 0:
-                frame = apply_white_noise(frame, noise_prob=self.background_noise, rng=self._rng)
+            if background > 0:
+                frame = apply_white_noise(frame, noise_prob=background, rng=self._rng)
 
-        self._current_input_frame = frame
-        self._update_label()
-
+        rs.current_frame = frame
         if self.brain_tensor is not None:
             flat = torch.from_numpy(frame.flatten()).float()
-            start = self._input_start_idx
-            end = start + len(flat)
-            self.brain_tensor.valores[start:end] = flat
+            self.brain_tensor.valores[rs.start : rs.start + len(flat)] = flat
 
-    def _update_label(self) -> None:
-        if not self._label_enabled or self._output_n == 0:
+    def _inject_error_diff(self, rs: RegionState) -> None:
+        if self.brain_tensor is None:
             return
-        if self._is_synthetic_input():
-            n_classes = len([t.strip() for t in self.input_text.split(",")])
+        n = rs.n
+        out_region = self._regions_by_id.get("output")
+        if out_region is None:
+            out_region = next((r for r in self._wiring_regions() if r is not self._tissue), None)
+        if out_region is None:
+            return
+
+        pred_full = self.brain_tensor.valores[out_region.start:out_region.end].cpu()
+        pred = self._compress_to_n(pred_full, n)
+
+        target_id = rs.source_cfg.get("target", "input")
+        target: torch.Tensor | None = None
+        if target_id == "label":
+            ascii_r = self._ascii_region()
+            classes = max(1, self._label_target_classes(ascii_r)) if ascii_r else 1
+            class_idx = (ascii_r.char_index % n) if ascii_r else 0
+            lbl = torch.zeros(n)
+            lbl[class_idx] = 1.0
+            target = lbl
         else:
-            n_classes = len(self.input_text)
-        self._n_classes = n_classes
-        label = torch.zeros(self._output_n)
-        class_idx = self._char_index % self._output_n
-        label[class_idx] = 1.0
-        self._current_label = label
+            target_region = self._regions_by_id.get(target_id) or self._ascii_region()
+            if target_region is not None and target_region.current_frame is not None:
+                flat = torch.from_numpy(target_region.current_frame.flatten()).float()
+                target = self._compress_to_n(flat, n)
+
+        if target is None:
+            return
+
+        if rs.source_cfg.get("diff_mode", "abs") == "relu":
+            error = torch.relu(target - pred)
+        else:
+            error = torch.abs(target - pred)
+        self.brain_tensor.valores[rs.start:rs.start + n] = error.to(self.brain_tensor.device)
+
+    @staticmethod
+    def _compress_to_n(t: torch.Tensor, n: int) -> torch.Tensor:
+        length = len(t)
+        if length == n:
+            return t
+        if length > n:
+            chunk = length // n
+            result = torch.zeros(n)
+            for i in range(n):
+                s = i * chunk
+                e = (i + 1) * chunk if i < n - 1 else length
+                result[i] = t[s:e].mean()
+            return result
+        result = torch.zeros(n)
+        result[:length] = t
+        return result
+
+    def _current_label(self, region: RegionState) -> torch.Tensor | None:
+        """One-hot label for a label-source region (n = region size)."""
+        ascii_r = self._ascii_region()
+        if ascii_r is None or region.n == 0:
+            return None
+        label = torch.zeros(region.n)
+        label[ascii_r.char_index % region.n] = 1.0
+        return label
+
+    def _label_region(self) -> RegionState | None:
+        return next((r for r in self._regions if r.source_type == "label"), None)
 
     # ── Processing ──
 
     def step(self) -> dict[str, Any]:
-        if self.input_enabled:
-            self._generate_and_project()
+        for rs in self._regions:
+            if rs.is_ascii_input:
+                self._inject_ascii(rs)
+
         self.brain_tensor.procesar()
 
-        # Label injection: override output neuron tension with ground-truth class signal
-        # so that learn() uses the label as the modulating signal for tissue→output weights.
-        if self._label_enabled and self._current_label is not None and self.brain_tensor is not None:
-            label_tension = self._current_label * 2.0 - 1.0  # [0,1] → [-1,+1]
-            o_start = self._output_start_idx
-            o_end = o_start + self._output_n
-            self.brain_tensor.tensiones[o_start:o_end] = label_tension.to(self.brain_tensor.device)
+        label_region = self._label_region()
+        if label_region is not None:
+            label = self._current_label(label_region)
+            if label is not None:
+                label_tension = label * 2.0 - 1.0
+                self.brain_tensor.tensiones[label_region.start:label_region.end] = (
+                    label_tension.to(self.brain_tensor.device)
+                )
 
-        if self.learning_enabled and self.brain_tensor is not None:
+        for rs in self._regions:
+            if rs.source_type == "error_diff":
+                self._inject_error_diff(rs)
+
+        if self.learning_enabled and self._lr_per_syn is not None:
             self.brain_tensor.learn(
-                lr=self.learning_rate,
-                lr_exc=self.lr_exc,
-                lr_inh=self.lr_inh,
-                lr_input=self.lr_input,
-                lr_output=self.lr_output,
+                lr_per_syn=self._lr_per_syn,
                 conn_exclude_range=self._conn_exclude_range,
             )
 
         self.generation += 1
-
-        if self.input_enabled and self.input_text:
-            n_items = (
-                len([t.strip() for t in self.input_text.split(",")])
-                if self._is_synthetic_input()
-                else len(self.input_text)
-            )
-            self._frame_in_char += 1
-            if self._in_gap:
-                if self._frame_in_char >= self.frames_per_char:
-                    self._in_gap = False
-                    self._frame_in_char = 0
-                    self._char_index = (self._char_index + 1) % n_items
-            elif self._frame_in_char >= self.frames_per_char:
-                if self.inter_char_noise:
-                    self._in_gap = True
-                    self._frame_in_char = 0
-                else:
-                    self._frame_in_char = 0
-                    self._char_index = (self._char_index + 1) % n_items
+        self._advance_ascii_frames()
 
         return {
             "type": "frame",
@@ -878,6 +895,34 @@ class Experiment(Experimento):
             "stats": self.get_stats(),
         }
 
+    def _advance_ascii_frames(self) -> None:
+        for rs in self._regions:
+            if not rs.is_ascii_input:
+                continue
+            text = rs.source_cfg.get("text", "") or ""
+            if not text:
+                continue
+            noise = rs.source_cfg.get("noise") or {}
+            inter_char = bool(noise.get("inter_char", False))
+            fpc = max(1, int(rs.source_cfg.get("frames_per_char", 10)))
+            n_items = (
+                len([t.strip() for t in text.split(",")])
+                if self._is_synthetic(text) else len(text)
+            )
+            rs.frame_in_char += 1
+            if rs.in_gap:
+                if rs.frame_in_char >= fpc:
+                    rs.in_gap = False
+                    rs.frame_in_char = 0
+                    rs.char_index = (rs.char_index + 1) % n_items
+            elif rs.frame_in_char >= fpc:
+                if inter_char:
+                    rs.in_gap = True
+                    rs.frame_in_char = 0
+                else:
+                    rs.frame_in_char = 0
+                    rs.char_index = (rs.char_index + 1) % n_items
+
     def step_n(self, count: int) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for _ in range(count):
@@ -885,13 +930,16 @@ class Experiment(Experimento):
         return result
 
     def click(self, x: int, y: int) -> None:
-        if self.brain_tensor is None:
+        if self.brain_tensor is None or self._tissue is None:
             return
         idx = y * self.width + x
-        limit = self._input_start_idx if self.input_enabled else self.brain_tensor.n_real
+        ascii_r = self._ascii_region()
+        limit = ascii_r.start if ascii_r else self.brain_tensor.n_real
         if 0 <= idx < limit:
             current = self.brain_tensor.valores[idx].item()
             self.brain_tensor.set_valor(idx, 0.0 if current >= 0.5 else 1.0)
+
+    # ── Frame serialization ──
 
     def get_frame(self) -> list[list[float]]:
         if self.brain_tensor:
@@ -903,82 +951,53 @@ class Experiment(Experimento):
             return self.brain_tensor.get_tension_grid(self.width, self.height)
         return None
 
-    def get_input_frame(self) -> list[list[float]] | None:
-        if not self.input_enabled:
-            return None
-        if self._current_input_frame is not None:
-            return self._current_input_frame.tolist()
-        return None
-
-    def get_output_frame(self) -> list[list[float]] | None:
-        if not self.output_enabled or self.brain_tensor is None:
-            return None
-        vals = self.brain_tensor.valores[self._output_start_idx:self._output_start_idx + self._output_n]
-        return vals.reshape(self.output_height, self.output_width).tolist()
-
-    def get_label_frame(self) -> list[list[float]] | None:
-        if not self._label_enabled or self._current_label is None:
-            return None
-        return self._current_label.reshape(self.output_height, self.output_width).tolist()
+    def _region_values(self, rs: RegionState) -> torch.Tensor:
+        return self.brain_tensor.valores[rs.start:rs.end]
 
     def get_region_frames(self) -> dict[str, list[list[float]]]:
-        """Return all region grids keyed by region ID, in config declaration order."""
-        frames: dict[str, list[list[float]] | None] = {}
-
-        frame = self.get_frame()
-        frames[self._tissue_id] = [[round(v) for v in row] for row in frame] if frame else None
-
-        if self._input_id:
-            input_frame = self.get_input_frame()
-            frames[self._input_id] = (
-                [[round(v) for v in row] for row in input_frame] if input_frame is not None else None
-            )
-
-        if self._output_id:
-            output_frame = self.get_output_frame()
-            frames[self._output_id] = (
-                [[round(v, 3) for v in row] for row in output_frame] if output_frame is not None else None
-            )
-
-        # Emit in config declaration order
+        if self.brain_tensor is None:
+            return {}
         result: dict[str, list[list[float]]] = {}
-        for region in self._config.get("regions", []):
-            rid = region.get("id")
-            if rid and rid in frames and frames[rid] is not None:
-                result[rid] = frames[rid]  # type: ignore[assignment]
-
+        for rs in self._regions:
+            vals = self._region_values(rs).reshape(rs.height, rs.width).tolist()
+            if rs.is_entrada and rs.source_type not in (None, "ascii"):
+                # error_diff / label: continuous values make sense
+                result[rs.id] = [[round(v, 3) for v in row] for row in vals]
+            else:
+                # wiring regions and ascii input: binary display
+                result[rs.id] = [[round(v) for v in row] for row in vals]
         return result
 
     def get_region_tension_frames(self) -> dict[str, list[list[float]]]:
-        """Return tension grids for all regions that have computed tensions, in config order."""
         if self.brain_tensor is None:
             return {}
-
-        raw: dict[str, list[list[float]]] = {}
-
-        n_tissue = self.width * self.height
-        t = self.brain_tensor.tensiones[:n_tissue]
-        raw[self._tissue_id] = [[round(v, 3) for v in row] for row in t.reshape(self.height, self.width).tolist()]
-
-        if self._output_id and self.output_enabled:
-            t_out = self.brain_tensor.tensiones[self._output_start_idx:self._output_start_idx + self._output_n]
-            raw[self._output_id] = [[round(v, 3) for v in row] for row in t_out.reshape(self.output_height, self.output_width).tolist()]
-
         result: dict[str, list[list[float]]] = {}
-        for region in self._config.get("regions", []):
-            rid = region.get("id")
-            if rid and rid in raw:
-                result[rid] = raw[rid]
-        return result
+        for rs in self._processed_regions():
+            t = self.brain_tensor.tensiones[rs.start:rs.end]
+            result[rs.id] = [
+                [round(v, 3) for v in row]
+                for row in t.reshape(rs.height, rs.width).tolist()
+            ]
+        # Emit in config declaration order
+        return {r.id: result[r.id] for r in self._regions if r.id in result}
 
     def get_label_frames(self) -> dict[str, list[list[float]]] | None:
-        """Return label grids keyed by output region ID (None if no label source)."""
-        if not self._output_id or not self._label_enabled:
+        label_region = self._label_region()
+        if label_region is None:
             return None
-        label_frame = self.get_label_frame()
-        if label_frame is None:
+        label = self._current_label(label_region)
+        if label is None:
             return None
-        return {self._output_id: [[round(v) for v in row] for row in label_frame]}
+        grid = label.reshape(label_region.height, label_region.width).tolist()
+        return {label_region.id: [[round(v) for v in row] for row in grid]}
+
+    def get_input_frame(self) -> list[list[float]] | None:
+        rs = self._ascii_region()
+        if rs is not None and rs.current_frame is not None:
+            return rs.current_frame.tolist()
+        return None
+
+    # ── Stats ──
 
     def get_stats(self) -> dict[str, Any]:
         if self.brain_tensor is None:
@@ -1030,51 +1049,45 @@ class Experiment(Experimento):
             "exclusion": round(exclusion, 3),
         }
 
-        if self.input_enabled:
-            if not self.input_text:
+        ascii_r = self._ascii_region()
+        if ascii_r is not None:
+            text = ascii_r.source_cfg.get("text", "") or ""
+            if not text:
                 current_char = ""
-            elif self._in_gap:
+            elif ascii_r.in_gap:
                 current_char = "gap"
-            elif self._is_synthetic_input():
-                tokens = [t.strip() for t in self.input_text.split(",")]
-                current_char = tokens[self._char_index % len(tokens)]
+            elif self._is_synthetic(text):
+                tokens = [t.strip() for t in text.split(",")]
+                current_char = tokens[ascii_r.char_index % len(tokens)]
             else:
-                current_char = self.input_text[self._char_index]
-
+                current_char = text[ascii_r.char_index]
             stats.update({
                 "current_char": current_char,
-                "char_index": self._char_index,
-                "frame_in_char": self._frame_in_char,
-                "frames_per_char": self.frames_per_char,
-                "input_resolution": self.input_resolution,
+                "char_index": ascii_r.char_index,
+                "frame_in_char": ascii_r.frame_in_char,
+                "frames_per_char": max(1, int(ascii_r.source_cfg.get("frames_per_char", 10))),
+                "input_resolution": ascii_r.width,
             })
 
         return stats
 
-    def inspect(self, x: int, y: int, region_id: str | None = None) -> dict[str, Any]:
-        """Return connection weights for any neuron in any region."""
-        effective_region = region_id or self._tissue_id
+    # ── Inspect ──
 
+    def _region_at(self, region_id: str | None) -> RegionState:
+        if region_id and region_id in self._regions_by_id:
+            return self._regions_by_id[region_id]
+        return self._tissue
+
+    def inspect(self, x: int, y: int, region_id: str | None = None) -> dict[str, Any]:
         if self.brain_tensor is None:
             result = super().inspect(x, y)
             result["input_weight_grid"] = None
-            result["region_id"] = effective_region
+            result["region_id"] = region_id or self._tissue_id
             return result
 
-        # Resolve global neuron index and whether this is a same-region inspection
-        if effective_region == self._output_id and self.output_enabled:
-            neuron_idx = self._output_start_idx + y * self.output_width + x
-            is_same_region_as_tissue = False
-        elif effective_region == self._input_id and self.input_enabled:
-            neuron_idx = self._input_start_idx + y * self.input_resolution + x
-            is_same_region_as_tissue = False
-        else:
-            neuron_idx = y * self.width + x
-            is_same_region_as_tissue = True
-
-        n_input = (self.input_resolution * self.input_resolution) if self.input_enabled else 0
-        input_start = self._input_start_idx
-        input_end = input_start + n_input
+        target = self._region_at(region_id)
+        is_tissue = target is self._tissue
+        neuron_idx = target.start + y * target.width + x
 
         sources = self.brain_tensor.indices_fuente[neuron_idx]
         weights = self.brain_tensor.pesos_sinapsis[neuron_idx]
@@ -1085,35 +1098,33 @@ class Experiment(Experimento):
         total_sinapsis = int(valid.sum().item())
         total_dendritas = int(dend_ids[valid].unique().numel()) if total_sinapsis > 0 else 0
 
-        tissue_pesos: dict[int, float] = {}
-        input_weights: list[float] = [0.0] * n_input
-
+        # Per-source-region effective weight maps
+        per_region: dict[str, dict[int, float]] = {r.id: {} for r in self._regions}
         for i in range(sources.shape[0]):
             if not valid[i]:
                 continue
             src = sources[i].item()
             w = weights[i].item()
             dw = dend_weights[i].item()
+            src_region = self._region_of_index(src)
+            if src_region is None:
+                continue
+            local_src = src - src_region.start
+            if src_region.is_ascii_input:
+                per_region[src_region.id][local_src] = w
+            else:
+                acc = per_region[src_region.id]
+                acc[local_src] = max(-1.0, min(1.0, acc.get(local_src, 0.0) + w * dw))
 
-            if self.input_enabled and input_start <= src < input_end:
-                input_weights[src - input_start] = w
-            elif src < input_start:
-                effective = w * dw
-                tissue_pesos[src] = tissue_pesos.get(src, 0.0) + effective
-
-        for src in tissue_pesos:
-            tissue_pesos[src] = max(-1.0, min(1.0, tissue_pesos[src]))
-
+        tissue_pesos = per_region.get(self._tissue.id, {})
         weight_grid: list[list[float | None]] = []
         for row in range(self.height):
             fila: list[float | None] = []
             for col in range(self.width):
-                # Mark self only when inspecting a tissue neuron
-                if is_same_region_as_tissue and col == x and row == y:
+                if is_tissue and col == x and row == y:
                     fila.append(999)
                 else:
-                    idx = row * self.width + col
-                    fila.append(tissue_pesos.get(idx))
+                    fila.append(tissue_pesos.get(row * self.width + col))
             weight_grid.append(fila)
 
         activation = self.brain_tensor.valores[neuron_idx].item()
@@ -1123,7 +1134,7 @@ class Experiment(Experimento):
             "type": "connections",
             "x": x,
             "y": y,
-            "region_id": effective_region,
+            "region_id": target.id,
             "activation": round(activation, 4),
             "tension": round(tension, 4),
             "total_dendritas": total_dendritas,
@@ -1131,158 +1142,119 @@ class Experiment(Experimento):
             "weight_grid": weight_grid,
         }
 
-        if self.input_enabled and n_input > 0 and is_same_region_as_tissue:
-            res = self.input_resolution
-            input_grid: list[list[float]] = []
-            for r in range(res):
-                input_grid.append(input_weights[r * res : (r + 1) * res])
-            result["input_weight_grid"] = input_grid
+        ascii_r = self._ascii_region()
+        if ascii_r is not None and is_tissue:
+            res = ascii_r.width
+            inp = per_region.get(ascii_r.id, {})
+            grid: list[list[float]] = []
+            for r in range(ascii_r.height):
+                grid.append([inp.get(r * res + c, 0.0) for c in range(res)])
+            result["input_weight_grid"] = grid
             result["input_weight_width"] = res
-            result["input_weight_height"] = res
+            result["input_weight_height"] = ascii_r.height
         else:
             result["input_weight_grid"] = None
 
+        # Generic per-source-region grids (output / nociceptor / etc.)
+        for src_region in self._regions:
+            if src_region is self._tissue or src_region is ascii_r:
+                continue
+            pesos = per_region.get(src_region.id)
+            if not pesos:
+                continue
+            sw, sh = src_region.width, src_region.height
+            grid2: list[list[float | None]] = []
+            for r in range(sh):
+                grid2.append([pesos.get(r * sw + c) for c in range(sw)])
+            key = src_region.id
+            result[f"{key}_weight_grid"] = grid2
+            result[f"{key}_weight_width"] = sw
+            result[f"{key}_weight_height"] = sh
+
         return result
 
-    def update_config(self, config: dict[str, Any]) -> bool:
-        """Apply config changes to a running experiment.
+    def _region_of_index(self, idx: int) -> RegionState | None:
+        for r in self._regions:
+            if r.start <= idx < r.end:
+                return r
+        return None
 
-        Accepts both canonical and legacy format — converts via _to_canonical().
-        Returns True if only soft updates were applied (no rebuild needed).
-        """
+    # ── Update config ──
+
+    def update_config(self, config: dict[str, Any]) -> bool:
         if self.brain_tensor is None:
             return False
 
         new_config = _to_canonical(config)
-        old_config = self._config  # always canonical after setup()
+        old_config = self._config
 
-        old_tissue = next((r for r in old_config.get("regions", []) if "wiring" in r), {})
-        new_tissue = next((r for r in new_config.get("regions", []) if "wiring" in r), {})
-        old_connections = old_config.get("connections", [])
-        new_connections = new_config.get("connections", [])
-        old_conn = old_connections[0] if old_connections else {}
-        new_conn = new_connections[0] if new_connections else {}
+        old_regions = {r.get("id"): r for r in old_config.get("regions", [])}
+        new_regions = {r.get("id"): r for r in new_config.get("regions", [])}
 
-        needs_reconnect = False
-
-        if new_tissue.get("grid") != old_tissue.get("grid"):
-            needs_reconnect = True
+        needs_reconnect = set(old_regions) != set(new_regions)
 
         if not needs_reconnect:
-            old_wiring = old_tissue.get("wiring", {})
-            new_wiring = new_tissue.get("wiring", {})
-            for k in ("mask", "dendrite_exc_weight", "dendrite_inh_weight"):
-                if new_wiring.get(k) != old_wiring.get(k):
+            for rid, new_r in new_regions.items():
+                old_r = old_regions[rid]
+                if new_r.get("grid") != old_r.get("grid"):
+                    needs_reconnect = True
+                    break
+                old_w = old_r.get("wiring") or {}
+                new_w = new_r.get("wiring") or {}
+                for k in ("mask", "deamon", "dendrite_exc_weight", "dendrite_inh_weight"):
+                    if old_w.get(k) != new_w.get(k):
+                        needs_reconnect = True
+                        break
+                if needs_reconnect:
+                    break
+                old_src = old_r.get("source") or {}
+                new_src = new_r.get("source") or {}
+                if old_src.get("type") != new_src.get("type"):
                     needs_reconnect = True
                     break
 
         if not needs_reconnect:
-            old_out = next((r for r in old_config.get("regions", []) if r.get("id") == self._output_id), {})
-            new_out = next((r for r in new_config.get("regions", []) if r.get("id") == self._output_id), {})
-            if old_out.get("wiring") != new_out.get("wiring"):
+            # Connection topology (weights / density / from / to) → rebuild
+            def conn_key(c: dict) -> tuple:
+                return (c.get("from"), c.get("to"), c.get("type"),
+                        c.get("weight"), c.get("density"), tuple(c.get("portion") or ()))
+            old_conns = [conn_key(c) for c in old_config.get("connections", [])]
+            new_conns = [conn_key(c) for c in new_config.get("connections", [])]
+            if old_conns != new_conns:
                 needs_reconnect = True
-
-        if not needs_reconnect:
-            old_has_source = any("source" in r for r in old_config.get("regions", []))
-            new_has_source = any("source" in r for r in new_config.get("regions", []))
-            if old_has_source != new_has_source:
-                needs_reconnect = True
-            elif new_has_source:
-                old_src = next((r for r in old_config["regions"] if "source" in r), {})
-                new_src = next((r for r in new_config["regions"] if "source" in r), {})
-                if old_src.get("grid") != new_src.get("grid"):
-                    needs_reconnect = True
-                elif old_conn.get("weight") != new_conn.get("weight"):
-                    needs_reconnect = True
 
         if needs_reconnect:
             self.setup(new_config)
             return False
 
         # ── Soft updates ──
-        # Resolve connections the same way setup() does
-        new_input_conn = next(
-            (c for c in new_connections if c.get("to") == self._tissue_id),
-            new_connections[0] if new_connections else None,
-        )
-        new_output_conn = next(
-            (c for c in new_connections
-             if c.get("from") == self._tissue_id and c.get("to") != self._tissue_id),
-            None,
-        )
-        new_wiring = new_tissue.get("wiring", {})
+        for rs in self._regions:
+            new_r = new_regions.get(rs.id, {})
+            new_wiring = new_r.get("wiring") or {}
+            new_source = new_r.get("source") or {}
 
-        # process_mode — always sync (handles removal → revert to default)
-        self.process_mode = new_wiring.get("process_mode", "min_vs_max")
-        self.brain_tensor.process_mode = self.process_mode
+            if rs.has_wiring:
+                rs.wiring_cfg = new_wiring
+                rs.process_mode = new_wiring.get("process_mode", "min_vs_max")
+                rs.tension_fns = _tension_fns_of(new_wiring)
+                new_umbral = float(new_r.get("umbral", 0.0))
+                if new_umbral != rs.umbral:
+                    rs.umbral = new_umbral
+                    self.brain_tensor.umbrales[rs.start:rs.end] = new_umbral
 
-        # tension_function — always sync
-        tf = new_wiring.get("tension_function")
-        if tf and isinstance(tf, dict):
-            self._tension_fns = [(k, float(v)) for k, v in tf.items()]
-        else:
-            self._tension_fns = []
-        self.brain_tensor.tension_fns = self._tension_fns
+            if rs.is_ascii_input and new_source:
+                self._soft_update_ascii(rs, new_source)
+                rs.source_cfg = new_source
 
-        # umbral tissue — soft update tensor in place
-        new_tissue_umbral = float(new_wiring.get("umbral", 0.0))
-        if new_tissue_umbral != self.tissue_umbral:
-            self.tissue_umbral = new_tissue_umbral
-            n_tissue = self.width * self.height
-            self.brain_tensor.umbrales[:n_tissue] = new_tissue_umbral
+        # Sync brain_tensor global mode/specs/spiking from tissue
+        if self._tissue is not None:
+            self.process_mode = self._tissue.process_mode
+            self.brain_tensor.process_mode = self.process_mode
+            self.brain_tensor.tension_fns = self._tissue.tension_fns
+        self.brain_tensor.region_specs = self._region_specs()
 
-        # umbral output — soft update tensor in place
-        new_out_region = next(
-            (r for r in new_config.get("regions", []) if r.get("id") == self._output_id), {}
-        )
-        new_output_umbral = float(new_out_region.get("umbral", 0.0))
-        if new_output_umbral != self.output_umbral and self.output_enabled:
-            self.output_umbral = new_output_umbral
-            o_start = self._output_start_idx
-            self.brain_tensor.umbrales[o_start:o_start + self._output_n] = new_output_umbral
-
-        # learning rates — canonical format: connection.learning.rate
-        wiring_lr = new_wiring.get("learning_rate")
-        conn_learning = new_input_conn.get("learning") if new_input_conn else None
-        if isinstance(conn_learning, dict):
-            conn_lr: float | None = float(conn_learning.get("rate", 0.0))
-            er = conn_learning.get("exclude_range")
-            self._conn_exclude_range = (float(er[0]), float(er[1])) if er else None
-        else:
-            conn_lr = float(new_input_conn.get("learning_rate", 0.0)) if new_input_conn else None
-            self._conn_exclude_range = None
-        out_learning = new_output_conn.get("learning") if new_output_conn else None
-        if isinstance(out_learning, dict):
-            out_lr: float = float(out_learning.get("rate", 0.0))
-        else:
-            out_lr = float(new_output_conn.get("learning_rate", 0.0)) if new_output_conn else 0.0
-        self.learning_rate = 1.0
-        self.lr_exc = float(wiring_lr) if wiring_lr is not None else 0.0
-        self.lr_inh = float(wiring_lr) if wiring_lr is not None else 0.0
-        self.lr_input = float(conn_lr) if conn_lr is not None else 0.0
-        self.lr_output = out_lr
-        self.learning_enabled = (
-            self.lr_exc > 0 or self.lr_inh > 0 or self.lr_input > 0 or self.lr_output > 0
-        )
-
-        # noise — canonical: lives in source_region["source"]["noise"]
-        new_src_region = next(
-            (r for r in new_config.get("regions", [])
-             if "source" in r and r["source"].get("type") != "label"),
-            None,
-        )
-        new_noise = new_src_region["source"].get("noise") if new_src_region else None
-        if new_noise:
-            self.background_noise = float(new_noise.get("background", 0.0))
-            self.shift_noise = bool(new_noise.get("shift", False))
-            self.inter_char_noise = bool(new_noise.get("inter_char", False))
-        else:
-            self.background_noise = 0.0
-            self.shift_noise = False
-            self.inter_char_noise = False
-
-        # spiking
-        new_spiking = new_tissue.get("spiking")
+        new_tissue_cfg = new_regions.get(self._tissue.id, {}) if self._tissue else {}
+        new_spiking = new_tissue_cfg.get("spiking")
         if new_spiking:
             self.adaptation_enabled = True
             self.up_ticks = int(new_spiking.get("up_ticks", self.up_ticks))
@@ -1294,41 +1266,35 @@ class Experiment(Experimento):
             self.adaptation_enabled = False
             self.brain_tensor.adaptation_enabled = False
 
-        # input text / font / frames_per_char
-        if self.input_enabled and new_src_region:
-            source = new_src_region["source"]
-
-            font_changed = False
-            if "font" in source and source["font"] != self._font_id:
-                self._font_id = source["font"]
-                font_changed = True
-            if "font_size" in source and source["font_size"] != self._font_size:
-                self._font_size = int(source["font_size"])
-                font_changed = True
-
-            text_changed = False
-            if "text" in source:
-                new_text = source["text"] or ""
-                if new_text != self.input_text:
-                    self.input_text = new_text
-                    text_changed = True
-                    self._char_index = 0
-                    self._frame_in_char = 0
-                    self._in_gap = False
-
-            if "frames_per_char" in source:
-                self.frames_per_char = max(1, int(source["frames_per_char"]))
-
-            if (font_changed or text_changed) and not self._is_synthetic_input():
-                self._char_images = {}
-                for char in set(self.input_text):
-                    self._char_images[char] = render_char(
-                        char, self.input_resolution,
-                        font_id=self._font_id, font_size=self._font_size,
-                    )
+        # learning rates may have changed (intra-region wiring lr / connection lr)
+        self._connections = new_config.get("connections", [])
+        self._rebuild_lr_per_syn()
 
         self._config = new_config
         return True
+
+    def _soft_update_ascii(self, rs: RegionState, new_source: dict[str, Any]) -> None:
+        old_source = rs.source_cfg
+        font_changed = False
+        new_font = new_source.get("font", old_source.get("font", "press_start_2p"))
+        new_font_size = int(new_source.get("font_size", old_source.get("font_size", 10)))
+        if new_font != old_source.get("font", "press_start_2p"):
+            font_changed = True
+        if new_font_size != int(old_source.get("font_size", 10)):
+            font_changed = True
+
+        text_changed = False
+        new_text = new_source.get("text", old_source.get("text", "")) or ""
+        if new_text != (old_source.get("text", "") or ""):
+            text_changed = True
+            rs.char_index = 0
+            rs.frame_in_char = 0
+            rs.in_gap = False
+
+        if (font_changed or text_changed) and not self._is_synthetic(new_text):
+            rs.char_images = {}
+            for char in set(new_text):
+                rs.char_images[char] = render_char(char, rs.width, font_id=new_font, font_size=new_font_size)
 
     def reset(self) -> None:
         self.setup(self._config)

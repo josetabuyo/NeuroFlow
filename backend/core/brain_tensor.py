@@ -42,10 +42,8 @@ class BrainTensor:
         tension_fn: str = "",
         tension_fn_param: float = 1.0,
         tension_fns: list[tuple[str, float]] | None = None,
-        es_exc_syn: torch.BoolTensor | None = None,
-        es_inh_syn: torch.BoolTensor | None = None,
-        es_input_syn: torch.BoolTensor | None = None,
-        es_output_syn: torch.BoolTensor | None = None,
+        region_specs: list[tuple[int, int, str, list]] | None = None,
+        es_cross_region: torch.BoolTensor | None = None,
     ) -> None:
         self.device = device
         self.process_mode = process_mode
@@ -56,6 +54,9 @@ class BrainTensor:
             self.tension_fns = [(tension_fn, tension_fn_param)]
         else:
             self.tension_fns = []
+        # Per-region specs: list of (start, end, process_mode, tension_fns)
+        # When set, overrides the global process_mode/tension_fns for each neuron range.
+        self.region_specs: list[tuple[int, int, str, list]] = region_specs or []
         # n_real = number of actual neurons from the Brain
         # N = total including possible border zero neuron
         self.n_real = n_real
@@ -88,28 +89,31 @@ class BrainTensor:
         # Pre-compute per-dendrite weights [N, max_dend] and dendrite mask
         self._dend_pesos, self._dendrita_mascara = self._precompute_dendrite_info()
 
-        # Per-synapse type masks for selective learning
+        # Cross-region synapse mask: source neuron lives in a different region
+        # than the destination (built from connection spans). group_avg uses it to
+        # separate distant dendrites from local ones. Learning rate per synapse is
+        # supplied externally via learn(lr_per_syn).
         NR = n_real
         max_syn = pesos_sinapsis.shape[1] if pesos_sinapsis.ndim > 1 else 1
-        if es_exc_syn is not None:
-            self.es_exc_syn = es_exc_syn.to(device)
+        if es_cross_region is not None:
+            self.es_cross_region = es_cross_region.to(device)
         else:
-            self.es_exc_syn = torch.ones(NR, max_syn, dtype=torch.bool, device=device)
-        if es_inh_syn is not None:
-            self.es_inh_syn = es_inh_syn.to(device)
-        else:
-            self.es_inh_syn = torch.zeros(NR, max_syn, dtype=torch.bool, device=device)
-        if es_input_syn is not None:
-            self.es_input_syn = es_input_syn.to(device)
-        else:
-            self.es_input_syn = torch.zeros(NR, max_syn, dtype=torch.bool, device=device)
-        if es_output_syn is not None:
-            self.es_output_syn = es_output_syn.to(device)
-        else:
-            self.es_output_syn = torch.zeros(NR, max_syn, dtype=torch.bool, device=device)
+            self.es_cross_region = torch.zeros(NR, max_syn, dtype=torch.bool, device=device)
+
+        # Per-dendrite mask: True if that dendrite is a distant (cross-region) connection
+        self._is_input_dendrite = self._precompute_input_dendrite_mask()
 
         # Tension values (updated each procesar() call)
         self.tensiones = torch.zeros(self.N, device=device)
+
+    def _precompute_input_dendrite_mask(self) -> torch.BoolTensor:
+        """Per-dendrite boolean: True if the dendrite is a distant (cross-region) connection."""
+        NR = self._safe_dend_ids.shape[0]
+        expanded = self.max_dendritas + 1
+        distant_marker = self.es_cross_region.float()
+        is_inp = torch.zeros(NR, expanded, device=self.device)
+        is_inp.scatter_add_(1, self._safe_dend_ids, distant_marker)
+        return (is_inp[:, :self.max_dendritas] > 0)
 
     def _precompute_dendrite_info(self) -> tuple[torch.Tensor, torch.BoolTensor]:
         """Pre-compute dendrite weights and validity mask.
@@ -131,6 +135,63 @@ class BrainTensor:
         dendrita_mascara = conteos[:, :self.max_dendritas] > 0
 
         return dend_pesos, dendrita_mascara
+
+    def _apply_tension_fns(self, tension: torch.Tensor, fns: list) -> torch.Tensor:
+        result = torch.zeros_like(tension)
+        for fn_name, coeff in fns:
+            if fn_name == "x":
+                result = result + coeff * tension
+            elif fn_name.startswith("x_pow_"):
+                exp = int(fn_name.split("_pow_")[1])
+                result = result + coeff * tension.pow(exp)
+        return result.clamp(-1.0, 1.0)
+
+    def _compute_tension(self, dpc: torch.Tensor, mode: str, r_start: int, r_end: int) -> torch.Tensor:
+        """Compute tension for a slice of neurons [r_start:r_end] using dpc [slice_len, max_dend]."""
+        if mode == "sum":
+            return dpc.sum(dim=1).clamp(-1.0, 1.0)
+
+        if mode in ("avg_vs_avg", "avg_vs_avg_normalized"):
+            pos_mask = dpc > 0
+            neg_mask = dpc < 0
+            pos_avg = (dpc * pos_mask).sum(dim=1) / pos_mask.sum(dim=1).clamp(min=1.0)
+            neg_avg = (dpc * neg_mask).sum(dim=1) / neg_mask.sum(dim=1).clamp(min=1.0)
+            raw = pos_avg + neg_avg
+            if mode == "avg_vs_avg_normalized":
+                normalizer = (pos_avg - neg_avg).clamp(min=1e-8)
+                return (raw / normalizer).clamp(-1.0, 1.0)
+            return raw.clamp(-1.0, 1.0)
+
+        if mode == "pos_vs_neg":
+            max_pos = dpc.clamp(min=0.0).max(dim=1).values
+            neg_mask = dpc < 0
+            neg_avg = (dpc * neg_mask).sum(dim=1) / neg_mask.sum(dim=1).clamp(min=1.0)
+            return (max_pos + neg_avg).clamp(-1.0, 1.0)
+
+        if mode == "group_avg":
+            is_inp = self._is_input_dendrite[r_start:r_end]
+            is_loc = ~is_inp
+            is_pos = self._dend_pesos[r_start:r_end] > 0
+            is_neg = self._dend_pesos[r_start:r_end] < 0
+            valid = self._dendrita_mascara[r_start:r_end]
+
+            def _gavg(mask: torch.BoolTensor) -> torch.Tensor:
+                m = mask & valid
+                s = (dpc * m).sum(dim=1)
+                c = m.sum(dim=1).clamp(min=1.0)
+                return (s / c) * m.any(dim=1).float()
+
+            return (
+                _gavg(is_loc & is_pos) +
+                _gavg(is_loc & is_neg) +
+                _gavg(is_inp & is_pos) +
+                _gavg(is_inp & is_neg)
+            ).clamp(-1.0, 1.0)
+
+        # min_vs_max (default)
+        max_vals = dpc.max(dim=1).values.clamp(min=0.0)
+        min_vals = dpc.min(dim=1).values.clamp(max=0.0)
+        return (max_vals + min_vals).clamp(-1.0, 1.0)
 
     def procesar(self) -> None:
         """A full vectorized step.
@@ -173,41 +234,19 @@ class BrainTensor:
         # Invalid dendrites → 0 (neutral for both modes).
         dendrita_para_calc = dendrita_valores.where(self._dendrita_mascara, torch.zeros(1, device=self.device))
 
-        if self.process_mode == "sum":
-            tension = dendrita_para_calc.sum(dim=1).clamp(-1.0, 1.0)  # [NR]
-        elif self.process_mode in ("avg_vs_avg", "avg_vs_avg_normalized"):
-            pos_mask = dendrita_para_calc > 0
-            neg_mask = dendrita_para_calc < 0
-            pos_sum = (dendrita_para_calc * pos_mask).sum(dim=1)
-            pos_cnt = pos_mask.sum(dim=1).clamp(min=1.0)
-            neg_sum = (dendrita_para_calc * neg_mask).sum(dim=1)
-            neg_cnt = neg_mask.sum(dim=1).clamp(min=1.0)
-            pos_avg = pos_sum / pos_cnt
-            neg_avg = neg_sum / neg_cnt
-            raw = pos_avg + neg_avg
-            if self.process_mode == "avg_vs_avg_normalized":
-                # Divide by total scale so only the ratio exc/inh matters,
-                # not the absolute magnitudes. pos_avg >= 0, neg_avg <= 0,
-                # so normalizer = pos_avg - neg_avg = |pos_avg| + |neg_avg|.
-                normalizer = (pos_avg - neg_avg).clamp(min=1e-8)
-                tension = (raw / normalizer).clamp(-1.0, 1.0)
-            else:
-                tension = raw.clamp(-1.0, 1.0)
-        else:
-            # min_vs_max: max(0, positives) + min(0, negatives)
-            max_vals = dendrita_para_calc.max(dim=1).values.clamp(min=0.0)  # [NR]
-            min_vals = dendrita_para_calc.min(dim=1).values.clamp(max=0.0)  # [NR]
-            tension = (max_vals + min_vals).clamp(-1.0, 1.0)  # [NR]
+        tension = torch.zeros(NR, device=self.device)
 
-        if self.tension_fns:
-            result = torch.zeros_like(tension)
-            for fn_name, coeff in self.tension_fns:
-                if fn_name == "x":
-                    result = result + coeff * tension
-                elif fn_name.startswith("x_pow_"):
-                    exp = int(fn_name.split("_pow_")[1])
-                    result = result + coeff * tension.pow(exp)
-            tension = result.clamp(-1.0, 1.0)
+        if self.region_specs:
+            for r_start, r_end, r_mode, r_fns in self.region_specs:
+                t = self._compute_tension(dendrita_para_calc[r_start:r_end], r_mode, r_start, r_end)
+                if r_fns:
+                    t = self._apply_tension_fns(t, r_fns)
+                tension[r_start:r_end] = t
+        else:
+            t = self._compute_tension(dendrita_para_calc, self.process_mode, 0, NR)
+            if self.tension_fns:
+                t = self._apply_tension_fns(t, self.tension_fns)
+            tension = t
 
         self.tensiones[:NR] = tension
 
@@ -254,39 +293,29 @@ class BrainTensor:
 
     def learn(
         self,
-        lr: float,
-        lr_exc: float = 1.0,
-        lr_inh: float = 1.0,
-        lr_input: float = 1.0,
-        lr_output: float = 1.0,
+        lr_per_syn: torch.Tensor,
         conn_exclude_range: tuple[float, float] | None = None,
     ) -> None:
-        """Tension-modulated Hebbian learning with per-dendrite-type rates.
+        """Tension-modulated Hebbian learning with a per-synapse learning rate.
 
-        Rule: dW = lr * lr_type * tension * (source_value - weight)
-          - lr_exc/lr_inh/lr_input/lr_output multiply the base rate per synapse type.
-          - Set a multiplier to 0.0 to freeze learning for that dendrite type.
-          - conn_exclude_range: dead zone for connection (inter-region) dendrites.
+        Rule: dW = lr_per_syn * tension * (source_value - weight)
+          - lr_per_syn [NR, max_syn]: effective learning rate per synapse. It is
+            built once in setup() (intra-region wiring rate vs. per-connection rate)
+            and updated on soft-updates. A 0.0 entry freezes that synapse.
+          - conn_exclude_range: dead zone for cross-region synapses (skip update
+            when the current weight is inside [lo, hi]).
         """
         NR = self.n_real
 
         source_vals = self.valores[self.indices_fuente]  # [NR, max_syn]
         tension = self.tensiones[:NR].unsqueeze(1)       # [NR, 1]
 
-        # Per-synapse effective learning rate (types are mutually exclusive)
-        lr_map = (
-            self.es_exc_syn.float()    * lr_exc +
-            self.es_inh_syn.float()    * lr_inh +
-            self.es_input_syn.float()  * lr_input +
-            self.es_output_syn.float() * lr_output
-        )  # [NR, max_syn]
-
-        delta = lr * lr_map * tension * (source_vals - self.pesos_sinapsis)
+        delta = lr_per_syn * tension * (source_vals - self.pesos_sinapsis)
 
         if conn_exclude_range is not None:
             lo, hi = conn_exclude_range
             in_range = (self.pesos_sinapsis >= lo) & (self.pesos_sinapsis <= hi)
-            delta = delta.masked_fill(self.es_input_syn & in_range, 0.0)
+            delta = delta.masked_fill(self.es_cross_region & in_range, 0.0)
 
         self.pesos_sinapsis = (self.pesos_sinapsis + delta * self.mascara_valida).clamp(0.0, 1.0)
 

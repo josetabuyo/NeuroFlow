@@ -132,6 +132,8 @@ function App() {
     tensionGrid,
     tensionMode,
     inputWeightGrid,
+    outputWeightGrid,
+    nociceptorWeightGrid,
     regions,
     tensionRegions,
     tissueId,
@@ -248,36 +250,43 @@ function App() {
   }, [reconnect, config, saveExecution, selectedTemplate]);
 
   const applyBrush = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, regionId?: string) => {
       if (inspectMode) return;
       const offsets = generateSquareBrush(brushSize);
       const value = brushMode === "activate" ? 1.0 : 0.0;
+      let w: number, h: number;
+      if (regionId && regions[regionId]) {
+        const g = regions[regionId];
+        h = g.length;
+        w = g[0]?.length ?? 1;
+      } else {
+        const g = getConfigGrid(config);
+        w = g.width;
+        h = g.height;
+      }
       const cells = offsets
         .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
-        .filter(
-          (c) =>
-            c.x >= 0 && c.x < getConfigGrid(config).width && c.y >= 0 && c.y < getConfigGrid(config).height
-        );
-      paint(cells, value);
+        .filter((c) => c.x >= 0 && c.x < w && c.y >= 0 && c.y < h);
+      paint(cells, value, regionId);
     },
-    [inspectMode, brushSize, brushMode, config, paint]
+    [inspectMode, brushSize, brushMode, config, paint, regions]
   );
 
   const handleCellClick = useCallback(
     (x: number, y: number, regionId?: string) => {
       if (inspectMode) {
         inspect(x, y, regionId);
-      } else if (!regionId || regionId === tissueId) {
-        applyBrush(x, y);
+      } else {
+        applyBrush(x, y, regionId);
       }
     },
-    [inspectMode, inspect, applyBrush, tissueId]
+    [inspectMode, inspect, applyBrush]
   );
 
   const handleCellDrag = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, regionId?: string) => {
       if (inspectMode) return;
-      applyBrush(x, y);
+      applyBrush(x, y, regionId);
     },
     [inspectMode, applyBrush]
   );
@@ -411,6 +420,8 @@ function App() {
               inspectedRegionId={inspectedRegionId}
               inspectInfo={inspectInfo}
               inputWeightGrid={inputWeightGrid}
+              outputWeightGrid={outputWeightGrid}
+              nociceptorWeightGrid={nociceptorWeightGrid}
               onCellClick={handleCellClick}
               onCellDrag={handleCellDrag}
               brushSize={brushSize}
