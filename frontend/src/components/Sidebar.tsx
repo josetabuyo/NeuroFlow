@@ -1,6 +1,6 @@
 /** Sidebar — template selector, JSON config editor, previews, and start button. */
 
-import { useEffect, useRef, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import type { ConfigTemplate, DendriteInfo, ExperimentConfig, ExperimentState, ExperimentStats, Metadata } from "../types";
 import { JsonConfigEditor } from "./JsonConfigEditor";
 
@@ -162,6 +162,7 @@ interface SidebarProps {
   canGoNext?: boolean;
   runPosition?: number;
   runTotal?: number;
+  onLoadDefault?: () => void;
 }
 
 export function Sidebar({
@@ -184,13 +185,14 @@ export function Sidebar({
   canGoNext = false,
   runPosition = 0,
   runTotal = 0,
+  onLoadDefault,
 }: SidebarProps) {
   const isInitializing = state === "initializing";
 
   const masks = metadata?.masks ?? [];
 
   // Support both canonical (regions[]) and legacy (wiring at top level)
-  const anyConfig = config as Record<string, unknown>;
+  const anyConfig = config as unknown as Record<string, unknown>;
   const legacyWiring: Record<string, unknown> | undefined = !Array.isArray(anyConfig.regions)
     ? config.wiring as Record<string, unknown> | undefined
     : undefined;
@@ -252,10 +254,6 @@ export function Sidebar({
     ? (daemonPreview?.dendrites ?? undefined)
     : (activeMask?.dendrites ?? undefined);
 
-  const selectedTpl = useMemo(
-    () => templates.find((t) => t.id === selectedTemplate),
-    [templates, selectedTemplate],
-  );
 
   return (
     <aside
@@ -403,6 +401,33 @@ export function Sidebar({
             </button>
           </div>
         )}
+        {/* Load Default button */}
+        <button
+          onClick={onLoadDefault}
+          title="Load the template's default config from file"
+          style={{
+            marginTop: "6px",
+            padding: "5px 10px",
+            background: "#1e1e3a",
+            border: "1px solid #4a4a7a",
+            borderRadius: "4px",
+            color: "#a0a0cc",
+            fontSize: "0.75rem",
+            cursor: "pointer",
+            width: "100%",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "#4cc9f0";
+            (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a";
+            (e.currentTarget as HTMLButtonElement).style.color = "#a0a0cc";
+          }}
+        >
+          Load Default
+        </button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -530,6 +555,8 @@ export function Sidebar({
 
       </div>
 
+      <HelpPanel />
+
       <div style={{ marginTop: "auto", fontSize: "0.7rem", color: "#444" }}>
         <p>Click on any cell to activate/deactivate neurons.</p>
         <p style={{ marginTop: "4px" }}>
@@ -537,5 +564,108 @@ export function Sidebar({
         </p>
       </div>
     </aside>
+  );
+}
+
+function HelpPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: "8px" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: "100%",
+          padding: "5px 10px",
+          background: "#12122a",
+          border: "1px solid #2a2a4a",
+          borderRadius: "4px",
+          color: "#666",
+          fontSize: "0.72rem",
+          cursor: "pointer",
+          textAlign: "left",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <span>Config reference</span>
+        <span style={{ fontSize: "0.65rem" }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div
+          style={{
+            background: "#0d0d1a",
+            border: "1px solid #2a2a4a",
+            borderTop: "none",
+            borderRadius: "0 0 4px 4px",
+            padding: "10px",
+            fontSize: "0.7rem",
+            color: "#888",
+            lineHeight: "1.6",
+            maxHeight: "400px",
+            overflowY: "auto",
+          }}
+        >
+          <HelpContent />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HelpContent() {
+  const S = ({ children }: { children: React.ReactNode }) => (
+    <span style={{ color: "#4cc9f0", fontFamily: "monospace" }}>{children}</span>
+  );
+  const Soft = () => <span style={{ color: "#4ade80", fontSize: "0.65rem" }}>soft</span>;
+  const Hard = () => <span style={{ color: "#f87171", fontSize: "0.65rem" }}>hard</span>;
+  const Row = ({ name, type, desc }: { name: string; type: "soft" | "hard"; desc: string }) => (
+    <div style={{ marginBottom: "4px" }}>
+      <S>{name}</S> {type === "soft" ? <Soft /> : <Hard />}
+      <span style={{ color: "#666", marginLeft: "4px" }}>{desc}</span>
+    </div>
+  );
+  const Section = ({ title }: { title: string }) => (
+    <div style={{ color: "#a0a0cc", fontWeight: 600, marginTop: "10px", marginBottom: "4px", textTransform: "uppercase", fontSize: "0.65rem", letterSpacing: "0.08em" }}>{title}</div>
+  );
+  return (
+    <div>
+      <div style={{ color: "#555", marginBottom: "8px", fontSize: "0.65rem" }}>
+        <span style={{ color: "#4ade80" }}>soft</span> = applies live &nbsp;
+        <span style={{ color: "#f87171" }}>hard</span> = requires Refresh
+      </div>
+
+      <Section title="Region › wiring" />
+      <Row name="process_mode" type="soft" desc="min_vs_max · avg_vs_avg · avg_vs_avg_normalized · sum · group_avg" />
+      <Row name="tension_function" type="soft" desc='{"x":1,"x_pow_2":3,"x_pow_3":20} — polynomial transform on tension' />
+      <Row name="learning_rate" type="soft" desc="intra-region Hebbian rate" />
+      <Row name="umbral" type="soft" desc="per-neuron firing threshold (default 0)" />
+      <Row name="mask / deamon" type="hard" desc="wiring topology" />
+      <Row name="dendrite_exc_weight" type="hard" desc="global excitatory dendrite weight" />
+      <Row name="dendrite_inh_weight" type="hard" desc="global inhibitory dendrite weight (negative)" />
+
+      <Section title="Region › source (ascii)" />
+      <Row name="text" type="soft" desc='chars to cycle: "AB" or synthetics "HALF_TOP,HALF_BOT,BARS_H,BARS_V,DOT_TL,DOT_BR"' />
+      <Row name="frames_per_char" type="soft" desc="steps per character" />
+      <Row name="font / font_size" type="soft" desc="font id and size in px" />
+      <Row name="noise.background" type="soft" desc="random pixel flip probability 0–1" />
+      <Row name="noise.shift" type="soft" desc="random 1-px shift each frame" />
+      <Row name="noise.inter_char" type="soft" desc="blank frame between characters" />
+      <Row name="type" type="hard" desc="ascii · error_diff · label" />
+
+      <Section title="Region › spiking" />
+      <Row name="up_ticks" type="soft" desc="max consecutive active steps before rest" />
+      <Row name="down_ticks" type="soft" desc="refractory period length" />
+
+      <Section title="Region › grid" />
+      <Row name="width / height" type="hard" desc="grid dimensions" />
+
+      <Section title="Connections" />
+      <Row name="learning.rate" type="soft" desc="Hebbian learning rate for this connection" />
+      <Row name="learning.exclude_range" type="soft" desc="[lo, hi] — skip weights in this range" />
+      <Row name="weight" type="hard" desc="initial dendrite weight" />
+      <Row name="density" type="hard" desc="fraction of source neurons sampled" />
+      <Row name="from / to / type" type="hard" desc="topology" />
+    </div>
   );
 }

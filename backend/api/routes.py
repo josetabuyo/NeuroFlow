@@ -82,6 +82,7 @@ async def get_metadata() -> dict:
             {"id": "avg_vs_avg", "name": "Avg vs Avg", "description": "Average excitatory vs average inhibitory"},
             {"id": "avg_vs_avg_normalized", "name": "Avg vs Avg (Norm)", "description": "Ratio exc/inh — only balance matters, not absolute scale"},
             {"id": "sum", "name": "Sum", "description": "All dendrites summed and clamped"},
+            {"id": "group_avg", "name": "Group Avg", "description": "Separate averages for local-exc, local-inh, cross-exc, cross-inh"},
         ],
         "input_sources": [
             {"id": "ascii", "name": "ASCII Images"},

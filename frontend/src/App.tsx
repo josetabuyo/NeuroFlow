@@ -21,13 +21,46 @@ const DEFAULT_CONFIG: ExperimentConfig = {
 };
 
 function getConfigGrid(config: ExperimentConfig): { width: number; height: number } {
-  const any = config as Record<string, unknown>;
+  const any = config as unknown as Record<string, unknown>;
   if (Array.isArray(any.regions)) {
     const tissue = (any.regions as Array<Record<string, unknown>>).find(r => r.wiring);
     const g = tissue?.grid as { width?: number; height?: number } | undefined;
     return { width: g?.width ?? 50, height: g?.height ?? 50 };
   }
   return { width: config.grid?.width ?? 50, height: config.grid?.height ?? 50 };
+}
+
+// Extract only the soft-updatable fields for change detection.
+// Works for both flat legacy format and canonical regions[]/connections[] format.
+function extractSoftFingerprint(cfg: ExperimentConfig): string {
+  const any = cfg as unknown as Record<string, unknown>;
+  if (Array.isArray(any.regions)) {
+    return JSON.stringify({
+      regions: (any.regions as Record<string, unknown>[]).map((r) => {
+        const w = (r.wiring as Record<string, unknown>) ?? {};
+        return {
+          umbral: r.umbral,
+          spiking: r.spiking,
+          process_mode: w.process_mode,
+          tension_function: w.tension_function,
+          learning_rate: w.learning_rate,
+          source: r.source,
+        };
+      }),
+      connections: ((any.connections as Record<string, unknown>[]) ?? []).map((c) => ({
+        learning: c.learning,
+      })),
+    });
+  }
+  // flat format
+  return JSON.stringify({
+    learning: cfg.learning,
+    noise: cfg.noise,
+    spiking: cfg.spiking,
+    process_mode: cfg.wiring?.process_mode,
+    tension_function: cfg.wiring?.tension_function,
+    input: cfg.input,
+  });
 }
 
 const SIDEBAR_DEFAULT = 380;
@@ -53,7 +86,7 @@ function App() {
   const selectedTemplateRef = useRef(selectedTemplate);
   selectedTemplateRef.current = selectedTemplate;
 
-  const loadHistory = useCallback((templateId: string) => {
+  const loadHistory = useCallback((templateId: string, fallbackConfig?: ExperimentConfig) => {
     fetch(`${API_URL}/api/templates/${templateId}/config/history?preset=_default`)
       .then((r) => r.json())
       .then((data: { history: { config: ExperimentConfig }[] }) => {
@@ -65,6 +98,7 @@ function App() {
           setConfig(configs[configs.length - 1]);
         } else {
           setRunIndex(-1);
+          if (fallbackConfig) setConfig(fallbackConfig);
         }
       })
       .catch(() => {});
@@ -129,7 +163,6 @@ function App() {
 
   const {
     grid,
-    tensionGrid,
     tensionMode,
     inputWeightGrid,
     outputWeightGrid,
@@ -204,7 +237,7 @@ function App() {
 
   // Soft config sync: update running experiment when certain nested fields change
   const prevConfigRef = useRef(config);
-  const liveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const liveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const prev = prevConfigRef.current;
@@ -212,16 +245,7 @@ function App() {
 
     if (!experimentActive || !hasGrid) return;
 
-    const changed =
-      JSON.stringify(config.learning) !== JSON.stringify(prev.learning) ||
-      JSON.stringify(config.noise) !== JSON.stringify(prev.noise) ||
-      JSON.stringify(config.spiking) !== JSON.stringify(prev.spiking) ||
-      JSON.stringify(config.wiring?.process_mode) !== JSON.stringify(prev.wiring?.process_mode) ||
-      JSON.stringify(config.wiring?.tension_function) !== JSON.stringify(prev.wiring?.tension_function) ||
-      JSON.stringify(config.input?.text) !== JSON.stringify(prev.input?.text) ||
-      JSON.stringify(config.input?.font) !== JSON.stringify(prev.input?.font) ||
-      JSON.stringify(config.input?.font_size) !== JSON.stringify(prev.input?.font_size) ||
-      JSON.stringify(config.input?.frames_per_char) !== JSON.stringify(prev.input?.frames_per_char);
+    const changed = extractSoftFingerprint(config) !== extractSoftFingerprint(prev);
 
     if (!changed) return;
 
@@ -235,12 +259,20 @@ function App() {
       setSelectedTemplate(id);
       localStorage.setItem("neuroflow_last_template", id);
       const tpl = templates.find((t) => t.id === id);
-      if (!tpl) return;
-      setConfig(tpl.config);
-      loadHistory(id);
+      loadHistory(id, tpl?.config);
     },
     [templates, loadHistory],
   );
+
+  const handleLoadDefault = useCallback(() => {
+    fetch(`${API_URL}/api/templates/refresh`, { method: "POST" })
+      .then((r) => r.json())
+      .then((tpls: ConfigTemplate[]) => {
+        const tpl = tpls.find((t) => t.id === selectedTemplate);
+        if (tpl) setConfig(tpl.config);
+      })
+      .catch(() => {});
+  }, [selectedTemplate]);
 
   const handleStart = useCallback(() => {
     start(config);
@@ -352,6 +384,7 @@ function App() {
         canGoNext={canGoNext}
         runPosition={runIndex >= 0 ? runIndex + 1 : 0}
         runTotal={runHistory.length}
+        onLoadDefault={handleLoadDefault}
       />
 
       {/* Resize handle */}

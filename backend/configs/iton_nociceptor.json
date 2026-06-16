@@ -1,8 +1,8 @@
 {
-  "name": "Input Mimic",
-  "description": "ITON Exp 2: output tries to reconstruct the input; nociceptor fires on reconstruction error and inhibits tissue. Unsupervised.",
+  "name": "ITON: Nociceptor Study",
+  "description": "Stage 3 ITON: tissue forms daemons tracking input, output learns to reconstruct, nociceptor fires on error.",
   "config": {
-    "description": "Input mimic. Tissue frozen. Output learns to reconstruct input. Nociceptor fires on error, inhibits tissue.",
+    "description": "ITON nociceptor experiment. Tissue forms daemons driven by input. Output learns to reconstruct input pattern. Nociceptor fires on reconstruction error.",
     "regions": [
       {
         "id": "input",
@@ -20,18 +20,19 @@
         "wiring": {
           "deamon": {
             "shape": "square",
-            "excitatory": { "offset": 1, "noise": 0.5, "weights": [1, 1, 1] },
+            "fixed": true,
+            "excitatory": { "offset": 1, "noise": 0, "weights": [1] },
             "inhibitory": {
               "offset": 6,
-              "noise": 0.5,
+              "noise": 0,
               "sectors": 12,
-              "weights": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+              "weights": [1]
             }
           },
-          "dendrite_exc_weight": 0.5,
-          "dendrite_inh_weight": -0.95,
+          "dendrite_exc_weight": 0.9,
+          "dendrite_inh_weight": -1.0,
           "process_mode": "group_avg",
-          "tension_function": { "x": 1, "x_pow_3": 20, "x_pow_2": 3 }
+          "tension_function": { "x": 1, "x_pow_3": 12 }
         }
       },
       {
@@ -48,8 +49,8 @@
               "weights": [1, 1, 1, 1, 1, 1]
             }
           },
-          "dendrite_exc_weight": 0.5,
-          "dendrite_inh_weight": -0.95,
+          "dendrite_exc_weight": 0.65,
+          "dendrite_inh_weight": -0.92,
           "process_mode": "group_avg",
           "tension_function": { "x": 1, "x_pow_3": 20, "x_pow_2": 3 }
         }
@@ -67,7 +68,7 @@
         "type": "full",
         "weight": 0.15,
         "density": 0.4,
-        "learning": { "rate": 0.02 }
+        "learning": { "rate": 0.05 }
       },
       {
         "from": "tissue",

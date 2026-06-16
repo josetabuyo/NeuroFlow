@@ -56,6 +56,125 @@ The documentation is organized by depth level. Start wherever interests you:
 
 ---
 
+## Config Reference
+
+NeuroFlow experiments are defined by a JSON config with two top-level arrays: `regions` and `connections`.
+
+### Regions
+
+Each region entry:
+
+```json
+{
+  "id": "tissue",
+  "grid": { "width": 50, "height": 50 },
+  "wiring": { ... },
+  "source": { ... },
+  "umbral": 0.0,
+  "spiking": { ... }
+}
+```
+
+- **`id`** (string, required): unique identifier
+- **`grid`** (object, required): `{ "width": N, "height": N }` — grid dimensions. **Hard param** (requires Refresh).
+- **`umbral`** (float, default 0.0): firing threshold per neuron. **Soft param**.
+- **`wiring`** (object): makes this a processing region. **Topology fields are Hard; behavior fields are Soft** (see below).
+- **`source`** (object): makes this an input region (NeuronaEntrada). **Hard param** to change type.
+- **`spiking`** (object): spike-frequency adaptation. **Soft param**.
+
+A region can have `wiring` only, `source` only, or both.
+
+#### `wiring` object
+
+Topology (Hard — requires Refresh):
+- **`mask`** (string): named wiring preset. Mutually exclusive with `deamon`.
+- **`deamon`** (object): daemon-style dynamic wiring. Mutually exclusive with `mask`.
+  - `shape`: `"square"` | `"ring"`
+  - `excitatory`: `{ "offset": N, "noise": 0–1, "weights": [w1, w2, ...] }`
+  - `inhibitory`: `{ "offset": N, "noise": 0–1, "sectors": N, "weights": [...] }`
+- **`dendrite_exc_weight`** (float): global excitatory dendrite weight. Hard param.
+- **`dendrite_inh_weight`** (float, negative): global inhibitory dendrite weight. Hard param.
+
+Behavior (Soft — applies live without Refresh):
+- **`process_mode`** (string): how dendrite values combine into tension.
+  - `"min_vs_max"` (default): best excitatory - best inhibitory
+  - `"avg_vs_avg"`: average excitatory - average inhibitory
+  - `"avg_vs_avg_normalized"`: ratio exc/inh — balance matters, not scale
+  - `"sum"`: all dendrites summed and clamped
+  - `"group_avg"`: separate averages for local-exc, local-inh, cross-exc, cross-inh
+- **`tension_function`** (object): polynomial transform applied to tension before activation. Soft param.
+  - Keys: `"x"`, `"x_pow_2"`, `"x_pow_3"`, etc.
+  - Each key coefficient multiplies that power of tension. `{ "x": 1, "x_pow_3": 20, "x_pow_2": 3 }` = `t + 20t³ + 3t²`
+  - All-zero or omitted: tension passes through unchanged.
+- **`learning_rate`** (float): intra-region Hebbian learning rate. Soft param.
+
+#### `source` object
+
+```json
+{ "type": "ascii", "text": "ABC", "frames_per_char": 15, "font": "press_start_2p", "font_size": 10,
+  "noise": { "background": 0.05, "shift": false, "inter_char": false } }
+```
+
+- **`type`** (string): `"ascii"` | `"error_diff"` | `"label"`. Hard param to change type.
+- For `type: "ascii"` — all fields below are **Soft params**:
+  - **`text`** (string): characters to cycle through, or synthetic pattern names comma-separated (`"HALF_TOP,HALF_BOT,BARS_H,BARS_V,DOT_TL,DOT_BR"`)
+  - **`frames_per_char`** (int): steps to display each character
+  - **`font`** (string): font identifier (e.g. `"press_start_2p"`)
+  - **`font_size`** (int): font size in pixels
+  - **`noise.background`** (float 0–1): random pixel flip probability
+  - **`noise.shift`** (bool): random 1-pixel shift each frame
+  - **`noise.inter_char`** (bool): insert a blank/noise frame between characters
+- For `type: "error_diff"`:
+  - **`target`** (string): region id to compare against (or `"label"`)
+  - **`diff_mode`** (string): `"abs"` | `"relu"`
+
+#### `spiking` object (Soft param)
+
+```json
+{ "up_ticks": 5, "down_ticks": 5 }
+```
+
+- **`up_ticks`**: max consecutive active steps before forced rest
+- **`down_ticks`**: refractory period length in steps
+
+### Connections
+
+```json
+{
+  "from": "tissue",
+  "to": "output",
+  "type": "full",
+  "weight": 0.5,
+  "density": 0.4,
+  "learning": { "rate": 0.01, "exclude_range": [0.4, 0.6] }
+}
+```
+
+- **`from`** / **`to`** (string): region ids. **Hard param**.
+- **`type`** (string): `"full"` | `"portion"`. **Hard param**.
+- **`weight`** (float): initial dendrite weight for this connection. **Hard param**.
+- **`density`** (float 0–1): fraction of source neurons each destination samples. **Hard param**.
+- **`portion`** (array `[rows, cols]`): spatial subdivision for `type: "portion"`. **Hard param**.
+- **`learning.rate`** (float): Hebbian learning rate for this cross-region connection. **Soft param**.
+- **`learning.exclude_range`** (array `[lo, hi]`): skip weight updates for weights in this range. **Soft param**.
+
+### Soft vs Hard params summary
+
+**Soft** (apply live, no rebuild):
+- `umbral`, `process_mode`, `tension_function`, `wiring.learning_rate`
+- `source.text`, `source.font`, `source.font_size`, `source.frames_per_char`, `source.noise.*`
+- `spiking.up_ticks`, `spiking.down_ticks`
+- `connections[].learning.rate`, `connections[].learning.exclude_range`
+
+**Hard** (require Refresh Experiment / full rebuild):
+- `grid.width`, `grid.height`
+- `wiring.mask`, `wiring.deamon`, `wiring.dendrite_exc_weight`, `wiring.dendrite_inh_weight`
+- `source.type`
+- `connections[].from`, `connections[].to`, `connections[].type`, `connections[].weight`, `connections[].density`
+- Adding or removing regions
+
+---
+
 ## Stack
 
 | Layer | Technology | Hosting |
