@@ -16,6 +16,19 @@ router = APIRouter(prefix="/api")
 # ── Config template loader ──
 
 CONFIGS_DIR = Path(__file__).parent.parent / "configs"
+SESSION_FILE = Path(__file__).parent.parent / "data" / "session_last.json"
+
+
+def _read_session() -> dict:
+    try:
+        return json.loads(SESSION_FILE.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _write_session(data: dict) -> None:
+    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SESSION_FILE.write_text(json.dumps(data, indent=2))
 
 
 def _load_templates() -> list[dict]:
@@ -118,3 +131,20 @@ def get_latest_config(template_id: str, preset: str = "_default") -> dict:
 def get_config_history(template_id: str, preset: str = "_default") -> dict:
     """All executed configs for a template+preset, oldest first."""
     return {"history": get_history(template_id, preset)}
+
+
+@router.get("/session/last/{template_id}")
+def get_last_session(template_id: str) -> dict:
+    """Return last-used config for this template from local session file."""
+    data = _read_session()
+    return {"config": data.get(template_id)}
+
+
+@router.post("/session/last/{template_id}")
+async def save_last_session(template_id: str, request: Request) -> dict:
+    """Persist current config for this template into local session file."""
+    config = await request.json()
+    data = _read_session()
+    data[template_id] = config
+    _write_session(data)
+    return {"ok": True}

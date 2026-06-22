@@ -86,14 +86,17 @@ function App() {
   const selectedTemplateRef = useRef(selectedTemplate);
   selectedTemplateRef.current = selectedTemplate;
 
-  const loadHistory = useCallback((templateId: string, fallbackConfig?: ExperimentConfig) => {
+  const loadHistory = useCallback((templateId: string, sessionConfig?: ExperimentConfig, fallbackConfig?: ExperimentConfig) => {
     fetch(`${API_URL}/api/templates/${templateId}/config/history?preset=_default`)
       .then((r) => r.json())
       .then((data: { history: { config: ExperimentConfig }[] }) => {
         if (selectedTemplateRef.current !== templateId) return;
         const configs = data.history.map((h) => h.config);
         setRunHistory(configs);
-        if (configs.length > 0) {
+        if (sessionConfig) {
+          setConfig(sessionConfig);
+          setRunIndex(configs.length > 0 ? configs.length - 1 : -1);
+        } else if (configs.length > 0) {
           setRunIndex(configs.length - 1);
           setConfig(configs[configs.length - 1]);
         } else {
@@ -216,24 +219,40 @@ function App() {
           setSelectedTemplate(firstId);
           setConfig(initialTpl.config);
 
-          // Load history for first template
-          fetch(`${API_URL}/api/templates/${firstId}/config/history?preset=_default`)
+          fetch(`${API_URL}/api/session/last/${firstId}`)
             .then((r) => r.json())
-            .then((histData: { history: { config: ExperimentConfig }[] }) => {
-              const configs = histData.history.map((h) => h.config);
-              setRunHistory(configs);
-              if (configs.length > 0) {
-                setRunIndex(configs.length - 1);
-                setConfig(configs[configs.length - 1]);
-              }
+            .then((data: { config: ExperimentConfig | null }) => {
+              if (selectedTemplateRef.current !== firstId) return;
+              loadHistory(firstId, data.config ?? undefined, initialTpl.config);
             })
-            .catch(() => {});
+            .catch(() => loadHistory(firstId, undefined, initialTpl.config));
         }
       })
       .catch(() => {});
   }, []);
 
   const hasGrid = grid.length > 0 || Object.keys(regions).length > 0;
+
+  const saveLastSession = useCallback((templateId: string, cfg: ExperimentConfig) => {
+    if (!templateId) return;
+    fetch(`${API_URL}/api/session/last/${templateId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    }).catch(() => {});
+  }, []);
+
+  // Persist last config for this template to local session file (debounced)
+  const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    clearTimeout(sessionTimerRef.current);
+    sessionTimerRef.current = setTimeout(
+      () => saveLastSession(selectedTemplate, config),
+      500,
+    );
+    return () => clearTimeout(sessionTimerRef.current);
+  }, [config, selectedTemplate, saveLastSession]);
 
   // Soft config sync: update running experiment when certain nested fields change
   const prevConfigRef = useRef(config);
@@ -259,10 +278,26 @@ function App() {
       setSelectedTemplate(id);
       localStorage.setItem("neuroflow_last_template", id);
       const tpl = templates.find((t) => t.id === id);
-      loadHistory(id, tpl?.config);
+      fetch(`${API_URL}/api/session/last/${id}`)
+        .then((r) => r.json())
+        .then((data: { config: ExperimentConfig | null }) => {
+          if (selectedTemplateRef.current !== id) return;
+          loadHistory(id, data.config ?? undefined, tpl?.config);
+        })
+        .catch(() => loadHistory(id, undefined, tpl?.config));
     },
     [templates, loadHistory],
   );
+
+  const handleLoadSession = useCallback(() => {
+    if (!selectedTemplate) return;
+    fetch(`${API_URL}/api/session/last/${selectedTemplate}`)
+      .then((r) => r.json())
+      .then((data: { config: ExperimentConfig | null }) => {
+        if (data.config) setConfig(data.config);
+      })
+      .catch(() => {});
+  }, [selectedTemplate]);
 
   const handleLoadDefault = useCallback(() => {
     fetch(`${API_URL}/api/templates/refresh`, { method: "POST" })
@@ -385,6 +420,7 @@ function App() {
         runPosition={runIndex >= 0 ? runIndex + 1 : 0}
         runTotal={runHistory.length}
         onLoadDefault={handleLoadDefault}
+        onLoadSession={handleLoadSession}
       />
 
       {/* Resize handle */}

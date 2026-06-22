@@ -163,6 +163,7 @@ interface SidebarProps {
   runPosition?: number;
   runTotal?: number;
   onLoadDefault?: () => void;
+  onLoadSession?: () => void;
 }
 
 export function Sidebar({
@@ -186,6 +187,7 @@ export function Sidebar({
   runPosition = 0,
   runTotal = 0,
   onLoadDefault,
+  onLoadSession,
 }: SidebarProps) {
   const isInitializing = state === "initializing";
 
@@ -401,33 +403,59 @@ export function Sidebar({
             </button>
           </div>
         )}
-        {/* Load Default button */}
-        <button
-          onClick={onLoadDefault}
-          title="Load the template's default config from file"
-          style={{
-            marginTop: "6px",
-            padding: "5px 10px",
-            background: "#1e1e3a",
-            border: "1px solid #4a4a7a",
-            borderRadius: "4px",
-            color: "#a0a0cc",
-            fontSize: "0.75rem",
-            cursor: "pointer",
-            width: "100%",
-            transition: "all 0.15s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = "#4cc9f0";
-            (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a";
-            (e.currentTarget as HTMLButtonElement).style.color = "#a0a0cc";
-          }}
-        >
-          Load Default
-        </button>
+        {/* Load Default / Load Session buttons */}
+        <div style={{ marginTop: "6px", display: "flex", gap: "6px" }}>
+          <button
+            onClick={onLoadDefault}
+            title="Load the template's default config from file"
+            style={{
+              flex: 1,
+              padding: "5px 10px",
+              background: "#1e1e3a",
+              border: "1px solid #4a4a7a",
+              borderRadius: "4px",
+              color: "#a0a0cc",
+              fontSize: "0.75rem",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "#4cc9f0";
+              (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a";
+              (e.currentTarget as HTMLButtonElement).style.color = "#a0a0cc";
+            }}
+          >
+            Load Default
+          </button>
+          <button
+            onClick={onLoadSession}
+            title="Load last session config from local file"
+            style={{
+              flex: 1,
+              padding: "5px 10px",
+              background: "#1e1e3a",
+              border: "1px solid #4a4a7a",
+              borderRadius: "4px",
+              color: "#a0a0cc",
+              fontSize: "0.75rem",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "#7c4dff";
+              (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a";
+              (e.currentTarget as HTMLButtonElement).style.color = "#a0a0cc";
+            }}
+          >
+            Load Session
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
