@@ -244,6 +244,7 @@ function App() {
 
   // Persist last config for this template to local session file (debounced)
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flashlightRef = useRef<{ cells: { x: number; y: number }[]; regionId?: string } | null>(null);
   useEffect(() => {
     if (!selectedTemplate) return;
     clearTimeout(sessionTimerRef.current);
@@ -324,58 +325,45 @@ function App() {
     saveExecution(selectedTemplate, config);
   }, [reconnect, config, saveExecution, selectedTemplate]);
 
+  const computeBrushCells = useCallback(
+    (x: number, y: number, regionId?: string): { x: number; y: number }[] => {
+      const offsets = generateSquareBrush(brushSize);
+      let w: number, h: number;
+      if (regionId && regions[regionId]) {
+        const g = regions[regionId];
+        h = g.length;
+        w = g[0]?.length ?? 1;
+      } else {
+        const g = getConfigGrid(config);
+        w = g.width;
+        h = g.height;
+      }
+      return offsets
+        .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
+        .filter((c) => c.x >= 0 && c.x < w && c.y >= 0 && c.y < h);
+    },
+    [brushSize, config, regions]
+  );
+
   const applyBrush = useCallback(
     (x: number, y: number, regionId?: string) => {
       if (inspectMode) return;
-      const offsets = generateSquareBrush(brushSize);
       const value = brushMode === "activate" ? 1.0 : 0.0;
-      let w: number, h: number;
-      if (regionId && regions[regionId]) {
-        const g = regions[regionId];
-        h = g.length;
-        w = g[0]?.length ?? 1;
-      } else {
-        const g = getConfigGrid(config);
-        w = g.width;
-        h = g.height;
-      }
-      const cells = offsets
-        .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
-        .filter((c) => c.x >= 0 && c.x < w && c.y >= 0 && c.y < h);
+      const cells = computeBrushCells(x, y, regionId);
       paint(cells, value, regionId);
     },
-    [inspectMode, brushSize, brushMode, config, paint, regions]
+    [inspectMode, brushMode, computeBrushCells, paint]
   );
 
   const handleDragEnd = useCallback(
-    (centers: { x: number; y: number }[], regionId?: string) => {
+    (_centers: { x: number; y: number }[], _regionId?: string) => {
       if (inspectMode) return;
-      const offsets = generateSquareBrush(brushSize);
-      let w: number, h: number;
-      if (regionId && regions[regionId]) {
-        const g = regions[regionId];
-        h = g.length;
-        w = g[0]?.length ?? 1;
-      } else {
-        const g = getConfigGrid(config);
-        w = g.width;
-        h = g.height;
+      if (flashlightRef.current) {
+        paint(flashlightRef.current.cells, 0.0, flashlightRef.current.regionId);
+        flashlightRef.current = null;
       }
-      const seen = new Set<string>();
-      const cells: { x: number; y: number }[] = [];
-      for (const center of centers) {
-        for (const [dx, dy] of offsets) {
-          const cx = center.x + dx, cy = center.y + dy;
-          const key = `${cx},${cy}`;
-          if (cx >= 0 && cx < w && cy >= 0 && cy < h && !seen.has(key)) {
-            seen.add(key);
-            cells.push({ x: cx, y: cy });
-          }
-        }
-      }
-      paint(cells, 0.0, regionId);
     },
-    [inspectMode, brushSize, config, paint, regions]
+    [inspectMode, paint]
   );
 
   const handleCellClick = useCallback(
@@ -383,18 +371,33 @@ function App() {
       if (inspectMode) {
         inspect(x, y, regionId);
       } else {
-        applyBrush(x, y, regionId);
+        const cells = computeBrushCells(x, y, regionId);
+        const value = brushMode === "activate" ? 1.0 : 0.0;
+        paint(cells, value, regionId);
+        if (brushMode === "activate") {
+          flashlightRef.current = { cells, regionId };
+        }
       }
     },
-    [inspectMode, inspect, applyBrush]
+    [inspectMode, inspect, computeBrushCells, brushMode, paint]
   );
 
   const handleCellDrag = useCallback(
     (x: number, y: number, regionId?: string) => {
       if (inspectMode) return;
-      applyBrush(x, y, regionId);
+      if (brushMode === "activate") {
+        // Flashlight: clear previous position, illuminate new position only
+        if (flashlightRef.current) {
+          paint(flashlightRef.current.cells, 0.0, flashlightRef.current.regionId);
+        }
+        const cells = computeBrushCells(x, y, regionId);
+        paint(cells, 1.0, regionId);
+        flashlightRef.current = { cells, regionId };
+      } else {
+        applyBrush(x, y, regionId);
+      }
     },
-    [inspectMode, applyBrush]
+    [inspectMode, brushMode, computeBrushCells, paint, applyBrush]
   );
 
   const handlePlay = useCallback(
