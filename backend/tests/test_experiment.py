@@ -463,6 +463,7 @@ class TestDaemonMetrics:
         exp.setup(_nested_config())
         for _ in range(5):
             exp.step()
+            exp.get_stats()  # history is populated on stats query, not on step
         assert len(exp._daemon_history) == 5
         exp.reset()
         assert len(exp._daemon_history) == 0
@@ -617,7 +618,8 @@ class TestArbitraryRegions:
         exp.setup(config)
         exp.step()
         frames = exp.get_region_frames()
-        assert list(frames.keys()) == ["src", "core", "readout"]
+        # ascii input region ("src") is excluded from region frames (hidden when source=ascii)
+        assert list(frames.keys()) == ["core", "readout"]
         # core is the tissue → laid out at index 0
         assert exp._regions_by_id["core"].start == 0
 
@@ -731,6 +733,122 @@ class TestPerConnectionLearning:
             exp.step()
         after = bt.pesos_sinapsis[out.start:out.end]
         assert not torch.allclose(before, after)
+
+
+def _draw_config(
+    input_w: int = 5,
+    input_h: int = 5,
+    tissue_w: int = 8,
+    tissue_h: int = 8,
+    weight: float = 1.0,
+) -> dict:
+    return {
+        "regions": [
+            {"id": "input", "grid": {"width": input_w, "height": input_h},
+             "source": {"type": "draw"}},
+            _wiring_region("tissue", tissue_w, tissue_h),
+        ],
+        "connections": [
+            {"from": "input", "to": "tissue", "type": "full",
+             "weight": weight, "density": 1.0},
+        ],
+    }
+
+
+class TestDrawInput:
+    """Draw source: user paints directly on an input region."""
+
+    def test_setup_creates_draw_region(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        assert "input" in exp._regions_by_id
+        rs = exp._regions_by_id["input"]
+        assert rs.n == 25
+        assert rs.source_type == "draw"
+        assert rs.is_entrada is True
+
+    def test_input_id_resolves_to_draw_region(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        assert exp._input_id == "input"
+
+    def test_draw_region_appears_in_frames(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        frames = exp.get_region_frames()
+        assert "input" in frames
+        assert len(frames["input"]) == 5
+        assert len(frames["input"][0]) == 5
+
+    def test_draw_region_starts_at_zero(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        rs = exp._regions_by_id["input"]
+        vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+        assert all(v == 0.0 for v in vals)
+
+    def test_paint_sets_draw_region_value(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        rs = exp._regions_by_id["input"]
+        idx = rs.start + 2 * 5 + 3  # cell (x=3, y=2)
+        exp.brain_tensor.set_valor(idx, 1.0)
+        assert exp.brain_tensor.valores[idx].item() == 1.0
+
+    def test_draw_values_persist_across_steps(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        rs = exp._regions_by_id["input"]
+        idx = rs.start + 1 * 5 + 1
+        exp.brain_tensor.set_valor(idx, 1.0)
+        for _ in range(3):
+            exp.step()
+        assert exp.brain_tensor.valores[idx].item() == 1.0
+
+    def test_draw_frames_are_binary(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        rs = exp._regions_by_id["input"]
+        exp.brain_tensor.set_valor(rs.start, 0.7)
+        frames = exp.get_region_frames()
+        flat = [v for row in frames["input"] for v in row]
+        assert all(v in (0.0, 1.0) for v in flat)
+
+    def test_draw_input_wired_to_tissue(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        bt = exp.brain_tensor
+        tissue = exp._regions_by_id["tissue"]
+        cross_in_tissue = bt.es_cross_region[tissue.start:tissue.end].any().item()
+        assert cross_in_tissue
+
+    def test_reset_clears_draw_values(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        rs = exp._regions_by_id["input"]
+        for i in range(rs.n):
+            exp.brain_tensor.set_valor(rs.start + i, 1.0)
+        exp.reset()
+        rs2 = exp._regions_by_id["input"]
+        vals = exp.brain_tensor.valores[rs2.start:rs2.end].tolist()
+        assert all(v == 0.0 for v in vals)
+
+    def test_steps_run_without_error(self) -> None:
+        random.seed(42)
+        exp = Experiment()
+        exp.setup(_draw_config())
+        rs = exp._regions_by_id["input"]
+        exp.brain_tensor.set_valor(rs.start, 1.0)
+        for _ in range(10):
+            result = exp.step()
+            assert result["type"] == "frame"
+
+    def test_frames_emitted_in_declaration_order_with_draw(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        exp.step()
+        frames = exp.get_region_frames()
+        assert list(frames.keys()) == ["input", "tissue"]
 
 
 class TestSourceTypes:
