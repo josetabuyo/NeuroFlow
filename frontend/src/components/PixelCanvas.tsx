@@ -141,8 +141,8 @@ export function PixelCanvas({
       );
     }
 
-    // ── Brush cursor overlay (always visible on hover) ──
-    if (hoverCell && brushSize) {
+    // ── Brush cursor overlay (only while mouse is pressed) ──
+    if (hoverCell && brushSize && isDragging) {
       const r = Math.floor(brushSize / 2);
       ctx.fillStyle = brushMode === "deactivate"
         ? "rgba(80,80,80,0.55)"
@@ -162,7 +162,7 @@ export function PixelCanvas({
         }
       }
     }
-  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, inspectedCell, getCellSize, hoverCell, brushSize, brushMode]);
+  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, inspectedCell, getCellSize, hoverCell, brushSize, brushMode, isDragging]);
 
   useEffect(() => { draw(); }, [draw]);
 
