@@ -153,6 +153,7 @@ export function PixelCanvas({
       ctx.lineWidth = 1;
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
+          if (dx * dx + dy * dy > r * r + r * 0.5) continue;
           const cx = hoverCell.x + dx;
           const cy = hoverCell.y + dy;
           if (cx >= 0 && cx < width && cy >= 0 && cy < height) {

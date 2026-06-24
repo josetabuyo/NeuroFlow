@@ -1,6 +1,6 @@
 /** Toolbar — floating vertical toolbar with tool selection + brush controls. */
 
-import { generateSquareBrush, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE } from "../brushes";
+import { generateCircleBrush, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE } from "../brushes";
 
 interface BrushPaletteProps {
   brushSize: number;
@@ -18,7 +18,7 @@ interface BrushPaletteProps {
 }
 
 function renderBrushPreview(size: number): React.ReactNode {
-  const offsets = generateSquareBrush(size);
+  const offsets = generateCircleBrush(size);
   const r = Math.floor(size / 2);
   const pixelSize = Math.max(2, Math.floor(28 / Math.max(size, 1)));
 
@@ -88,7 +88,7 @@ export function BrushPalette({
   onDrawNoiseChange,
 }: BrushPaletteProps) {
   const isActivate = brushMode === "activate";
-  const pixelCount = brushSize * brushSize;
+  const pixelCount = generateCircleBrush(brushSize).length;
   const canIncrease = !inspectMode && brushSize < MAX_BRUSH_SIZE;
   const canDecrease = !inspectMode && brushSize > MIN_BRUSH_SIZE;
   const brushActive = !inspectMode;

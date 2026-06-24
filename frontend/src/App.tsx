@@ -5,7 +5,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Controls } from "./components/Controls";
 import { Scene } from "./components/Scene";
 import { useExperiment } from "./hooks/useExperiment";
-import { generateSquareBrush } from "./brushes";
+import { generateCircleBrush } from "./brushes";
 import type { ConfigTemplate, ExperimentConfig, Metadata } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -358,7 +358,7 @@ function App() {
 
   const computeBrushCells = useCallback(
     (x: number, y: number, regionId?: string): { x: number; y: number }[] => {
-      const offsets = generateSquareBrush(brushSize);
+      const offsets = generateCircleBrush(brushSize);
       let w: number, h: number;
       if (regionId && regions[regionId]) {
         const g = regions[regionId];
