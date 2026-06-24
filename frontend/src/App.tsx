@@ -294,7 +294,12 @@ function App() {
     fetch(`${API_URL}/api/session/last/${selectedTemplate}`)
       .then((r) => r.json())
       .then((data: { config: ExperimentConfig | null }) => {
-        if (data.config) setConfig(data.config);
+        if (data.config) {
+          setConfig(data.config);
+        } else {
+          console.warn("[NeuroFlow] Load Session: no config found in session file for template", selectedTemplate);
+          alert(`session_${selectedTemplate}.json no tiene un config válido.\n\nEl archivo debe contener directamente el config:\n{ "regions": [...] }\n\nRevisa que el JSON sea válido.`);
+        }
       })
       .catch(() => {});
   }, [selectedTemplate]);
@@ -340,6 +345,37 @@ function App() {
       paint(cells, value, regionId);
     },
     [inspectMode, brushSize, brushMode, config, paint, regions]
+  );
+
+  const handleDragEnd = useCallback(
+    (centers: { x: number; y: number }[], regionId?: string) => {
+      if (inspectMode) return;
+      const offsets = generateSquareBrush(brushSize);
+      let w: number, h: number;
+      if (regionId && regions[regionId]) {
+        const g = regions[regionId];
+        h = g.length;
+        w = g[0]?.length ?? 1;
+      } else {
+        const g = getConfigGrid(config);
+        w = g.width;
+        h = g.height;
+      }
+      const seen = new Set<string>();
+      const cells: { x: number; y: number }[] = [];
+      for (const center of centers) {
+        for (const [dx, dy] of offsets) {
+          const cx = center.x + dx, cy = center.y + dy;
+          const key = `${cx},${cy}`;
+          if (cx >= 0 && cx < w && cy >= 0 && cy < h && !seen.has(key)) {
+            seen.add(key);
+            cells.push({ x: cx, y: cy });
+          }
+        }
+      }
+      paint(cells, 0.0, regionId);
+    },
+    [inspectMode, brushSize, config, paint, regions]
   );
 
   const handleCellClick = useCallback(
@@ -496,6 +532,7 @@ function App() {
               nociceptorWeightGrid={nociceptorWeightGrid}
               onCellClick={handleCellClick}
               onCellDrag={handleCellDrag}
+              onCellDragEnd={handleDragEnd}
               brushSize={brushSize}
               brushMode={brushMode}
               inspectMode={inspectMode}

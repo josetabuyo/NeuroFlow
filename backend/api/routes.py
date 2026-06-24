@@ -16,19 +16,23 @@ router = APIRouter(prefix="/api")
 # ── Config template loader ──
 
 CONFIGS_DIR = Path(__file__).parent.parent / "configs"
-SESSION_FILE = Path(__file__).parent.parent / "data" / "session_last.json"
+DATA_DIR = Path(__file__).parent.parent / "data"
 
 
-def _read_session() -> dict:
+def _session_file(template_id: str) -> Path:
+    return DATA_DIR / f"session_{template_id}.json"
+
+
+def _read_session_config(template_id: str) -> dict | None:
     try:
-        return json.loads(SESSION_FILE.read_text())
+        return json.loads(_session_file(template_id).read_text())
     except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+        return None
 
 
-def _write_session(data: dict) -> None:
-    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SESSION_FILE.write_text(json.dumps(data, indent=2))
+def _write_session_config(template_id: str, config: dict) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _session_file(template_id).write_text(json.dumps(config, indent=2))
 
 
 def _load_templates() -> list[dict]:
@@ -135,16 +139,32 @@ def get_config_history(template_id: str, preset: str = "_default") -> dict:
 
 @router.get("/session/last/{template_id}")
 def get_last_session(template_id: str) -> dict:
-    """Return last-used config for this template from local session file."""
-    data = _read_session()
-    return {"config": data.get(template_id)}
+    """Return last-used config for this template from its session file."""
+    return {"config": _read_session_config(template_id)}
 
 
 @router.post("/session/last/{template_id}")
 async def save_last_session(template_id: str, request: Request) -> dict:
-    """Persist current config for this template into local session file."""
+    """Persist current config for this template into its session file."""
     config = await request.json()
-    data = _read_session()
-    data[template_id] = config
-    _write_session(data)
+    _write_session_config(template_id, config)
+    return {"ok": True}
+
+
+@router.get("/session/file-path/{template_id}")
+def get_session_file_path(template_id: str) -> dict:
+    """Return the absolute path of the session file for this template."""
+    return {"path": str(_session_file(template_id).resolve())}
+
+
+@router.post("/session/reveal/{template_id}")
+def reveal_session_file(template_id: str) -> dict:
+    """Open Finder with the session file for this template selected (macOS)."""
+    import subprocess
+    fp = _session_file(template_id)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # Reveal file if it exists, otherwise just open the data folder
+    target = str(fp.resolve()) if fp.exists() else str(DATA_DIR.resolve())
+    args = ["open", "-R", target] if fp.exists() else ["open", target]
+    subprocess.Popen(args)
     return {"ok": True}

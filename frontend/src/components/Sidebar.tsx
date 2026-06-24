@@ -455,6 +455,7 @@ export function Sidebar({
           >
             Load Session
           </button>
+          <SessionFileButtons templateId={selectedTemplate} />
         </div>
       </div>
 
@@ -592,6 +593,58 @@ export function Sidebar({
         </p>
       </div>
     </aside>
+  );
+}
+
+function SessionFileButtons({ templateId }: { templateId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copyPath = async () => {
+    try {
+      const res = await fetch(`/api/session/file-path/${templateId}`);
+      const { path } = await res.json();
+      await navigator.clipboard.writeText(path);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {/* ignore */}
+  };
+
+  const revealInFinder = () =>
+    fetch(`/api/session/reveal/${templateId}`, { method: "POST" }).catch(() => {});
+
+  const btnStyle: React.CSSProperties = {
+    padding: "5px 7px",
+    background: "#1e1e3a",
+    border: "1px solid #4a4a7a",
+    borderRadius: "4px",
+    color: "#a0a0cc",
+    fontSize: "0.85rem",
+    cursor: "pointer",
+    transition: "all 0.15s",
+    lineHeight: 1,
+  };
+
+  return (
+    <div style={{ display: "flex", gap: "4px" }}>
+      <button
+        onClick={copyPath}
+        title="Copy session file path"
+        style={{ ...btnStyle, color: copied ? "#06d6a0" : "#a0a0cc" }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#4cc9f0"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a"; }}
+      >
+        {copied ? "✓" : "⎘"}
+      </button>
+      <button
+        onClick={revealInFinder}
+        title="Reveal session file in Finder"
+        style={btnStyle}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#ffd166"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a"; }}
+      >
+        📂
+      </button>
+    </div>
   );
 }
 

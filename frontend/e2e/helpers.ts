@@ -8,7 +8,7 @@ export async function waitForConnection(page: Page): Promise<void> {
 /** Start an experiment with the current config and wait for canvas + controls. */
 export async function startExperiment(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Start Experiment" }).click();
-  await expect(page.locator("main canvas")).toBeVisible({ timeout: 45_000 });
+  await expect(page.locator("main canvas").first()).toBeVisible({ timeout: 45_000 });
   await expect(
     page.getByRole("button", { name: "Step" })
   ).toBeEnabled({ timeout: 10_000 });
@@ -35,9 +35,9 @@ export async function getActiveCount(page: Page): Promise<number> {
   return parseInt(text ?? "0", 10);
 }
 
-/** Click in the center of the main experiment canvas. */
+/** Click in the center of the first main experiment canvas. */
 export async function clickCanvasCenter(page: Page): Promise<void> {
-  const canvas = page.locator("main canvas");
+  const canvas = page.locator("main canvas").first();
   const box = await canvas.boundingBox();
   if (!box) throw new Error("Canvas not found");
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);

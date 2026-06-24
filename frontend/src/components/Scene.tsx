@@ -42,6 +42,7 @@ interface SceneProps {
 
   onCellClick: (x: number, y: number, regionId?: string) => void;
   onCellDrag: (x: number, y: number, regionId?: string) => void;
+  onCellDragEnd?: (cells: { x: number; y: number }[], regionId?: string) => void;
 
   brushSize: number;
   brushMode: "activate" | "deactivate";
@@ -70,7 +71,7 @@ export function Scene({
   outputWeightGrid,
   tensionMode,
   nociceptorWeightGrid,
-  onCellClick, onCellDrag,
+  onCellClick, onCellDrag, onCellDragEnd,
   brushSize, brushMode, inspectMode, canInspect,
   onIncrease, onDecrease, onToggleMode, onToggleInspect, onToggleTension,
   isInitializing,
@@ -384,6 +385,9 @@ export function Scene({
               inspectedCell={id === inspectedRegionId ? inspectedCell : undefined}
               onCellClick={(cx, cy) => onCellClick(cx, cy, id)}
               onCellDrag={(cx, cy) => onCellDrag(cx, cy, id)}
+              onDragEnd={(cells) => onCellDragEnd?.(cells, id)}
+              brushSize={brushSize}
+              brushMode={brushMode}
             />
 
             {/* Label column beside output regions */}

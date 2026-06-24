@@ -30,6 +30,7 @@ class ExperimentSession:
         self._inspect_x: int | None = None
         self._inspect_y: int | None = None
         self._inspect_region_id: str | None = None
+        self._frame_count: int = 0
 
     async def send(self, data: dict[str, Any]) -> None:
         """Send JSON data to the client."""
@@ -317,12 +318,16 @@ class ExperimentSession:
                 "steps_per_second": round(steps / elapsed_s, 1),
             }
 
+        self._frame_count += 1
+        # Throttle inspect to every 3rd frame during play — the weight grid
+        # (~3k floats) doesn't need to update at full fps.
         if self._inspect_x is not None and self._inspect_y is not None:
-            inspect_data = self.experiment.inspect(
-                self._inspect_x, self._inspect_y,
-                region_id=self._inspect_region_id,
-            )
-            msg["inspect"] = inspect_data
+            if not self._playing or self._frame_count % 3 == 0:
+                inspect_data = self.experiment.inspect(
+                    self._inspect_x, self._inspect_y,
+                    region_id=self._inspect_region_id,
+                )
+                msg["inspect"] = inspect_data
 
         await self.send(msg)
 

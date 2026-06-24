@@ -17,6 +17,9 @@ interface PixelCanvasProps {
   inspectedCell?: { x: number; y: number } | null;
   onCellClick: (x: number, y: number) => void;
   onCellDrag?: (x: number, y: number) => void;
+  onDragEnd?: (cells: { x: number; y: number }[]) => void;
+  brushSize?: number;
+  brushMode?: "activate" | "deactivate";
 }
 
 const COLORS = {
@@ -66,9 +69,18 @@ export function PixelCanvas({
   inspectedCell,
   onCellClick,
   onCellDrag,
+  onDragEnd,
+  brushSize,
+  brushMode,
 }: PixelCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
+  const lastCellRef = useRef<string | null>(null);
+  const paintedCellsRef = useRef<{ x: number; y: number }[]>([]);
+  const paintedKeysRef = useRef<Set<string>>(new Set());
 
   const getCellSize = useCallback(() => {
     if (!containerRef.current) return 10;
@@ -128,7 +140,29 @@ export function PixelCanvas({
         cellSize - 3,
       );
     }
-  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, inspectedCell, getCellSize]);
+
+    // ── Brush cursor overlay (always visible on hover) ──
+    if (hoverCell && brushSize) {
+      const r = Math.floor(brushSize / 2);
+      ctx.fillStyle = brushMode === "deactivate"
+        ? "rgba(80,80,80,0.55)"
+        : "rgba(255,255,255,0.25)";
+      ctx.strokeStyle = brushMode === "deactivate"
+        ? "rgba(120,120,120,0.8)"
+        : "rgba(255,255,255,0.7)";
+      ctx.lineWidth = 1;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const cx = hoverCell.x + dx;
+          const cy = hoverCell.y + dy;
+          if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
+            ctx.fillRect(cx * cellSize, cy * cellSize, cellSize - 1, cellSize - 1);
+            ctx.strokeRect(cx * cellSize + 0.5, cy * cellSize + 0.5, cellSize - 2, cellSize - 2);
+          }
+        }
+      }
+    }
+  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, inspectedCell, getCellSize, hoverCell, brushSize, brushMode]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -137,9 +171,6 @@ export function PixelCanvas({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [draw]);
-
-  const [isDragging, setIsDragging] = useState(false);
-  const lastCellRef = useRef<string | null>(null);
 
   const getCellFromEvent = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -155,31 +186,67 @@ export function PixelCanvas({
     [width, height, getCellSize],
   );
 
+  const trackCell = (cell: { x: number; y: number }) => {
+    const key = `${cell.x},${cell.y}`;
+    if (!paintedKeysRef.current.has(key)) {
+      paintedKeysRef.current.add(key);
+      paintedCellsRef.current.push(cell);
+    }
+  };
+
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const cell = getCellFromEvent(e);
     if (!cell) return;
+    paintedCellsRef.current = [];
+    paintedKeysRef.current = new Set();
+    trackCell(cell);
     setIsDragging(true);
+    setHoverCell(cell);
     lastCellRef.current = `${cell.x},${cell.y}`;
     onCellClick(cell.x, cell.y);
   }, [getCellFromEvent, onCellClick]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
     const cell = getCellFromEvent(e);
     if (!cell) return;
+    setHoverCell(cell);
+
+    if (!isDragging) return;
     const key = `${cell.x},${cell.y}`;
     if (key === lastCellRef.current) return;
     lastCellRef.current = key;
+    trackCell(cell);
     onCellDrag?.(cell.x, cell.y);
   }, [isDragging, getCellFromEvent, onCellDrag]);
 
   const handleMouseUp = useCallback(() => {
+    if (paintedCellsRef.current.length > 0) {
+      onDragEnd?.(paintedCellsRef.current);
+      paintedCellsRef.current = [];
+      paintedKeysRef.current = new Set();
+    }
     setIsDragging(false);
+    lastCellRef.current = null;
+  }, [onDragEnd]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoverCell(null);
     lastCellRef.current = null;
   }, []);
 
+  const onDragEndRef = useRef(onDragEnd);
+  onDragEndRef.current = onDragEnd;
+
   useEffect(() => {
-    const up = () => { setIsDragging(false); lastCellRef.current = null; };
+    const up = () => {
+      if (paintedCellsRef.current.length > 0) {
+        onDragEndRef.current?.(paintedCellsRef.current);
+        paintedCellsRef.current = [];
+        paintedKeysRef.current = new Set();
+      }
+      setIsDragging(false);
+      lastCellRef.current = null;
+    };
     window.addEventListener("mouseup", up);
     return () => window.removeEventListener("mouseup", up);
   }, []);
@@ -191,6 +258,7 @@ export function PixelCanvas({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
         style={{ cursor: "crosshair", imageRendering: "pixelated", borderRadius: "4px", border: "1px solid #2a2a3e" }}
       />
     </div>

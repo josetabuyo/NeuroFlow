@@ -37,7 +37,7 @@ test("1. Initial load", async ({ page }) => {
 test("2. Start experiment", async ({ page }) => {
   await startExperiment(page);
 
-  await expect(page.locator("main canvas")).toBeVisible();
+  await expect(page.locator("main canvas").first()).toBeVisible();
 
   const palette = getBrushPalette(page);
   await expect(palette).toBeVisible();
@@ -64,7 +64,7 @@ test("2. Start experiment", async ({ page }) => {
 test("3. Start and verify initial state", async ({ page }) => {
   await startExperiment(page);
 
-  await expect(page.locator("main canvas")).toBeVisible();
+  await expect(page.locator("main canvas").first()).toBeVisible();
 
   const steps = await getStepCount(page);
   expect(steps).toBe(0);
@@ -289,7 +289,7 @@ test("13. Template selector changes config", async ({ page }) => {
   await templateSelect.selectOption(secondOption!);
 
   await page.getByRole("button", { name: "Start Experiment" }).click();
-  await expect(page.locator("main canvas")).toBeVisible({ timeout: 45_000 });
+  await expect(page.locator("main canvas").first()).toBeVisible({ timeout: 45_000 });
 });
 
 // ---------------------------------------------------------------------------
@@ -331,4 +331,40 @@ test("15. Inspect shows connection map", async ({ page }) => {
     timeout: 3_000,
   });
   await expect(page.getByText("Inhibitory (-1)")).toBeVisible();
+});
+
+// ---------------------------------------------------------------------------
+// 16. Paint mode: mousedown paints 1s, mouseup clears to 0s (transient signal)
+// ---------------------------------------------------------------------------
+test("16. Paint mode: mousedown injects 1s, mouseup clears them", async ({ page }) => {
+  await startExperiment(page);
+
+  // No continuous mode button should exist
+  await expect(page.getByTitle("Continuous (signal follows cursor)")).not.toBeVisible();
+  await expect(page.getByTitle("Pointer (click/drag to paint)")).not.toBeVisible();
+
+  // Increase brush to 5×5 for easier detection
+  const increaseBtn = getBrushPalette(page).getByRole("button", { name: "Increase brush" });
+  await increaseBtn.click();
+  await increaseBtn.click();
+  expect(await getBrushSizeLabel(page)).toBe("5×5");
+
+  const canvas = page.locator("main canvas").first();
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("Canvas not found");
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+
+  // Mousedown — cells should light up
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.waitForTimeout(150);
+  const activeWhilePressed = await getActiveCount(page);
+  expect(activeWhilePressed).toBeGreaterThan(0);
+
+  // Mouseup — painted cells should be cleared back to 0
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  const activeAfterRelease = await getActiveCount(page);
+  expect(activeAfterRelease).toBeLessThan(activeWhilePressed);
 });

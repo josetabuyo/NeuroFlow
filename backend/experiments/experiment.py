@@ -379,6 +379,8 @@ class Experiment(Experimento):
     @property
     def _input_id(self) -> str | None:
         r = self._ascii_region()
+        if r is None:
+            r = next((rs for rs in self._regions if rs.source_type == "draw"), None)
         return r.id if r else None
 
     @property
@@ -888,12 +890,7 @@ class Experiment(Experimento):
         self.generation += 1
         self._advance_ascii_frames()
 
-        return {
-            "type": "frame",
-            "generation": self.generation,
-            "grid": self.get_frame(),
-            "stats": self.get_stats(),
-        }
+        return {"type": "frame", "generation": self.generation}
 
     def _advance_ascii_frames(self) -> None:
         for rs in self._regions:
@@ -959,12 +956,14 @@ class Experiment(Experimento):
             return {}
         result: dict[str, list[list[float]]] = {}
         for rs in self._regions:
+            if rs.is_ascii_input:
+                continue  # ASCII-driven each step; not shown as interactive grid
             vals = self._region_values(rs).reshape(rs.height, rs.width).tolist()
-            if rs.is_entrada and rs.source_type not in (None, "ascii"):
+            if rs.is_entrada and rs.source_type not in (None, "ascii", "draw"):
                 # error_diff / label: continuous values make sense
                 result[rs.id] = [[round(v, 3) for v in row] for row in vals]
             else:
-                # wiring regions and ascii input: binary display
+                # wiring regions and draw input: binary display
                 result[rs.id] = [[round(v) for v in row] for row in vals]
         return result
 
