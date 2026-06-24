@@ -1,6 +1,6 @@
 /** NeuroFlow — Main Application Layout. */
 
-import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type PointerEvent as ReactPointerEvent } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Controls } from "./components/Controls";
 import { Scene } from "./components/Scene";
@@ -232,6 +232,37 @@ function App() {
   }, []);
 
   const hasGrid = grid.length > 0 || Object.keys(regions).length > 0;
+
+  const drawNoise = useMemo(() => {
+    const any = config as unknown as Record<string, unknown>;
+    if (!Array.isArray(any.regions)) return undefined;
+    const drawRegion = (any.regions as Record<string, unknown>[]).find(
+      (r) => (r.source as Record<string, unknown> | undefined)?.type === "draw"
+    );
+    if (!drawRegion) return undefined;
+    const src = drawRegion.source as Record<string, unknown>;
+    const noiseVal = src?.noise;
+    if (typeof noiseVal === "number") return noiseVal;
+    if (typeof noiseVal === "object" && noiseVal !== null) {
+      const bg = (noiseVal as Record<string, unknown>).background;
+      return typeof bg === "number" ? bg : 0;
+    }
+    return 0;
+  }, [config]);
+
+  const handleDrawNoiseChange = useCallback((v: number) => {
+    setConfig((prev) => {
+      const p = prev as unknown as Record<string, unknown>;
+      if (!Array.isArray(p.regions)) return prev;
+      return {
+        ...prev,
+        regions: (p.regions as Record<string, unknown>[]).map((r) => {
+          if ((r.source as Record<string, unknown> | undefined)?.type !== "draw") return r;
+          return { ...r, source: { ...(r.source as object), noise: { background: v } } };
+        }),
+      } as ExperimentConfig;
+    });
+  }, []);
 
   const saveLastSession = useCallback((templateId: string, cfg: ExperimentConfig) => {
     if (!templateId) return;
@@ -545,6 +576,8 @@ function App() {
               onToggleMode={toggleBrushMode}
               onToggleInspect={toggleInspectMode}
               onToggleTension={toggleTensionMode}
+              drawNoise={drawNoise}
+              onDrawNoiseChange={handleDrawNoiseChange}
               isInitializing={isInitializing}
             />
           ) : (

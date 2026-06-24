@@ -54,6 +54,9 @@ interface SceneProps {
   onToggleInspect: () => void;
   onToggleTension: () => void;
 
+  drawNoise?: number;
+  onDrawNoiseChange?: (v: number) => void;
+
   isInitializing?: boolean;
 }
 
@@ -74,6 +77,7 @@ export function Scene({
   onCellClick, onCellDrag, onCellDragEnd,
   brushSize, brushMode, inspectMode, canInspect,
   onIncrease, onDecrease, onToggleMode, onToggleInspect, onToggleTension,
+  drawNoise, onDrawNoiseChange,
   isInitializing,
 }: SceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -582,6 +586,8 @@ export function Scene({
           onToggleMode={onToggleMode}
           onToggleInspect={onToggleInspect}
           onToggleTension={onToggleTension}
+          drawNoise={drawNoise}
+          onDrawNoiseChange={onDrawNoiseChange}
         />
       </div>
 

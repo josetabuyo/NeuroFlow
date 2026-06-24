@@ -73,6 +73,8 @@ class RegionState:
     in_gap: bool = False
     current_frame: np.ndarray | None = None
     char_images: dict[str, np.ndarray] = field(default_factory=dict)
+    # draw source: clean painted values, kept separate from brain_tensor
+    draw_base: torch.Tensor | None = None
 
     @property
     def n(self) -> int:
@@ -667,6 +669,10 @@ class Experiment(Experimento):
             region_specs=region_specs,
         )
 
+        for rs in self._regions:
+            if rs.source_type == "draw":
+                rs.draw_base = torch.zeros(rs.n, device=self.brain_tensor.valores.device)
+
         self._rebuild_lr_per_syn()
 
     def _rebuild_lr_per_syn(self) -> None:
@@ -866,6 +872,7 @@ class Experiment(Experimento):
             if rs.is_ascii_input:
                 self._inject_ascii(rs)
 
+        self._apply_draw_noise()
         self.brain_tensor.procesar()
 
         label_region = self._label_region()
@@ -891,6 +898,38 @@ class Experiment(Experimento):
         self._advance_ascii_frames()
 
         return {"type": "frame", "generation": self.generation}
+
+    @staticmethod
+    def _draw_noise_prob(source_cfg: dict[str, Any]) -> float:
+        """Read noise probability from source config.
+
+        Accepts both flat ``"noise": 0.5`` and nested ``"noise": {"background": 0.5}``
+        (same format as ASCII noise.background).
+        """
+        noise_val = source_cfg.get("noise", 0.0)
+        if isinstance(noise_val, dict):
+            return float(noise_val.get("background", 0.0))
+        return float(noise_val)
+
+    def _apply_draw_noise(self) -> None:
+        """Inject background noise into draw regions using draw_base as clean source.
+
+        Uses draw_base (the user's painted values) to apply white noise each step.
+        The noisy frame is written to brain_tensor so it is visible in the display
+        and processed by the network — the same pattern as ASCII noise.background.
+        draw_base itself is never mutated here; it is only updated by paint().
+        """
+        for rs in self._regions:
+            if rs.source_type != "draw" or rs.draw_base is None:
+                continue
+            noise_prob = self._draw_noise_prob(rs.source_cfg)
+            if noise_prob <= 0.0:
+                continue
+            flat = rs.draw_base.cpu().numpy().astype(np.float64)
+            noisy = apply_white_noise(flat, noise_prob=noise_prob, rng=self._rng)
+            self.brain_tensor.valores[rs.start:rs.end] = torch.from_numpy(
+                noisy.astype(np.float32)
+            ).to(self.brain_tensor.valores.device)
 
     def _advance_ascii_frames(self) -> None:
         for rs in self._regions:
@@ -919,6 +958,30 @@ class Experiment(Experimento):
                 else:
                     rs.frame_in_char = 0
                     rs.char_index = (rs.char_index + 1) % n_items
+
+    def paint(
+        self,
+        region_id: str | None,
+        cells: list[dict[str, int]],
+        value: float,
+    ) -> None:
+        """Paint cells on a draw region, keeping draw_base in sync with brain_tensor."""
+        if self.brain_tensor is None:
+            return
+        region = self._regions_by_id.get(region_id) if region_id else self._tissue
+        if region is None:
+            region = self._tissue
+        if region is None:
+            return
+        rw, rh, start = region.width, region.height, region.start
+        for cell in cells:
+            x, y = cell.get("x", 0), cell.get("y", 0)
+            if 0 <= x < rw and 0 <= y < rh:
+                idx = start + y * rw + x
+                if idx < self.brain_tensor.n_real:
+                    self.brain_tensor.set_valor(idx, value)
+                    if region.source_type == "draw" and region.draw_base is not None:
+                        region.draw_base[idx - start] = value
 
     def step_n(self, count: int) -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -1243,6 +1306,8 @@ class Experiment(Experimento):
 
             if rs.is_ascii_input and new_source:
                 self._soft_update_ascii(rs, new_source)
+                rs.source_cfg = new_source
+            elif rs.source_type == "draw" and new_source:
                 rs.source_cfg = new_source
 
         # Sync brain_tensor global mode/specs/spiking from tissue

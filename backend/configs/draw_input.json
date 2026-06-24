@@ -19,7 +19,8 @@
         "id": "input",
         "grid": { "width": 15, "height": 15 },
         "source": {
-          "type": "draw"
+          "type": "draw",
+          "noise": { "background": 0.9 }
         }
       }
     ],

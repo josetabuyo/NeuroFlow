@@ -741,11 +741,15 @@ def _draw_config(
     tissue_w: int = 8,
     tissue_h: int = 8,
     weight: float = 1.0,
+    noise: float = 0.0,
 ) -> dict:
+    source: dict = {"type": "draw"}
+    if noise > 0:
+        source["noise"] = {"background": noise}
     return {
         "regions": [
             {"id": "input", "grid": {"width": input_w, "height": input_h},
-             "source": {"type": "draw"}},
+             "source": source},
             _wiring_region("tissue", tissue_w, tissue_h),
         ],
         "connections": [
@@ -849,6 +853,79 @@ class TestDrawInput:
         exp.step()
         frames = exp.get_region_frames()
         assert list(frames.keys()) == ["input", "tissue"]
+
+
+class TestDrawNoise:
+    """Background noise for draw source regions."""
+
+    def test_noise_default_is_zero(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        rs = exp._regions_by_id["input"]
+        assert exp._draw_noise_prob(rs.source_cfg) == 0.0
+
+    def test_noise_stored_in_source_cfg_nested(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.5))
+        rs = exp._regions_by_id["input"]
+        assert exp._draw_noise_prob(rs.source_cfg) == 0.5
+
+    def test_noise_flat_format_also_accepted(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        assert exp._draw_noise_prob({"type": "draw", "noise": 0.3}) == 0.3
+
+    def test_draw_base_initialized_to_zeros(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        rs = exp._regions_by_id["input"]
+        assert rs.draw_base is not None
+        assert rs.draw_base.tolist() == [0.0] * rs.n
+
+    def test_noise_visible_in_region_after_step(self) -> None:
+        """With noise=1.0 on all-zero draw_base, bt shows all-ones after step."""
+        exp = Experiment()
+        exp.setup(_draw_config(noise=1.0, input_w=4, input_h=4))
+        rs = exp._regions_by_id["input"]
+        exp.step()
+        vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+        assert all(v == 1.0 for v in vals)
+
+    def test_draw_base_preserves_painted_values(self) -> None:
+        """paint() keeps draw_base intact across steps with full noise."""
+        exp = Experiment()
+        exp.setup(_draw_config(noise=1.0))
+        rs = exp._regions_by_id["input"]
+        exp.paint("input", [{"x": 3, "y": 2}], 1.0)
+        for _ in range(5):
+            exp.step()
+        # draw_base (canonical source) preserves the painted value
+        local_idx = 2 * 5 + 3
+        assert rs.draw_base[local_idx].item() == 1.0
+
+    def test_unpainted_zeros_preserved_in_draw_base(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config(noise=1.0))
+        rs = exp._regions_by_id["input"]
+        for _ in range(5):
+            exp.step()
+        assert all(v == 0.0 for v in rs.draw_base.tolist())
+
+    def test_soft_update_noise_applies(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        exp.update_config(_draw_config(noise=0.7))
+        rs = exp._regions_by_id["input"]
+        assert exp._draw_noise_prob(rs.source_cfg) == pytest.approx(0.7)
+
+    def test_soft_update_noise_no_restart(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config())
+        rs = exp._regions_by_id["input"]
+        exp.paint("input", [{"x": 0, "y": 0}], 1.0)
+        result = exp.update_config(_draw_config(noise=0.3))
+        assert result is True
+        assert rs.draw_base[0].item() == 1.0
 
 
 class TestSourceTypes:

@@ -1,0 +1,16 @@
+{
+  "name": "NeuroFlow",
+  "voice": "Moira",
+  "pronunciation": "NeuroFlow",
+  "created": "2026-05-25",
+  "ports": [
+    {
+      "port": 5181,
+      "app": "frontend dev server"
+    },
+    {
+      "port": 8510,
+      "app": "backend API"
+    }
+  ]
+}

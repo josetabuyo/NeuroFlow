@@ -101,21 +101,7 @@ class ExperimentSession:
         cells: list[dict[str, int]] = message.get("cells", [])
         value: float = message.get("value", 1.0)
         region_id: str | None = message.get("region_id")
-
-        brain_tensor = self.experiment.brain_tensor
-        exp = self.experiment
-        if brain_tensor:
-            region = exp._regions_by_id.get(region_id) if region_id else exp._tissue
-            if region is None:
-                region = exp._tissue
-            if region is not None:
-                rw, rh, start = region.width, region.height, region.start
-                for cell in cells:
-                    x, y = cell.get("x", 0), cell.get("y", 0)
-                    if 0 <= x < rw and 0 <= y < rh:
-                        idx = start + y * rw + x
-                        if idx < brain_tensor.n_real:
-                            brain_tensor.set_valor(idx, value)
+        self.experiment.paint(region_id, cells, value)
         await self._send_frame()
 
     async def _stop_play_loop(self) -> None:
