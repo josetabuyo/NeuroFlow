@@ -1019,14 +1019,12 @@ class Experiment(Experimento):
             return {}
         result: dict[str, list[list[float]]] = {}
         for rs in self._regions:
-            if rs.is_ascii_input:
-                continue  # ASCII-driven each step; not shown as interactive grid
             vals = self._region_values(rs).reshape(rs.height, rs.width).tolist()
             if rs.is_entrada and rs.source_type not in (None, "ascii", "draw"):
                 # error_diff / label: continuous values make sense
                 result[rs.id] = [[round(v, 3) for v in row] for row in vals]
             else:
-                # wiring regions and draw input: binary display
+                # tissue, ascii input, draw input: binary display
                 result[rs.id] = [[round(v) for v in row] for row in vals]
         return result
 

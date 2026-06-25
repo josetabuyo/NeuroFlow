@@ -172,9 +172,8 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
     Shapes
     ------
     ``square``
-        Excitatory: single dendrite, square rings, gradient in pesos_sinapsis.
-        Inhibitory: ``sectors`` (default 12) wedges covering the full ring range,
-        gradient in pesos_sinapsis.
+        Excitatory: single dendrite, square (Chebyshev) rings, gradient in pesos_sinapsis.
+        Inhibitory: ``sectors`` (default 12) wedges covering the full square ring range.
 
         Format::
 
@@ -186,12 +185,18 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
                                "sectors": int, "density": float},
             }
 
+    ``circle``
+        Same as ``square`` but uses Euclidean (round) rings instead of Chebyshev.
+        Excitatory: single dendrite, circular rings.
+        Inhibitory: ``sectors`` (default 12) pie-wedges of a circular annular corona.
+
+        Format: identical to ``square``.
+
     ``square_flower``
-        Excitatory: identical to square (center cup).
+        Excitatory: identical to square (center cup, Chebyshev rings).
         Inhibitory: ``multiplier`` petals (default 8) placed at distance
-        ``offset`` from the center, angularly equidistant. Each petal is the
-        same square-cup shape defined by ``inhibitory.weights`` (rings 1, 2, …
-        from petal center). One dendrite per petal.
+        ``offset`` from the center, angularly equidistant. Petal body uses
+        Chebyshev rings. One dendrite per petal.
 
         Format::
 
@@ -201,14 +206,22 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
                 "inhibitory": {"offset": int, "multiplier": int,
                                "weights": [...], "density": float},
             }
+
+    ``circle_flower``
+        Same as ``square_flower`` but petal bodies use Euclidean rings.
+        Excitatory center also uses Euclidean rings.
+
+        Format: identical to ``square_flower``.
+
     """
     shape = wiring.get("shape", "square")
     mask: MaskDef = []
 
-    if shape == "square_flower":
+    if shape in ("square_flower", "circle_flower"):
+        flower_ring = _ring_ci if shape == "circle_flower" else _ring_sq
         # ── Center (excitatory, optional) ─────────────────────────────────
         if "excitatory" in wiring:
-            exc_dendrite = _build_exc_dendrite(wiring["excitatory"], _ring_sq)
+            exc_dendrite = _build_exc_dendrite(wiring["excitatory"], flower_ring)
             if exc_dendrite:
                 mask.append(exc_dendrite)
 
@@ -219,10 +232,10 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
         petal_dist: int = inh["offset"]
         multiplier: int = inh.get("multiplier", 8)
 
-        # Petal cup shape: center cell at weight 1, then square rings 1, 2, …
+        # Petal cup shape: center cell at weight 1, then rings 1, 2, …
         petal_weight_map: dict[tuple[int, int], float] = {(0, 0): 1.0}
         for i, w in enumerate(inh["weights"]):
-            for dx, dy in _ring_sq(i + 1):
+            for dx, dy in flower_ring(i + 1):
                 petal_weight_map[(dx, dy)] = w
 
         # Apply density once — same subsampled pattern for every petal
@@ -247,7 +260,7 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
 
         return mask
 
-    # ── square / circular ──────────────────────────────────────────────────
+    # ── square / circle ────────────────────────────────────────────────────
     ring_fn = _ring_sq if shape == "square" else _ring_ci
 
     if "excitatory" in wiring:

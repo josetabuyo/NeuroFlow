@@ -5,14 +5,16 @@ Validates:
 - noise controls per-neuron scaling only (template weights unchanged)
 - aplicar_mascara_2d uses random_noise to determine scaling range
 - _compute_preview_grid uses the same noise formula as the live network
+- circle / circle_flower / crown shapes produce circular (Euclidean) cells
 """
 
+import math
 import random
 
 import pytest
 
 from core.constructor import Constructor
-from core.masks import _compute_preview_grid, compile_deamon_wiring
+from core.masks import _compute_preview_grid, _ring_ci, compile_deamon_wiring
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -264,3 +266,103 @@ class TestPreviewGridNoise:
         n = brain.get_neurona("x20y20")
         exc_d = next(d for d in n.dendritas if d.peso > 0)
         assert all(abs(s.peso - 1.0) < 1e-9 for s in exc_d.sinapsis)
+
+
+# ── circle shape ──────────────────────────────────────────────────────────────
+
+def _circle_wiring(sectors=4):
+    return {
+        "shape": "circle",
+        "excitatory": {"offset": 1, "weights": [1.0, 0.5]},
+        "inhibitory": {"offset": 4, "weights": [1.0, 1.0], "sectors": sectors},
+    }
+
+
+class TestCircleShape:
+    """compile_deamon_wiring with shape='circle' produces Euclidean (round) cells."""
+
+    def test_structure_one_exc_plus_sectors(self):
+        mask = compile_deamon_wiring(_circle_wiring(sectors=6))
+        exc = [d for d in mask if d["peso_dendrita"] > 0]
+        inh = [d for d in mask if d["peso_dendrita"] < 0]
+        assert len(exc) == 1
+        assert len(inh) == 6
+
+    def test_exc_cells_are_euclidean_rings(self):
+        """Excitatory cells must be exactly the cells in _ring_ci(1) ∪ _ring_ci(2)."""
+        mask = compile_deamon_wiring(_circle_wiring())
+        exc = next(d for d in mask if d["peso_dendrita"] > 0)
+        expected = set(_ring_ci(1)) | set(_ring_ci(2))
+        assert set(exc["offsets"]) == expected
+
+    def test_exc_cells_exclude_chebyshev_corners(self):
+        """The 4 diagonal corners at distance=2 (chebyshev) must NOT appear in exc offsets.
+
+        Chebyshev r=2 includes (2,2) etc.; Euclidean r=2 (round(sqrt(8))=3) excludes them.
+        For exc rings 1..2 the cell (2,2) has euclidean dist sqrt(8)≈2.83 → round→3, not 1 or 2.
+        """
+        mask = compile_deamon_wiring(_circle_wiring())
+        exc = next(d for d in mask if d["peso_dendrita"] > 0)
+        offsets = set(exc["offsets"])
+        # (2,2) is the classic chebyshev-only corner at the r=2 level
+        assert (2, 2) not in offsets
+        assert (-2, 2) not in offsets
+
+    def test_inh_cells_are_euclidean(self):
+        """All inhibitory cells must live on Euclidean rings 4 or 5."""
+        mask = compile_deamon_wiring(_circle_wiring())
+        inh_cells = {off for d in mask if d["peso_dendrita"] < 0 for off in d["offsets"]}
+        valid = set(_ring_ci(4)) | set(_ring_ci(5))
+        assert inh_cells == valid
+
+    def test_noise_defaults_on_circle(self):
+        mask = compile_deamon_wiring(_circle_wiring())
+        assert all(d["random_noise"] == 0.5 for d in mask)
+
+
+# ── circle_flower shape ───────────────────────────────────────────────────────
+
+class TestCircleFlowerShape:
+    """circle_flower petals use Euclidean ring cells, not Chebyshev."""
+
+    def test_structure_same_as_square_flower(self):
+        wiring = {
+            "shape": "circle_flower",
+            "excitatory": {"offset": 1, "weights": [1.0]},
+            "inhibitory": {"offset": 5, "weights": [1.0], "multiplier": 4},
+        }
+        mask = compile_deamon_wiring(wiring)
+        exc = [d for d in mask if d["peso_dendrita"] > 0]
+        inh = [d for d in mask if d["peso_dendrita"] < 0]
+        assert len(exc) == 1
+        assert len(inh) == 4
+
+    def test_petal_body_uses_euclidean_cells(self):
+        """Petal body at ring 1 must match _ring_ci(1), not _ring_sq(1).
+
+        _ring_sq(1) == _ring_ci(1) (they agree at r=1), so we use r=2 where
+        they differ: chebyshev r=2 includes (2,2); euclidean r=2 does not.
+        """
+        wiring = {
+            "shape": "circle_flower",
+            "inhibitory": {"offset": 5, "weights": [1.0, 0.5], "multiplier": 1},
+        }
+        mask = compile_deamon_wiring(wiring)
+        petal = mask[0]
+        # center at cos(0)*5=5, sin(0)*5=0 → petal placed at (5, 0)
+        # local offsets (relative to petal center) must come from _ring_ci, not _ring_sq
+        petal_center = (round(5 * math.cos(0)), round(5 * math.sin(0)))
+        local_offsets = {(dx - petal_center[0], dy - petal_center[1]) for dx, dy in petal["offsets"]}
+        # (2,2) should NOT appear (it's chebyshev r=2 but not euclidean r=2)
+        assert (2, 2) not in local_offsets
+
+    def test_noise_defaults_on_circle_flower(self):
+        wiring = {
+            "shape": "circle_flower",
+            "excitatory": {"offset": 1, "weights": [1.0]},
+            "inhibitory": {"offset": 5, "weights": [1.0], "multiplier": 3},
+        }
+        mask = compile_deamon_wiring(wiring)
+        assert all(d["random_noise"] == 0.5 for d in mask)
+
+
