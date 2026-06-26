@@ -41,6 +41,7 @@
           "width": 40,
           "height": 20
         },
+        "neuron_labels": [["L"], ["T"]],
         "tension": {
           "function": {
             "x": 1,
@@ -56,11 +57,10 @@
           "width": 1,
           "height": 2
         },
-        "neuron_labels": [["L"], ["T"]],
         "source": {
-          "type": "error_diff",
-          "target": "label",
-          "diff_mode": "abs"
+          "type": "label_mismatch",
+          "char_region": "input",
+          "label_region": "output"
         }
       }
     ],

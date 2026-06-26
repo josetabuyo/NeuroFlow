@@ -966,6 +966,43 @@ class TestSourceTypes:
         assert err.min().item() >= 0.0
         assert err.max().item() <= 1.0
 
+    def test_label_mismatch_nociceptor(self) -> None:
+        config = {
+            "regions": [
+                {"id": "input", "grid": {"width": 4, "height": 4},
+                 "source": {"type": "ascii", "text": "TL", "frames_per_char": 1}},
+                _wiring_region("tissue", 6, 6),
+                {"id": "out", "grid": {"width": 1, "height": 2},
+                 "neuron_labels": [["T"], ["L"]]},
+                {"id": "noci", "grid": {"width": 1, "height": 2},
+                 "source": {"type": "label_mismatch", "char_region": "input", "label_region": "out"}},
+            ],
+            "connections": [
+                {"from": "input", "to": "tissue", "full": {"weight": 0.4, "density": 1.0}},
+                {"from": "tissue", "to": "out", "full": {"weight": 0.5, "density": 1.0}},
+                {"from": "noci", "to": "out", "full": {"weight": -0.5, "density": 1.0}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        noci = exp._regions_by_id["noci"]
+        assert noci.is_entrada is True
+
+        # char_index=0 → "T": noci[i] = |target[i] - out[i]|, target = [1, 0]
+        exp.step()
+        out = exp._regions_by_id["out"]
+        out_vals = exp.brain_tensor.valores[out.start:out.end].clamp(0, 1).tolist()
+        vals = exp.brain_tensor.valores[noci.start:noci.end].tolist()
+        assert vals[0] == pytest.approx(abs(1.0 - out_vals[0]), abs=1e-5)  # "T" matches → |1 - act|
+        assert vals[1] == pytest.approx(abs(0.0 - out_vals[1]), abs=1e-5)  # "L" mismatch → |0 - act|
+
+        # char_index=1 → "L": target = [0, 1]
+        exp.step()
+        out_vals = exp.brain_tensor.valores[out.start:out.end].clamp(0, 1).tolist()
+        vals = exp.brain_tensor.valores[noci.start:noci.end].tolist()
+        assert vals[0] == pytest.approx(abs(0.0 - out_vals[0]), abs=1e-5)  # "T" mismatch → |0 - act|
+        assert vals[1] == pytest.approx(abs(1.0 - out_vals[1]), abs=1e-5)  # "L" matches → |1 - act|
+
 
 def _threshold_config(threshold: float | None = None, key: str = "threshold") -> dict:
     """Minimal config: tissue → output (no wiring on output)."""

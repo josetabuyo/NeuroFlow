@@ -7,7 +7,8 @@ The network is fully described by the canonical config (regions + connections):
   - regions[].source  → NeuronaEntrada cells, values set externally each step:
         "ascii"      → synthetic / rendered text patterns
         "label"      → ground-truth class signal
-        "error_diff" → |target - output| diff (nociceptor)
+        "error_diff"      → |target - output| diff (nociceptor, legacy)
+        "label_mismatch"  → 1 if neuron's label ≠ current input char, else 0
   - connections[]     → cross-region dendrites, with weight / density / learning.rate.
 
 A region may declare wiring AND/OR source (orthogonal). Nothing here is keyed on a
@@ -43,7 +44,7 @@ _STABILITY_WINDOW = 20
 _DAEMON_THRESHOLD = 0.5
 _MIN_DAEMON_SIZE = 3
 
-_SOURCE_TYPES_NON_INPUT = {"label", "error_diff"}
+_SOURCE_TYPES_NON_INPUT = {"label", "error_diff", "label_mismatch"}
 _SYNTHETIC_PATTERNS = {"HALF_TOP", "HALF_BOT", "BARS_H", "BARS_V", "DOT_TL", "DOT_BR"}
 
 
@@ -973,6 +974,29 @@ class Experiment(Experimento):
             error = torch.abs(target - pred)
         self.brain_tensor.valores[rs.start:rs.start + n] = error.to(self.brain_tensor.device)
 
+    def _inject_label_mismatch(self, rs: RegionState) -> None:
+        """Nociceptor: neuron i = activation of label_region[i] when its label ≠ current char, else 0."""
+        if self.brain_tensor is None:
+            return
+        char_r = self._regions_by_id.get(rs.source_cfg.get("char_region", "input"))
+        label_r = self._regions_by_id.get(rs.source_cfg.get("label_region", ""))
+        if char_r is None or label_r is None or not label_r.neuron_labels:
+            return
+        text = char_r.source_cfg.get("text", "")
+        if not text:
+            return
+        current_char = text[char_r.char_index % len(text)]
+        label_vals = self.brain_tensor.valores[label_r.start : label_r.end].cpu()
+        values = torch.zeros(rs.n)
+        flat_idx = 0
+        for row_labels in label_r.neuron_labels:
+            for label in row_labels:
+                if flat_idx < rs.n:
+                    target = 1.0 if label == current_char else 0.0
+                    values[flat_idx] = abs(target - label_vals[flat_idx].clamp(0, 1).item())
+                flat_idx += 1
+        self.brain_tensor.valores[rs.start : rs.start + rs.n] = values.to(self.brain_tensor.device)
+
     @staticmethod
     def _compress_to_n(t: torch.Tensor, n: int) -> torch.Tensor:
         length = len(t)
@@ -1024,6 +1048,8 @@ class Experiment(Experimento):
         for rs in self._regions:
             if rs.source_type == "error_diff":
                 self._inject_error_diff(rs)
+            elif rs.source_type == "label_mismatch":
+                self._inject_label_mismatch(rs)
 
         if self.learning_enabled and self._lr_per_syn is not None:
             self.brain_tensor.learn(
