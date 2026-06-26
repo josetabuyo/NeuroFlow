@@ -245,12 +245,10 @@ export function Scene({
 
     const regionBox = boxes[inspectedRegionId];
     if (!regionBox) return;
-    const grid = regions[inspectedRegionId];
-    const gw = grid?.[0]?.length ?? 1;
-    const gh = grid?.length ?? 1;
-    const cellX = regionBox.x + (inspectedCell.x + 0.5) * (regionBox.w / gw);
-    const cellY = regionBox.y + HEADER_H + (inspectedCell.y + 0.5) * (regionBox.h / gh);
-    setInfoPanelPos({ x: cellX + 20, y: cellY - 80 });
+    // Place panel to the left of the region box, outside any neuron grid
+    const panelX = Math.max(MARGIN, regionBox.x - INFO_W - GAP);
+    const panelY = regionBox.y + HEADER_H;
+    setInfoPanelPos({ x: panelX, y: panelY });
   }, [inspectedCell?.x, inspectedCell?.y, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 1:1 mode ───────────────────────────────────────────────────────
