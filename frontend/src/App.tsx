@@ -171,6 +171,7 @@ function App() {
     tissueId,
     inputId,
     labels,
+    neuronLabelMap,
     state,
     stats,
     perf,
@@ -560,6 +561,7 @@ function App() {
               tissueId={tissueId}
               inputId={inputId}
               labels={labels}
+              neuronLabelMap={neuronLabelMap}
               tensionMode={tensionMode}
               connectionMap={connectionMap}
               inspectedCell={inspectedCell}

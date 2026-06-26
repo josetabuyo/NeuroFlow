@@ -217,6 +217,7 @@ export interface FrameMessage {
   tissue_id?: string;
   input_id?: string;
   labels?: Record<string, number[][]>;
+  neuron_label_map?: Record<string, string[][]>;
 }
 
 export interface StatusMessage {

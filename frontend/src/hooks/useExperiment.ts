@@ -33,6 +33,7 @@ interface UseExperimentReturn {
   tissueId: string;
   inputId: string | null;
   labels: Record<string, number[][]>;
+  neuronLabelMap: Record<string, string[][]>;
   state: ExperimentState;
   stats: ExperimentStats | null;
   perf: PerfMetrics | null;
@@ -98,6 +99,7 @@ export function useExperiment(): UseExperimentReturn {
   const [tissueId, setTissueId] = useState<string>("tissue");
   const [inputId, setInputId] = useState<string | null>(null);
   const [labels, setLabels] = useState<Record<string, number[][]>>({});
+  const [neuronLabelMap, setNeuronLabelMap] = useState<Record<string, string[][]>>({});
   const [experimentActive, setExperimentActive] = useState(false);
   const [brushSize, setBrushSize] = useState(1);
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
@@ -135,6 +137,7 @@ export function useExperiment(): UseExperimentReturn {
           if (msg.tissue_id) setTissueId(msg.tissue_id);
           if (msg.input_id !== undefined) setInputId(msg.input_id ?? null);
           setLabels(msg.labels ?? {});
+          if (msg.neuron_label_map) setNeuronLabelMap(msg.neuron_label_map);
           if (msg.inspect) {
             setConnectionMap(msg.inspect.weight_grid);
             setInspectedCell({ x: msg.inspect.x, y: msg.inspect.y });
@@ -318,6 +321,7 @@ export function useExperiment(): UseExperimentReturn {
     tissueId,
     inputId,
     labels,
+    neuronLabelMap,
     state,
     stats,
     perf,

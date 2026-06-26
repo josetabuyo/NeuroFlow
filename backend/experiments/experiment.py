@@ -66,6 +66,7 @@ class RegionState:
     umbral: float = 0.0
     process_mode: str = "min_vs_max"
     tension_fns: list[tuple[str, float]] = field(default_factory=list)
+    neuron_labels: list[list[str]] | None = None
 
     # Runtime state (source regions)
     char_index: int = 0
@@ -595,6 +596,7 @@ class Experiment(Experimento):
                 umbral=_get_threshold(rc),
                 process_mode=wiring_cfg.get("process_mode", "min_vs_max"),
                 tension_fns=_tension_fns_of(rc),
+                neuron_labels=rc.get("neuron_labels"),
             )
             self._regions.append(rs)
             self._regions_by_id[rs.id] = rs
@@ -1185,6 +1187,10 @@ class Experiment(Experimento):
             return None
         grid = label.reshape(label_region.height, label_region.width).tolist()
         return {label_region.id: [[round(v) for v in row] for row in grid]}
+
+    def get_neuron_label_map(self) -> dict[str, list[list[str]]] | None:
+        result = {r.id: r.neuron_labels for r in self._regions if r.neuron_labels}
+        return result if result else None
 
     def get_input_frame(self) -> list[list[float]] | None:
         rs = self._ascii_region()

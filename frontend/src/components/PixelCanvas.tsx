@@ -14,6 +14,7 @@ interface PixelCanvasProps {
    * The normal activation grid is ignored.
    */
   weightGrid?: (number | null)[][] | null;
+  neuronLabels?: (string | null)[][] | null;
   inspectedCell?: { x: number; y: number } | null;
   onCellClick: (x: number, y: number) => void;
   onCellDrag?: (x: number, y: number) => void;
@@ -66,6 +67,7 @@ export function PixelCanvas({
   width,
   height,
   weightGrid,
+  neuronLabels,
   inspectedCell,
   onCellClick,
   onCellDrag,
@@ -141,6 +143,27 @@ export function PixelCanvas({
       );
     }
 
+    // ── Neuron labels overlay ──
+    if (neuronLabels && neuronLabels.length > 0) {
+      const fontSize = Math.max(8, Math.round(cellSize * 0.55));
+      ctx.font = `bold ${fontSize}px monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (let row = 0; row < Math.min(height, neuronLabels.length); row++) {
+        for (let col = 0; col < Math.min(width, (neuronLabels[row]?.length ?? 0)); col++) {
+          const lbl = neuronLabels[row]?.[col];
+          if (!lbl) continue;
+          const cx = col * cellSize + cellSize / 2;
+          const cy = row * cellSize + cellSize / 2;
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          const tw = ctx.measureText(lbl).width;
+          ctx.fillRect(cx - tw / 2 - 2, cy - fontSize / 2 - 1, tw + 4, fontSize + 2);
+          ctx.fillStyle = "#ffff00";
+          ctx.fillText(lbl, cx, cy);
+        }
+      }
+    }
+
     // ── Brush cursor overlay (only while mouse is pressed) ──
     if (hoverCell && brushSize && isDragging) {
       const r = Math.floor(brushSize / 2);
@@ -163,7 +186,7 @@ export function PixelCanvas({
         }
       }
     }
-  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, inspectedCell, getCellSize, hoverCell, brushSize, brushMode, isDragging]);
+  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, neuronLabels, inspectedCell, getCellSize, hoverCell, brushSize, brushMode, isDragging]);
 
   useEffect(() => { draw(); }, [draw]);
 

@@ -24,6 +24,7 @@ interface SceneProps {
   tissueId: string;
   inputId?: string | null;
   labels?: Record<string, number[][]>;
+  neuronLabelMap?: Record<string, string[][]>;
 
   connectionMap?: (number | null)[][] | null;
   inspectedCell?: { x: number; y: number } | null;
@@ -66,6 +67,7 @@ export function Scene({
   tissueId,
   inputId,
   labels = {},
+  neuronLabelMap = {},
   connectionMap,
   inspectedCell,
   inspectedRegionId,
@@ -384,6 +386,7 @@ export function Scene({
               tensionMode={tensionMode}
               width={gw}
               height={gh}
+              neuronLabels={neuronLabelMap[id] ?? null}
               inspectedCell={id === inspectedRegionId ? inspectedCell : undefined}
               onCellClick={(cx, cy) => onCellClick(cx, cy, id)}
               onCellDrag={(cx, cy) => onCellDrag(cx, cy, id)}
@@ -550,6 +553,20 @@ export function Scene({
             userSelect: "none",
           }}
         >
+          {(() => {
+            const lbl = inspectedRegionId
+              ? (neuronLabelMap[inspectedRegionId]?.[inspectedCell.y]?.[inspectedCell.x] ?? null)
+              : null;
+            return lbl ? (
+              <div style={{
+                color: "#000", background: "#ffff00", fontWeight: 700,
+                fontSize: "1.1rem", textAlign: "center", borderRadius: 3,
+                padding: "2px 0", letterSpacing: 2, marginBottom: 4,
+              }}>
+                {lbl}
+              </div>
+            ) : null;
+          })()}
           <div style={{ color: "#ffff00", fontWeight: 600, fontSize: "0.72rem", marginBottom: 1 }}>
             {inspectedRegionId} ({inspectedCell.x}, {inspectedCell.y})
           </div>

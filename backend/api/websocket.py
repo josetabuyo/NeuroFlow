@@ -299,6 +299,10 @@ class ExperimentSession:
         if label_frames:
             msg["labels"] = label_frames
 
+        neuron_label_map = self.experiment.get_neuron_label_map()
+        if neuron_label_map:
+            msg["neuron_label_map"] = neuron_label_map
+
         if steps is not None and elapsed_s is not None and elapsed_s > 0:
             msg["perf"] = {
                 "steps": steps,
