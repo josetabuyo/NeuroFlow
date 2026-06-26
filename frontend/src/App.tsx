@@ -36,19 +36,15 @@ function extractSoftFingerprint(cfg: ExperimentConfig): string {
   const any = cfg as unknown as Record<string, unknown>;
   if (Array.isArray(any.regions)) {
     return JSON.stringify({
-      regions: (any.regions as Record<string, unknown>[]).map((r) => {
-        const w = (r.wiring as Record<string, unknown>) ?? {};
-        return {
-          umbral: r.umbral,
-          spiking: r.spiking,
-          process_mode: w.process_mode,
-          tension_function: w.tension_function,
-          learning_rate: w.learning_rate,
-          source: r.source,
-        };
-      }),
+      regions: (any.regions as Record<string, unknown>[]).map((r) => ({
+        umbral: r.umbral,
+        spiking: r.spiking,
+        process_mode: r.process_mode,
+        tension: r.tension,
+        source: r.source,
+      })),
       connections: ((any.connections as Record<string, unknown>[]) ?? []).map((c) => ({
-        learning: c.learning,
+        learning: (c.full as Record<string, unknown>)?.learning ?? c.learning,
       })),
     });
   }
@@ -58,7 +54,7 @@ function extractSoftFingerprint(cfg: ExperimentConfig): string {
     noise: cfg.noise,
     spiking: cfg.spiking,
     process_mode: cfg.wiring?.process_mode,
-    tension_function: cfg.wiring?.tension_function,
+    tension: cfg.wiring?.tension,
     input: cfg.input,
   });
 }
@@ -187,6 +183,7 @@ function App() {
     inspectInfo,
     brushSize,
     brushMode,
+    normalizedConfig,
     start,
     reconnect,
     updateConfig,
@@ -202,6 +199,13 @@ function App() {
     decreaseBrushSize,
     toggleBrushMode,
   } = useExperiment();
+
+  // When backend sends back the normalized config, update the editor
+  useEffect(() => {
+    if (normalizedConfig) {
+      setConfig(normalizedConfig as unknown as ExperimentConfig);
+    }
+  }, [normalizedConfig]);
 
   // Fetch templates + metadata on mount
   useEffect(() => {

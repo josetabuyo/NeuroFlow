@@ -13,8 +13,19 @@ from experiments.experiment import Experiment
 
 
 def _wiring_region(rid: str, w: int, h: int, **wiring: object) -> dict:
-    cfg = {"mask": "simple", "process_mode": "min_vs_max"}
-    cfg.update(wiring)
+    process_mode = wiring.pop("process_mode", "min_vs_max")
+    lr = wiring.pop("learning_rate", None)
+    exc_w = wiring.pop("dendrite_exc_weight", None)
+    inh_w = wiring.pop("dendrite_inh_weight", None)
+    deamon: dict = {"mask": "simple"}
+    if exc_w is not None:
+        deamon["excitatory"] = {"weight": exc_w}
+    if inh_w is not None:
+        deamon["inhibitory"] = {"weight": inh_w}
+    deamon.update(wiring)
+    cfg: dict = {"deamon": deamon, "process_mode": process_mode}
+    if lr is not None:
+        cfg["learning_rate"] = lr
     return {"id": rid, "grid": {"width": w, "height": h}, "wiring": cfg}
 
 
@@ -34,8 +45,7 @@ def _two_region_config() -> dict:
             _wiring_region("output", 4, 4),
         ],
         "connections": [
-            {"from": "tissue", "to": "output", "type": "full",
-             "weight": 0.5, "density": 1.0, "learning": {"rate": 0.0}},
+            {"from": "tissue", "to": "output", "full": {"weight": 0.5, "density": 1.0, "learning": {"rate": 0.0}}},
         ],
     }
 
@@ -49,8 +59,7 @@ def _ascii_config() -> dict:
             _wiring_region("tissue", 8, 8),
         ],
         "connections": [
-            {"from": "input", "to": "tissue", "type": "full",
-             "weight": 0.4, "density": 1.0},
+            {"from": "input", "to": "tissue", "full": {"weight": 0.4, "density": 1.0}},
         ],
     }
 
@@ -72,7 +81,7 @@ class TestSoftUpdates:
         exp = Experiment()
         exp.setup(_base_config())
         cfg = copy.deepcopy(exp._config)
-        cfg["regions"][0]["wiring"]["tension_function"] = {"x": 1, "x_pow_3": 5}
+        cfg["regions"][0]["tension"] = {"function": {"x": 1, "x_pow_3": 5}}
         assert exp.update_config(cfg) is True
 
     def test_umbral_change_is_soft(self) -> None:
@@ -99,7 +108,7 @@ class TestSoftUpdates:
         exp = Experiment()
         exp.setup(_two_region_config())
         cfg = copy.deepcopy(exp._config)
-        cfg["connections"][0]["learning"]["rate"] = 0.05
+        cfg["connections"][0]["full"]["learning"]["rate"] = 0.05
         assert exp.update_config(cfg) is True
 
     def test_connection_learning_rate_takes_effect(self) -> None:
@@ -109,7 +118,7 @@ class TestSoftUpdates:
         assert exp.learning_enabled is False
 
         cfg = copy.deepcopy(exp._config)
-        cfg["connections"][0]["learning"]["rate"] = 0.05
+        cfg["connections"][0]["full"]["learning"]["rate"] = 0.05
         exp.update_config(cfg)
         assert exp.learning_enabled is True
 
@@ -188,7 +197,7 @@ class TestSoftUpdates:
         exp = Experiment()
         exp.setup(_base_config())
         cfg = copy.deepcopy(exp._config)
-        cfg["regions"][0]["wiring"]["tension_function"] = {"x": 2, "x_pow_3": 10}
+        cfg["regions"][0]["tension"] = {"function": {"x": 2, "x_pow_3": 10}}
         exp.update_config(cfg)
         tissue = exp._regions_by_id["tissue"]
         specs = {(s[0], s[1]): (s[2], s[3]) for s in exp.brain_tensor.region_specs}
@@ -284,7 +293,7 @@ class TestHardUpdates:
         exp = Experiment()
         exp.setup(_two_region_config())
         cfg = copy.deepcopy(exp._config)
-        cfg["connections"][0]["weight"] = 0.9
+        cfg["connections"][0]["full"]["weight"] = 0.9
         assert exp.update_config(cfg) is False
 
     def test_connection_density_change_is_hard(self) -> None:
@@ -292,7 +301,7 @@ class TestHardUpdates:
         exp = Experiment()
         exp.setup(_two_region_config())
         cfg = copy.deepcopy(exp._config)
-        cfg["connections"][0]["density"] = 0.5
+        cfg["connections"][0]["full"]["density"] = 0.5
         assert exp.update_config(cfg) is False
 
     def test_source_type_change_is_hard(self) -> None:
@@ -308,7 +317,7 @@ class TestHardUpdates:
         exp = Experiment()
         exp.setup(_base_config())
         cfg = copy.deepcopy(exp._config)
-        cfg["regions"][0]["wiring"]["dendrite_exc_weight"] = 0.7
+        cfg["regions"][0]["wiring"]["deamon"]["excitatory"] = {"weight": 0.7}
         assert exp.update_config(cfg) is False
 
     def test_hard_update_resets_generation(self) -> None:
@@ -350,11 +359,11 @@ class TestHardUpdates:
         random.seed(1)
         exp = Experiment()
         cfg = _two_region_config()
-        cfg["connections"][0]["learning"] = {"rate": 0.05, "exclude_range": [0.4, 0.6]}
+        cfg["connections"][0]["full"]["learning"] = {"rate": 0.05, "exclude_range": [0.4, 0.6]}
         exp.setup(cfg)
 
         new_cfg = copy.deepcopy(exp._config)
-        new_cfg["connections"][0]["learning"]["exclude_range"] = [0.3, 0.7]
+        new_cfg["connections"][0]["full"]["learning"]["exclude_range"] = [0.3, 0.7]
         assert exp.update_config(new_cfg) is True
 
     def test_connection_from_change_is_hard(self) -> None:
@@ -367,7 +376,7 @@ class TestHardUpdates:
                 _wiring_region("c", 4, 4),
             ],
             "connections": [
-                {"from": "a", "to": "b", "type": "full", "weight": 0.5, "density": 1.0},
+                {"from": "a", "to": "b", "full": {"weight": 0.5, "density": 1.0}},
             ],
         }
         exp.setup(cfg)
@@ -380,5 +389,5 @@ class TestHardUpdates:
         exp = Experiment()
         exp.setup(_base_config())
         cfg = copy.deepcopy(exp._config)
-        cfg["regions"][0]["wiring"]["dendrite_inh_weight"] = -0.5
+        cfg["regions"][0]["wiring"]["deamon"]["inhibitory"] = {"weight": -0.5}
         assert exp.update_config(cfg) is False

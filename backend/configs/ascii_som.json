@@ -6,18 +6,25 @@
     "regions": [
       {
         "id": "tissue",
-        "grid": { "width": 50, "height": 50 },
-        "wiring": {
-          "mask": "deamon_e3_g2_i12_de1_di1",
-          "dendrite_exc_weight": 0.9,
-          "dendrite_inh_weight": -1,
-          "process_mode": "avg_vs_avg",
-          "tension_function": { "x": 3, "x_pow_3": 9, "x_pow_2": 2 }
-        }
+        "grid": {
+          "width": 50,
+          "height": 50
+        },
+        "tension": {
+          "function": {
+            "x": 3,
+            "x_pow_3": 9,
+            "x_pow_2": 2
+          }
+        },
+        "process_mode": "avg_vs_avg"
       },
       {
         "id": "input",
-        "grid": { "width": 20, "height": 20 },
+        "grid": {
+          "width": 20,
+          "height": 20
+        },
         "source": {
           "type": "ascii",
           "text": "HALF_TOP,HALF_BOT",
@@ -27,11 +34,20 @@
     ],
     "connections": [
       {
+        "on": "tissue",
+        "deamon": {
+          "mask": "deamon_e3_g2_i12_de1_di1",
+          "excitatory": { "weight": 0.9 },
+          "inhibitory": { "weight": -1 }
+        }
+      },
+      {
         "from": "input",
         "to": "tissue",
-        "type": "full",
-        "weight": 0.2,
-        "learning_rate": 1.0
+        "full": {
+          "weight": 0.2,
+          "learning": { "rate": 1.0 }
+        }
       }
     ]
   }

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import type {
+  CanonicalExperimentConfig,
   ExperimentConfig,
   ExperimentState,
   ExperimentStats,
@@ -49,6 +50,7 @@ interface UseExperimentReturn {
   } | null;
   brushSize: number;
   brushMode: "activate" | "deactivate";
+  normalizedConfig: CanonicalExperimentConfig | null;
   start: (config: ExperimentConfig) => void;
   reconnect: (config: ExperimentConfig) => void;
   updateConfig: (config: Partial<ExperimentConfig>) => void;
@@ -99,6 +101,7 @@ export function useExperiment(): UseExperimentReturn {
   const [experimentActive, setExperimentActive] = useState(false);
   const [brushSize, setBrushSize] = useState(1);
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
+  const [normalizedConfig, setNormalizedConfig] = useState<CanonicalExperimentConfig | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const send = useCallback((data: Record<string, unknown>) => {
@@ -171,6 +174,9 @@ export function useExperiment(): UseExperimentReturn {
           break;
         case "status":
           setState(msg.state);
+          break;
+        case "config_normalized":
+          setNormalizedConfig(msg.config);
           break;
         case "error":
           console.error("Server error:", msg.message);
@@ -324,6 +330,7 @@ export function useExperiment(): UseExperimentReturn {
     inspectInfo,
     brushSize,
     brushMode,
+    normalizedConfig,
     start,
     reconnect,
     updateConfig,

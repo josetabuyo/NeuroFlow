@@ -80,6 +80,7 @@ class ExperimentSession:
         self.experiment.setup(config)
 
         await self.send({"type": "status", "state": "ready"})
+        await self.send({"type": "config_normalized", "config": self.experiment._config})
         await self._send_frame()
 
     async def _handle_click(self, message: dict[str, Any]) -> None:
@@ -188,6 +189,7 @@ class ExperimentSession:
         config = message.get("config", {})
         self.experiment.setup(config)
         await self.send({"type": "status", "state": "ready"})
+        await self.send({"type": "config_normalized", "config": self.experiment._config})
         await self._send_frame()
 
     async def _handle_update_config(self, message: dict[str, Any]) -> None:

@@ -70,14 +70,17 @@ Each region entry:
   "grid": { "width": 50, "height": 50 },
   "wiring": { ... },
   "source": { ... },
-  "umbral": 0.0,
+  "threshold": 0.0,
   "spiking": { ... }
 }
 ```
 
 - **`id`** (string, required): unique identifier
 - **`grid`** (object, required): `{ "width": N, "height": N }` — grid dimensions. **Hard param** (requires Refresh).
-- **`umbral`** (float, default 0.0): firing threshold per neuron. **Soft param**.
+- **`threshold`** (float, default 0.0): firing threshold applied to all non-input neurons in this region — a neuron fires only when its tension exceeds this value. **Soft param**. Alias: `"umbral"` (legacy).
+  - Tissue regions with lateral daemon wiring self-balance around 0, so threshold=0 works fine.
+  - Regions without lateral wiring (e.g. output) receive a residual positive signal (~0.35) from silent sources due to the synapse formula `1-|w-input|`. Set `threshold > 0` (e.g. 0.5) to gate this out.
+  - Input neurons (`source` regions) are always exempt — their values are set externally.
 - **`wiring`** (object): makes this a processing region. **Topology fields are Hard; behavior fields are Soft** (see below).
 - **`source`** (object): makes this an input region (NeuronaEntrada). **Hard param** to change type.
 - **`spiking`** (object): spike-frequency adaptation. **Soft param**.
@@ -161,7 +164,7 @@ Behavior (Soft — applies live without Refresh):
 ### Soft vs Hard params summary
 
 **Soft** (apply live, no rebuild):
-- `umbral`, `process_mode`, `tension_function`, `wiring.learning_rate`
+- `threshold` (alias `umbral`), `process_mode`, `tension_function`, `wiring.learning_rate`
 - `source.text`, `source.font`, `source.font_size`, `source.frames_per_char`, `source.noise.*`
 - `spiking.up_ticks`, `spiking.down_ticks`
 - `connections[].learning.rate`, `connections[].learning.exclude_range`

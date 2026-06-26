@@ -141,6 +141,8 @@ class BrainTensor:
         for fn_name, coeff in fns:
             if fn_name == "x":
                 result = result + coeff * tension
+            elif fn_name == "b":
+                result = result + coeff
             elif fn_name.startswith("x_pow_"):
                 exp = int(fn_name.split("_pow_")[1])
                 result = result + coeff * tension.pow(exp)

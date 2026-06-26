@@ -60,12 +60,24 @@ export interface RegionSource {
 }
 
 export interface RegionWiring {
-  mask?: string;
-  dendrite_exc_weight?: number;
-  dendrite_inh_weight?: number;
+  deamon?: {
+    mask?: string;
+    shape?: string;
+    centroid?: Record<string, unknown>;
+    fixed?: boolean;
+    excitatory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
+    inhibitory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
+    learning?: { rate?: number };
+  };
   process_mode?: string;
-  tension_function?: Record<string, number>;
+  tension?: { function: Record<string, number> };
   learning_rate?: number;
+  /** @deprecated use deamon.mask */
+  mask?: string;
+  /** @deprecated use deamon.excitatory.weight */
+  dendrite_exc_weight?: number;
+  /** @deprecated use deamon.inhibitory.weight */
+  dendrite_inh_weight?: number;
 }
 
 export interface RegionNoise {
@@ -88,19 +100,40 @@ export interface Region {
   id: string;
   grid: { width: number; height: number };
   source?: RegionSource;
-  wiring?: RegionWiring;
   noise?: RegionNoise;
   spiking?: RegionSpiking;
   daemon?: RegionDaemon;
+  process_mode?: string;
+  tension?: { function: Record<string, number> };
 }
 
 export interface Connection {
-  from: string;
-  to: string;
-  type: "full" | "portion";
-  weight: number;
+  // inter-region full
+  from?: string;
+  to?: string;
+  full?: {
+    weight?: number;
+    density?: number;
+    learning?: { rate?: number; exclude_range?: [number, number] };
+    learning_rate?: number;
+  };
+  // legacy portion (type: "portion" still used internally)
+  type?: string;
   portion?: [number, number];
-  learning_rate?: number;
+  weight?: number;
+  // intra-region (on-connection)
+  on?: string;
+  deamon?: {
+    mask?: string;
+    shape?: string;
+    centroid?: Record<string, unknown>;
+    fixed?: boolean;
+    excitatory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
+    inhibitory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
+    learning?: { rate?: number };
+  };
+  /** @deprecated use deamon */
+  mask?: string;
 }
 
 export interface CanonicalExperimentConfig {
@@ -120,7 +153,7 @@ export interface ExperimentConfig {
     dendrite_exc_weight?: number;
     dendrite_inh_weight?: number;
     process_mode?: string;
-    tension_function?: Record<string, number>;
+    tension?: { function: Record<string, number> };
   };
   input?: {
     source?: string;
@@ -217,7 +250,12 @@ export interface ConnectionsMessage {
   nociceptor_weight_height?: number;
 }
 
-export type ServerMessage = FrameMessage | StatusMessage | ErrorMessage | ConnectionsMessage;
+export interface ConfigNormalizedMessage {
+  type: "config_normalized";
+  config: CanonicalExperimentConfig;
+}
+
+export type ServerMessage = FrameMessage | StatusMessage | ErrorMessage | ConnectionsMessage | ConfigNormalizedMessage;
 
 export interface ExperimentStats {
   active_cells: number;

@@ -134,6 +134,117 @@ def _detect_daemons(
     return len(sizes), daemon_indices, noise_indices, sizes
 
 
+def _migrate_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Migrate old-format connections and region wirings to the new canonical format.
+
+    Old → new:
+    - {"type":"full","weight":w,...} → {"full":{"weight":w,...}}
+    - {"type":"deamon","shape":s,"dendrite_exc_weight":w,...} → {"deamon":{"shape":s,"excitatory":{"weight":w,...},...}}
+    - region.wiring {"mask":m,"dendrite_exc_weight":w} → {"deamon":{"mask":m,"excitatory":{"weight":w}}}
+    """
+    import copy
+    config = copy.deepcopy(config)
+    new_conns: list[dict[str, Any]] = []
+    for conn in config.get("connections", []):
+        ctype = conn.get("type")
+        if "on" in conn and "deamon" not in conn:
+            # Old-style intra-region connection → deamon key
+            deamon: dict[str, Any] = {}
+            for k in ("mask", "shape", "centroid", "fixed"):
+                if k in conn:
+                    deamon[k] = conn[k]
+            exc_w = conn.get("dendrite_exc_weight")
+            inh_w = conn.get("dendrite_inh_weight")
+            if "excitatory" in conn:
+                exc = dict(conn["excitatory"])
+                if exc_w is not None:
+                    exc = {"weight": exc_w, **{k: v for k, v in exc.items() if k != "weight"}}
+                deamon["excitatory"] = exc
+            elif exc_w is not None:
+                deamon["excitatory"] = {"weight": exc_w}
+            if "inhibitory" in conn:
+                inh = dict(conn["inhibitory"])
+                if inh_w is not None:
+                    inh = {"weight": inh_w, **{k: v for k, v in inh.items() if k != "weight"}}
+                deamon["inhibitory"] = inh
+            elif inh_w is not None:
+                deamon["inhibitory"] = {"weight": inh_w}
+            if "learning_rate" in conn:
+                deamon["learning"] = {"rate": conn["learning_rate"]}
+            new_conns.append({"on": conn["on"], "deamon": deamon})
+        elif ctype == "full" or ("from" in conn and "to" in conn and "full" not in conn and ctype != "portion"):
+            # Old-style inter-region full connection → full key
+            full: dict[str, Any] = {}
+            if "weight" in conn:
+                full["weight"] = conn["weight"]
+            if "density" in conn:
+                full["density"] = conn["density"]
+            if "learning" in conn:
+                full["learning"] = conn["learning"]
+            elif "learning_rate" in conn:
+                full["learning"] = {"rate": conn["learning_rate"]}
+            new_conns.append({"from": conn["from"], "to": conn["to"], "full": full})
+        else:
+            new_conns.append(conn)
+    if config.get("connections") is not None:
+        config["connections"] = new_conns
+
+    for region in config.get("regions", []):
+        w = region.get("wiring")
+        if not w or "deamon" in w:
+            continue
+        top_mask = w.get("mask", "")
+        if top_mask and get_mask_type(top_mask) == "wolfram":
+            continue
+        deamon = {}
+        if top_mask:
+            deamon["mask"] = top_mask
+        exc_w = w.get("dendrite_exc_weight")
+        inh_w = w.get("dendrite_inh_weight")
+        if exc_w is not None:
+            deamon["excitatory"] = {"weight": exc_w}
+        if inh_w is not None:
+            deamon["inhibitory"] = {"weight": inh_w}
+        new_w: dict[str, Any] = {"deamon": deamon}
+        for k in ("process_mode", "learning_rate", "tension"):
+            if k in w:
+                new_w[k] = w[k]
+        region["wiring"] = new_w
+
+    return config
+
+
+def _inject_wiring_from_connections(config: dict[str, Any]) -> dict[str, Any]:
+    """Absorb on-connections into region wiring for internal use. Returns a deep copy."""
+    import copy
+    config = copy.deepcopy(config)
+    connections = config.get("connections", [])
+    on_conns = [c for c in connections if "on" in c]
+    if not on_conns:
+        return config
+    region_map = {r["id"]: r for r in config.get("regions", [])}
+    for conn in on_conns:
+        rid = conn["on"]
+        if rid not in region_map:
+            continue
+        r = region_map[rid]
+        if "wiring" in r:
+            continue  # region wiring already present — on-connection skipped
+        wiring: dict[str, Any] = {}
+        pm = r.get("process_mode") or conn.get("process_mode")
+        if pm:
+            wiring["process_mode"] = pm
+        if "deamon" in conn:
+            deamon_cfg = conn["deamon"]
+            wiring["deamon"] = deamon_cfg
+            lr = deamon_cfg.get("learning", {}).get("rate")
+            if lr is not None:
+                wiring["learning_rate"] = lr
+        r["wiring"] = wiring
+    config["connections"] = [c for c in connections if "on" not in c]
+    return config
+
+
 def _to_canonical(config: dict[str, Any]) -> dict[str, Any]:
     """Convert a legacy flat config to the canonical regions/connections format.
 
@@ -204,25 +315,28 @@ def _to_canonical(config: dict[str, Any]) -> dict[str, Any]:
             "source": source,
         })
 
-        conn: dict[str, Any] = {
-            "from": "input",
-            "to": "tissue",
-            "type": "full",
-            "weight": float(input_cfg.get("dendrite_input_weight", 0.2)),
-        }
-        if "density" in input_cfg:
-            conn["density"] = float(input_cfg["density"])
         portion = input_cfg.get("portion")
         if portion is not None:
-            conn["type"] = "portion"
-            conn["portion"] = list(portion)
-
-        if learning_cfg is not None:
-            base_rate = float(learning_cfg.get("rate", 1.0))
-            lr_input = float(learning_cfg.get("lr_input", 1.0))
-            effective_input = base_rate * lr_input
-            if effective_input > 0:
-                conn["learning"] = {"rate": effective_input}
+            conn: dict[str, Any] = {
+                "from": "input",
+                "to": "tissue",
+                "type": "portion",
+                "portion": list(portion),
+                "weight": float(input_cfg.get("dendrite_input_weight", 0.2)),
+            }
+        else:
+            full_cfg: dict[str, Any] = {
+                "weight": float(input_cfg.get("dendrite_input_weight", 0.2)),
+            }
+            if "density" in input_cfg:
+                full_cfg["density"] = float(input_cfg["density"])
+            if learning_cfg is not None:
+                base_rate = float(learning_cfg.get("rate", 1.0))
+                lr_input = float(learning_cfg.get("lr_input", 1.0))
+                effective_input = base_rate * lr_input
+                if effective_input > 0:
+                    full_cfg["learning"] = {"rate": effective_input}
+            conn = {"from": "input", "to": "tissue", "full": full_cfg}
 
         connections.append(conn)
 
@@ -275,17 +389,24 @@ def _apply_mask_to_neuron_grid(
 
 def _compile_mask(wiring_cfg: dict[str, Any]) -> tuple[list[dict], bool]:
     """Compile a wiring config into (mask, random_weights), applying weight overrides."""
-    if "deamon" in wiring_cfg:
-        deamon_cfg = wiring_cfg["deamon"]
-        random_weights = not deamon_cfg.get("fixed", False)
-        raw_mask = compile_deamon_wiring(deamon_cfg)
+    deamon_cfg = wiring_cfg.get("deamon", {})
+    if deamon_cfg:
+        if "mask" in deamon_cfg:
+            mask_id = deamon_cfg["mask"]
+            random_weights = get_random_weights(mask_id)
+            raw_mask = get_mask(mask_id)
+        else:
+            random_weights = not deamon_cfg.get("fixed", False)
+            raw_mask = compile_deamon_wiring(deamon_cfg)
+        exc_w = deamon_cfg.get("excitatory", {}).get("weight")
+        inh_w = deamon_cfg.get("inhibitory", {}).get("weight")
     else:
+        # Wolfram masks keep mask at wiring top level (no deamon key)
         mask_id = wiring_cfg.get("mask", "")
         random_weights = get_random_weights(mask_id)
         raw_mask = get_mask(mask_id)
-
-    exc_w = wiring_cfg.get("dendrite_exc_weight")
-    inh_w = wiring_cfg.get("dendrite_inh_weight")
+        exc_w = None
+        inh_w = None
     if exc_w is None and inh_w is None:
         return raw_mask, random_weights
 
@@ -301,11 +422,21 @@ def _compile_mask(wiring_cfg: dict[str, Any]) -> tuple[list[dict], bool]:
     return mask, random_weights
 
 
-def _tension_fns_of(wiring_cfg: dict[str, Any]) -> list[tuple[str, float]]:
-    tf = wiring_cfg.get("tension_function")
+def _tension_fns_of(cfg: dict[str, Any]) -> list[tuple[str, float]]:
+    tf = cfg.get("tension", {}).get("function")
     if tf and isinstance(tf, dict):
         return [(k, float(v)) for k, v in tf.items()]
     return []
+
+
+def _get_threshold(region_cfg: dict[str, Any]) -> float:
+    """Read firing threshold from region config.
+
+    "threshold" is the canonical key; "umbral" is accepted as a legacy alias.
+    NeuronaEntrada neurons are never affected — BrainTensor skips them via
+    mascara_entrada regardless of what value is stored here.
+    """
+    return float(region_cfg.get("threshold", region_cfg.get("umbral", 0.0)))
 
 
 class Experiment(Experimento):
@@ -360,7 +491,7 @@ class Experiment(Experimento):
             if r.has_wiring:
                 specs.append((r.start, r.end, r.process_mode, r.tension_fns))
             else:
-                specs.append((r.start, r.end, self.process_mode, self._tissue.tension_fns if self._tissue else []))
+                specs.append((r.start, r.end, self.process_mode, r.tension_fns))
         return specs
 
     def _ascii_region(self) -> RegionState | None:
@@ -403,7 +534,9 @@ class Experiment(Experimento):
 
     def setup(self, config: dict[str, Any]) -> None:
         config = _to_canonical(config)
+        config = _migrate_config(config)
         self._config = config
+        config = _inject_wiring_from_connections(config)  # internal copy with wiring in regions
         self.generation = 0
 
         region_cfgs = config["regions"]
@@ -459,9 +592,9 @@ class Experiment(Experimento):
                 source_type=source.get("type") if source else None,
                 source_cfg=source or {},
                 wiring_cfg=wiring_cfg,
-                umbral=float(rc.get("umbral", 0.0)),
+                umbral=_get_threshold(rc),
                 process_mode=wiring_cfg.get("process_mode", "min_vs_max"),
-                tension_fns=_tension_fns_of(wiring_cfg),
+                tension_fns=_tension_fns_of(rc),
             )
             self._regions.append(rs)
             self._regions_by_id[rs.id] = rs
@@ -566,7 +699,7 @@ class Experiment(Experimento):
             width=self.width, height=self.height, is_entrada=False,
             wiring_cfg=tissue_cfg["wiring"],
             process_mode=self.process_mode,
-            tension_fns=_tension_fns_of(tissue_cfg["wiring"]),
+            tension_fns=_tension_fns_of(tissue_cfg),
         )]
         self._regions_by_id = {self._regions[0].id: self._regions[0]}
         self._connections = []
@@ -588,14 +721,15 @@ class Experiment(Experimento):
         dst = self._regions_by_id.get(conn.get("to"))
         if src is None or dst is None:
             return
-        weight = float(conn.get("weight", 0.5))
-        density = float(conn.get("density", 1.0))
+        _full = conn.get("full") or {}
+        weight = float(_full.get("weight", 0.5))
+        density = float(_full.get("density", 1.0))
         src_neurons = list(self.regiones[src.id].neuronas.values())
         dst_neurons = list(self.regiones[dst.id].neuronas.values())
         if not src_neurons or not dst_neurons:
             return
 
-        if conn.get("type") == "portion" and conn.get("portion") and src.is_ascii_input:
+        if (conn.get("type") == "portion" or ("portion" in conn and "full" not in conn)) and conn.get("portion") and src.is_ascii_input:
             self._wire_portion(conn, src, dst, weight, src_neurons, dst_neurons)
             return
 
@@ -707,14 +841,15 @@ class Experiment(Experimento):
             d = self._regions_by_id.get(c.get("to"))
             if s is None or d is None:
                 continue
-            learning = c.get("learning")
+            _full = c.get("full") or {}
+            learning = _full.get("learning")
             if isinstance(learning, dict):
                 rate = float(learning.get("rate", 0.0))
                 er = learning.get("exclude_range")
                 if er:
                     exclude_range = (float(er[0]), float(er[1]))
             else:
-                rate = float(c.get("learning_rate", 0.0))
+                rate = float(_full.get("learning_rate", 0.0))
             if rate == 0.0:
                 continue
             dst_in = (dst_idx >= d.start) & (dst_idx < d.end)
@@ -1246,10 +1381,12 @@ class Experiment(Experimento):
             return False
 
         new_config = _to_canonical(config)
-        old_config = self._config
+        new_config = _migrate_config(new_config)
+        new_internal = _inject_wiring_from_connections(new_config)
+        old_internal = _inject_wiring_from_connections(self._config)
 
-        old_regions = {r.get("id"): r for r in old_config.get("regions", [])}
-        new_regions = {r.get("id"): r for r in new_config.get("regions", [])}
+        old_regions = {r.get("id"): r for r in old_internal.get("regions", [])}
+        new_regions = {r.get("id"): r for r in new_internal.get("regions", [])}
 
         needs_reconnect = set(old_regions) != set(new_regions)
 
@@ -1261,7 +1398,7 @@ class Experiment(Experimento):
                     break
                 old_w = old_r.get("wiring") or {}
                 new_w = new_r.get("wiring") or {}
-                for k in ("mask", "deamon", "dendrite_exc_weight", "dendrite_inh_weight"):
+                for k in ("mask", "deamon"):
                     if old_w.get(k) != new_w.get(k):
                         needs_reconnect = True
                         break
@@ -1274,12 +1411,16 @@ class Experiment(Experimento):
                     break
 
         if not needs_reconnect:
-            # Connection topology (weights / density / from / to) → rebuild
+            # Inter-region connection topology (weights / density / from / to) → rebuild
             def conn_key(c: dict) -> tuple:
-                return (c.get("from"), c.get("to"), c.get("type"),
-                        c.get("weight"), c.get("density"), tuple(c.get("portion") or ()))
-            old_conns = [conn_key(c) for c in old_config.get("connections", [])]
-            new_conns = [conn_key(c) for c in new_config.get("connections", [])]
+                _full = c.get("full") or {}
+                return (c.get("from"), c.get("to"),
+                        "full" if "full" in c else c.get("type"),
+                        _full.get("weight"),
+                        _full.get("density"),
+                        tuple(c.get("portion") or ()))
+            old_conns = [conn_key(c) for c in old_internal.get("connections", [])]
+            new_conns = [conn_key(c) for c in new_internal.get("connections", [])]
             if old_conns != new_conns:
                 needs_reconnect = True
 
@@ -1296,8 +1437,11 @@ class Experiment(Experimento):
             if rs.has_wiring:
                 rs.wiring_cfg = new_wiring
                 rs.process_mode = new_wiring.get("process_mode", "min_vs_max")
-                rs.tension_fns = _tension_fns_of(new_wiring)
-                new_umbral = float(new_r.get("umbral", 0.0))
+            if not rs.is_entrada:
+                rs.tension_fns = _tension_fns_of(new_r)
+
+            if not rs.is_entrada:
+                new_umbral = _get_threshold(new_r)
                 if new_umbral != rs.umbral:
                     rs.umbral = new_umbral
                     self.brain_tensor.umbrales[rs.start:rs.end] = new_umbral
@@ -1329,10 +1473,10 @@ class Experiment(Experimento):
             self.brain_tensor.adaptation_enabled = False
 
         # learning rates may have changed (intra-region wiring lr / connection lr)
-        self._connections = new_config.get("connections", [])
+        self._connections = new_internal.get("connections", [])
         self._rebuild_lr_per_syn()
 
-        self._config = new_config
+        self._config = new_config  # store external format for frontend
         return True
 
     def _soft_update_ascii(self, rs: RegionState, new_source: dict[str, Any]) -> None:

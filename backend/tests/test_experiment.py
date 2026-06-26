@@ -557,8 +557,19 @@ class TestWolframMasks:
 
 
 def _wiring_region(rid: str, w: int, h: int, **wiring: object) -> dict:
-    cfg = {"mask": "simple", "process_mode": "min_vs_max"}
-    cfg.update(wiring)
+    process_mode = wiring.pop("process_mode", "min_vs_max")
+    lr = wiring.pop("learning_rate", None)
+    exc_w = wiring.pop("dendrite_exc_weight", None)
+    inh_w = wiring.pop("dendrite_inh_weight", None)
+    deamon: dict = {"mask": "simple"}
+    if exc_w is not None:
+        deamon["excitatory"] = {"weight": exc_w}
+    if inh_w is not None:
+        deamon["inhibitory"] = {"weight": inh_w}
+    deamon.update(wiring)
+    cfg: dict = {"deamon": deamon, "process_mode": process_mode}
+    if lr is not None:
+        cfg["learning_rate"] = lr
     return {"id": rid, "grid": {"width": w, "height": h}, "wiring": cfg}
 
 
@@ -573,7 +584,7 @@ class TestArbitraryRegions:
                 _wiring_region("b", 6, 6, process_mode="sum"),
             ],
             "connections": [
-                {"from": "a", "to": "b", "type": "full", "weight": 0.5, "density": 0.5},
+                {"from": "a", "to": "b", "full": {"weight": 0.5, "density": 0.5}},
             ],
         }
         exp = Experiment()
@@ -610,8 +621,8 @@ class TestArbitraryRegions:
                 _wiring_region("readout", 3, 3),
             ],
             "connections": [
-                {"from": "src", "to": "core", "type": "full", "weight": 0.4, "density": 1.0},
-                {"from": "core", "to": "readout", "type": "full", "weight": 0.5, "density": 1.0},
+                {"from": "src", "to": "core", "full": {"weight": 0.4, "density": 1.0}},
+                {"from": "core", "to": "readout", "full": {"weight": 0.5, "density": 1.0}},
             ],
         }
         exp = Experiment()
@@ -632,8 +643,8 @@ class TestArbitraryRegions:
                 _wiring_region("r3", 6, 6),
             ],
             "connections": [
-                {"from": "r1", "to": "r2", "type": "full", "weight": 0.5, "density": 1.0},
-                {"from": "r2", "to": "r3", "type": "full", "weight": 0.5, "density": 1.0},
+                {"from": "r1", "to": "r2", "full": {"weight": 0.5, "density": 1.0}},
+                {"from": "r2", "to": "r3", "full": {"weight": 0.5, "density": 1.0}},
             ],
         }
         exp = Experiment()
@@ -658,8 +669,7 @@ class TestPerConnectionLearning:
                 _wiring_region("out", 4, 4),
             ],
             "connections": [
-                {"from": "core", "to": "out", "type": "full",
-                 "weight": 0.5, "density": 1.0, "learning": {"rate": 0.05}},
+                {"from": "core", "to": "out", "full": {"weight": 0.5, "density": 1.0, "learning": {"rate": 0.05}}},
             ],
         }
         exp = Experiment()
@@ -704,8 +714,7 @@ class TestPerConnectionLearning:
                 _wiring_region("out", 4, 4),
             ],
             "connections": [
-                {"from": "core", "to": "out", "type": "full",
-                 "weight": 0.5, "density": 1.0, "learning": {"rate": 0.0}},
+                {"from": "core", "to": "out", "full": {"weight": 0.5, "density": 1.0, "learning": {"rate": 0.0}}},
             ],
         }
         exp = Experiment()
@@ -720,8 +729,7 @@ class TestPerConnectionLearning:
                 _wiring_region("out", 4, 4),
             ],
             "connections": [
-                {"from": "core", "to": "out", "type": "full",
-                 "weight": 0.5, "density": 1.0, "learning": {"rate": 0.1}},
+                {"from": "core", "to": "out", "full": {"weight": 0.5, "density": 1.0, "learning": {"rate": 0.1}}},
             ],
         }
         exp = Experiment()
@@ -753,8 +761,7 @@ def _draw_config(
             _wiring_region("tissue", tissue_w, tissue_h),
         ],
         "connections": [
-            {"from": "input", "to": "tissue", "type": "full",
-             "weight": weight, "density": 1.0},
+            {"from": "input", "to": "tissue", "full": {"weight": weight, "density": 1.0}},
         ],
     }
 
@@ -943,9 +950,9 @@ class TestSourceTypes:
                  "source": {"type": "error_diff", "target": "input", "diff_mode": "abs"}},
             ],
             "connections": [
-                {"from": "input", "to": "tissue", "type": "full", "weight": 0.4, "density": 1.0},
-                {"from": "tissue", "to": "output", "type": "full", "weight": 0.5, "density": 1.0},
-                {"from": "noci", "to": "tissue", "type": "full", "weight": -0.5, "density": 0.3},
+                {"from": "input", "to": "tissue", "full": {"weight": 0.4, "density": 1.0}},
+                {"from": "tissue", "to": "output", "full": {"weight": 0.5, "density": 1.0}},
+                {"from": "noci", "to": "tissue", "full": {"weight": -0.5, "density": 0.3}},
             ],
         }
         exp = Experiment()
@@ -958,3 +965,135 @@ class TestSourceTypes:
         err = exp.brain_tensor.valores[noci.start:noci.end]
         assert err.min().item() >= 0.0
         assert err.max().item() <= 1.0
+
+
+def _threshold_config(threshold: float | None = None, key: str = "threshold") -> dict:
+    """Minimal config: tissue → output (no wiring on output)."""
+    output_region: dict = {"id": "output", "grid": {"width": 1, "height": 2}}
+    if threshold is not None:
+        output_region[key] = threshold
+    return {
+        "regions": [
+            _wiring_region("tissue", 6, 6),
+            output_region,
+        ],
+        "connections": [
+            {"from": "tissue", "to": "output", "full": {"weight": 0.65, "density": 1.0}},
+        ],
+    }
+
+
+class TestThreshold:
+    """Firing threshold per region — 'threshold' key, 'umbral' is a legacy alias."""
+
+    def test_threshold_key_sets_umbral_tensor(self) -> None:
+        exp = Experiment()
+        exp.setup(_threshold_config(threshold=0.8))
+        rs = exp._regions_by_id["output"]
+        umbrales = exp.brain_tensor.umbrales[rs.start:rs.end].tolist()
+        assert all(u == pytest.approx(0.8) for u in umbrales)
+
+    def test_umbral_key_backward_compat(self) -> None:
+        exp = Experiment()
+        exp.setup(_threshold_config(threshold=0.7, key="umbral"))
+        rs = exp._regions_by_id["output"]
+        umbrales = exp.brain_tensor.umbrales[rs.start:rs.end].tolist()
+        assert all(u == pytest.approx(0.7) for u in umbrales)
+
+    def test_default_threshold_is_zero(self) -> None:
+        exp = Experiment()
+        exp.setup(_threshold_config())
+        rs = exp._regions_by_id["output"]
+        umbrales = exp.brain_tensor.umbrales[rs.start:rs.end].tolist()
+        assert all(u == 0.0 for u in umbrales)
+
+    def test_threshold_key_wins_over_umbral(self) -> None:
+        """If both 'threshold' and 'umbral' present, 'threshold' takes precedence."""
+        region: dict = {"id": "output", "grid": {"width": 1, "height": 2},
+                        "threshold": 0.9, "umbral": 0.1}
+        config = {
+            "regions": [_wiring_region("tissue", 6, 6), region],
+            "connections": [{"from": "tissue", "to": "output", "full": {"weight": 0.65, "density": 1.0}}],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        rs = exp._regions_by_id["output"]
+        umbrales = exp.brain_tensor.umbrales[rs.start:rs.end].tolist()
+        assert all(u == pytest.approx(0.9) for u in umbrales)
+
+    def test_threshold_prevents_output_always_on(self) -> None:
+        """threshold=0.5 suppresses output when tissue is silent.
+
+        With the synapse formula 1-|w-input|, a silent tissue neuron (value=0)
+        still produces a positive signal ~(1-w) ≈ 0.4 through each synapse.
+        The resulting output tension is ~0.26 which exceeds threshold=0 (default)
+        but not threshold=0.5, so the threshold gates the spurious activation.
+        """
+        random.seed(42)
+        exp = Experiment()
+        exp.setup(_threshold_config(threshold=0.5))
+        bt = exp.brain_tensor
+        for i in range(bt.n_real):
+            bt.set_valor(i, 0.0)
+        bt.procesar()
+        out = exp._regions_by_id["output"]
+        assert all(v == 0.0 for v in bt.valores[out.start:out.end].tolist())
+
+    def test_without_threshold_output_fires_on_silent_tissue(self) -> None:
+        """Baseline: default threshold=0 causes output to fire even on silent tissue."""
+        random.seed(42)
+        exp = Experiment()
+        exp.setup(_threshold_config(threshold=0.0))
+        bt = exp.brain_tensor
+        for i in range(bt.n_real):
+            bt.set_valor(i, 0.0)
+        bt.procesar()
+        out = exp._regions_by_id["output"]
+        assert all(v == 1.0 for v in bt.valores[out.start:out.end].tolist())
+
+    def test_soft_update_threshold_non_wiring_region(self) -> None:
+        exp = Experiment()
+        exp.setup(_threshold_config(threshold=0.0))
+        rs = exp._regions_by_id["output"]
+        assert exp.brain_tensor.umbrales[rs.start].item() == pytest.approx(0.0)
+
+        result = exp.update_config(_threshold_config(threshold=0.8))
+        assert result is True  # soft update — no reconnect
+        assert exp.brain_tensor.umbrales[rs.start].item() == pytest.approx(0.8)
+        assert exp.brain_tensor.umbrales[rs.start + 1].item() == pytest.approx(0.8)
+
+    def test_soft_update_threshold_wiring_region(self) -> None:
+        config = _threshold_config(threshold=0.0)
+        config["regions"][0]["threshold"] = 0.0
+        exp = Experiment()
+        exp.setup(config)
+        tissue = exp._regions_by_id["tissue"]
+        assert exp.brain_tensor.umbrales[tissue.start].item() == pytest.approx(0.0)
+
+        new_config = _threshold_config(threshold=0.0)
+        new_config["regions"][0]["threshold"] = 0.6
+        result = exp.update_config(new_config)
+        assert result is True
+        assert exp.brain_tensor.umbrales[tissue.start].item() == pytest.approx(0.6)
+
+    def test_threshold_does_not_affect_entrada_neurons(self) -> None:
+        """NeuronaEntrada neurons are unaffected — BrainTensor skips them via mascara_entrada."""
+        random.seed(42)
+        config = {
+            "regions": [
+                {"id": "inp", "grid": {"width": 4, "height": 4},
+                 "source": {"type": "ascii", "text": "HALF_TOP", "frames_per_char": 5},
+                 "threshold": 0.99},
+                _wiring_region("tissue", 6, 6),
+            ],
+            "connections": [
+                {"from": "inp", "to": "tissue", "full": {"weight": 0.5, "density": 1.0}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        inp = exp._regions_by_id["inp"]
+        # The source region sets values directly; threshold must not gate them
+        exp.step()
+        vals = exp.brain_tensor.valores[inp.start:inp.end].tolist()
+        assert any(v == 1.0 for v in vals), "ascii source must still inject 1s"

@@ -6,85 +6,129 @@
     "regions": [
       {
         "id": "input",
-        "grid": { "width": 20, "height": 20 },
+        "grid": {
+          "width": 20,
+          "height": 20
+        },
         "source": {
           "type": "ascii",
           "text": "TL",
           "frames_per_char": 15,
-          "noise": { "background": 0.05, "shift": false, "inter_char": false }
+          "noise": {
+            "background": 0.05,
+            "shift": false,
+            "inter_char": false
+          }
         }
       },
       {
         "id": "tissue",
-        "grid": { "width": 50, "height": 50 },
-        "wiring": {
-          "deamon": {
-            "shape": "square",
-            "fixed": true,
-            "excitatory": { "offset": 1, "noise": 0, "weights": [1] },
-            "inhibitory": {
-              "offset": 6,
-              "noise": 0,
-              "sectors": 12,
-              "weights": [1]
-            }
-          },
-          "dendrite_exc_weight": 0.9,
-          "dendrite_inh_weight": -1.0,
-          "process_mode": "group_avg",
-          "tension_function": { "x": 1, "x_pow_3": 12 }
-        }
+        "grid": {
+          "width": 50,
+          "height": 50
+        },
+        "tension": {
+          "function": {
+            "x": 1,
+            "x_pow_3": 12
+          }
+        },
+        "process_mode": "group_avg"
       },
       {
         "id": "output",
-        "grid": { "width": 40, "height": 20 },
-        "wiring": {
-          "deamon": {
-            "shape": "square",
-            "excitatory": { "offset": 1, "noise": 0.5, "weights": [1, 1, 1] },
-            "inhibitory": {
-              "offset": 3,
-              "noise": 0.5,
-              "sectors": 12,
-              "weights": [1, 1, 1, 1, 1, 1]
-            }
-          },
-          "dendrite_exc_weight": 0.65,
-          "dendrite_inh_weight": -0.92,
-          "process_mode": "group_avg",
-          "tension_function": { "x": 1, "x_pow_3": 20, "x_pow_2": 3 }
-        }
+        "grid": {
+          "width": 40,
+          "height": 20
+        },
+        "tension": {
+          "function": {
+            "x": 1,
+            "x_pow_3": 20,
+            "x_pow_2": 3
+          }
+        },
+        "process_mode": "group_avg"
       },
       {
         "id": "nociceptor",
-        "grid": { "width": 1, "height": 2 },
-        "source": { "type": "error_diff", "target": "label", "diff_mode": "abs" }
+        "grid": {
+          "width": 1,
+          "height": 2
+        },
+        "source": {
+          "type": "error_diff",
+          "target": "label",
+          "diff_mode": "abs"
+        }
       }
     ],
     "connections": [
       {
+        "on": "tissue",
+        "deamon": {
+          "shape": "square",
+          "fixed": true,
+          "excitatory": {
+            "weight": 0.9,
+            "offset": 1,
+            "noise": 0,
+            "weights": [1]
+          },
+          "inhibitory": {
+            "weight": -1.0,
+            "offset": 6,
+            "noise": 0,
+            "sectors": 12,
+            "weights": [1]
+          }
+        }
+      },
+      {
+        "on": "output",
+        "deamon": {
+          "shape": "square",
+          "excitatory": {
+            "weight": 0.65,
+            "offset": 1,
+            "noise": 0.5,
+            "weights": [1, 1, 1]
+          },
+          "inhibitory": {
+            "weight": -0.92,
+            "offset": 3,
+            "noise": 0.5,
+            "sectors": 12,
+            "weights": [1, 1, 1, 1, 1, 1]
+          }
+        }
+      },
+      {
         "from": "input",
         "to": "tissue",
-        "type": "full",
-        "weight": 0.15,
-        "density": 0.4,
-        "learning": { "rate": 0.05 }
+        "full": {
+          "weight": 0.15,
+          "density": 0.4,
+          "learning": { "rate": 0.05 }
+        }
       },
       {
         "from": "tissue",
         "to": "output",
-        "type": "full",
-        "weight": 0.65,
-        "density": 0.4,
-        "learning": { "rate": 0.002 }
+        "full": {
+          "weight": 0.65,
+          "density": 0.4,
+          "learning": { "rate": 0.002 }
+        }
       },
       {
         "from": "nociceptor",
         "to": "output",
-        "type": "full",
-        "weight": 0,
-        "density": 0.3,
-        "learning": { "rate": 0 }
+        "full": {
+          "weight": 0,
+          "density": 0.3,
+          "learning": { "rate": 0 }
+        }
       }
     ]
   }

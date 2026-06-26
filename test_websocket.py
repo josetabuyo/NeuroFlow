@@ -26,13 +26,13 @@ async def test_websocket():
                         "mask": "deamon_e3_g2_i12_de1_di1",
                         "dendrite_exc_weight": 0.9,
                         "dendrite_inh_weight": -1,
-                        "process_mode": "avg_vs_avg",
-                        "tension_function": {
-                            "x": 3,
-                            "x_pow_3": 9,
-                            "x_pow_2": 2
-                        }
+                        "process_mode": "avg_vs_avg"
                     },
+                    "tension": {"function": {
+                        "x": 3,
+                        "x_pow_3": 9,
+                        "x_pow_2": 2
+                    }},
                     "input": {
                         "text": "HALF_TOP,HALF_BOT",
                         "resolution": 20,

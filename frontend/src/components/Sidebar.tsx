@@ -716,14 +716,18 @@ function HelpContent() {
         <span style={{ color: "#f87171" }}>hard</span> = requires Refresh
       </div>
 
-      <Section title="Region › wiring" />
+      <Section title="Region (top-level)" />
       <Row name="process_mode" type="soft" desc="min_vs_max · avg_vs_avg · avg_vs_avg_normalized · sum · group_avg" />
-      <Row name="tension_function" type="soft" desc='{"x":1,"x_pow_2":3,"x_pow_3":20} — polynomial transform on tension' />
-      <Row name="learning_rate" type="soft" desc="intra-region Hebbian rate" />
-      <Row name="umbral" type="soft" desc="per-neuron firing threshold (default 0)" />
-      <Row name="mask / deamon" type="hard" desc="wiring topology" />
-      <Row name="dendrite_exc_weight" type="hard" desc="global excitatory dendrite weight" />
-      <Row name="dendrite_inh_weight" type="hard" desc="global inhibitory dendrite weight (negative)" />
+      <Row name="tension.function" type="soft" desc='{"x":1,"x_pow_2":3,"x_pow_3":20,"b":-0.7} — polynomial + bias (b shifts firing point; threshold = 0 always)' />
+
+      <Section title='Connection › on (intra-region wiring)' />
+      <Row name="on" type="hard" desc='region id — e.g. "tissue". Marks this as an intra-region wiring entry' />
+      <Row name="deamon" type="hard" desc='daemon wiring object. Contains mask or shape/excitatory/inhibitory' />
+      <Row name="deamon.mask" type="hard" desc='mask string — e.g. "deamon_e3_g2_i12_de1_di1"' />
+      <Row name="deamon.shape / centroid / excitatory / inhibitory" type="hard" desc="daemon wiring geometry" />
+      <Row name="deamon.excitatory.weight" type="hard" desc="global excitatory dendrite weight" />
+      <Row name="deamon.inhibitory.weight" type="hard" desc="global inhibitory dendrite weight (negative)" />
+      <Row name="deamon.learning.rate" type="soft" desc="intra-region Hebbian rate" />
 
       <Section title="Region › source (ascii)" />
       <Row name="text" type="soft" desc='chars to cycle: "AB" or synthetics "HALF_TOP,HALF_BOT,BARS_H,BARS_V,DOT_TL,DOT_BR"' />
@@ -741,12 +745,12 @@ function HelpContent() {
       <Section title="Region › grid" />
       <Row name="width / height" type="hard" desc="grid dimensions" />
 
-      <Section title="Connections" />
-      <Row name="learning.rate" type="soft" desc="Hebbian learning rate for this connection" />
-      <Row name="learning.exclude_range" type="soft" desc="[lo, hi] — skip weights in this range" />
-      <Row name="weight" type="hard" desc="initial dendrite weight" />
-      <Row name="density" type="hard" desc="fraction of source neurons sampled" />
-      <Row name="from / to / type" type="hard" desc="topology" />
+      <Section title="Connections (inter-region full)" />
+      <Row name="full.learning.rate" type="soft" desc="Hebbian learning rate for this connection" />
+      <Row name="full.learning.exclude_range" type="soft" desc="[lo, hi] — skip weights in this range" />
+      <Row name="full.weight" type="hard" desc="initial dendrite weight" />
+      <Row name="full.density" type="hard" desc="fraction of source neurons sampled" />
+      <Row name="from / to" type="hard" desc="topology" />
     </div>
   );
 }
