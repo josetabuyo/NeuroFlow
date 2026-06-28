@@ -224,12 +224,10 @@ export function Scene({
     setBoxes(prev => {
       if (nociceptorWeightGrid) {
         if (prev["inspect:nociceptor"]) return prev;
-        // Place next to the inspected neuron's region box, below inspect:output if present
-        const anchor = inspectedRegionId ? prev[inspectedRegionId] : null;
-        if (!anchor) return prev;
-        const refX = prev["inspect:output"] ? prev["inspect:output"].x : anchor.x + anchor.w + GAP;
-        const refY = prev["inspect:output"] ? prev["inspect:output"].y + prev["inspect:output"].h + GAP : anchor.y;
-        return { ...prev, "inspect:nociceptor": { x: refX, y: refY, w: 120, h: 80 } };
+        // Anchor to the nociceptor region box (same pattern as inspect:input → input box)
+        const nb = prev["nociceptor"] || (inspectedRegionId ? prev[inspectedRegionId] : null);
+        if (!nb) return prev;
+        return { ...prev, "inspect:nociceptor": { x: nb.x + nb.w + GAP, y: nb.y, w: 120, h: 80 } };
       } else {
         if (!prev["inspect:nociceptor"]) return prev;
         const { "inspect:nociceptor": _, ...rest } = prev;
