@@ -37,7 +37,7 @@ interface SceneProps {
   } | null;
   inputWeightGrid?: number[][] | null;
   sourceWeightGrids?: Record<string, { grid: (number | null)[][], width: number, height: number }>;
-  overlayGrid?: (number | null)[][] | null;
+  regionOverlays?: Record<string, (number | null)[][]>;
   nerveCircles?: Array<{ cx: number; cy: number; radius: number }> | null;
 
   tensionMode?: boolean;
@@ -76,7 +76,7 @@ export function Scene({
   inputWeightGrid,
   sourceWeightGrids,
   tensionMode,
-  overlayGrid,
+  regionOverlays,
   nerveCircles,
   onCellClick, onCellDrag, onCellDragEnd,
   brushSize, brushMode, inspectMode, canInspect,
@@ -95,6 +95,8 @@ export function Scene({
   const lastInspectedKeyRef = useRef<string | null>(null);
 
   const isInspecting = connectionMap != null;
+  const tissueInspectKey = `inspect:${tissueId}`;
+  const inputInspectKey = inputId ? `inspect:${inputId}` : null;
   // Only show the tissue weight popup if there are actual non-null weights
   const hasAnyTissueWeights = !!connectionMap?.some(row => row.some(v => v !== null));
 
@@ -164,9 +166,11 @@ export function Scene({
   useEffect(() => {
     if (!isInspecting || isInputNeuron) {
       setBoxes(prev => {
-        if (!prev["inspect:tissue"]) return prev;
-        const { "inspect:tissue": _t, "inspect:input": _i, ...rest } = prev;
-        return rest;
+        if (!prev[tissueInspectKey]) return prev;
+        const without: Boxes = { ...prev };
+        delete without[tissueInspectKey];
+        if (inputInspectKey) delete without[inputInspectKey];
+        return without;
       });
       if (!isInspecting) {
         setInfoPanelPos(null);
@@ -174,14 +178,14 @@ export function Scene({
       }
       return;
     }
-    // Place inspect:tissue popup (once per region change, next to tissue box)
+    // Place tissue inspect popup (once per region change, next to tissue box)
     setBoxes(prev => {
-      if (prev["inspect:tissue"]) return prev;
+      if (prev[tissueInspectKey]) return prev;
       const tb = prev[tissueId];
       if (!tb) return prev;
       return {
         ...prev,
-        "inspect:tissue": { x: tb.x + tb.w + GAP, y: tb.y, w: tb.w, h: tb.h },
+        [tissueInspectKey]: { x: tb.x + tb.w + GAP, y: tb.y, w: tb.w, h: tb.h },
       };
     });
   }, [isInspecting, isInputNeuron, tissueId, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -190,15 +194,16 @@ export function Scene({
   useEffect(() => {
     if (!isInspecting) return;
     setBoxes(prev => {
-      if (inputWeightGrid) {
-        if (prev["inspect:input"]) return prev;
+      if (inputWeightGrid && inputInspectKey) {
+        if (prev[inputInspectKey]) return prev;
         const ib = inputId ? prev[inputId] : null;
         if (!ib) return prev;
-        return { ...prev, "inspect:input": { x: ib.x + ib.w + GAP, y: ib.y, w: ib.w, h: ib.h } };
+        return { ...prev, [inputInspectKey]: { x: ib.x + ib.w + GAP, y: ib.y, w: ib.w, h: ib.h } };
       } else {
-        if (!prev["inspect:input"]) return prev;
-        const { "inspect:input": _, ...rest } = prev;
-        return rest;
+        if (!inputInspectKey || !prev[inputInspectKey]) return prev;
+        const without = { ...prev };
+        delete without[inputInspectKey];
+        return without;
       }
     });
   }, [inputWeightGrid !== null, isInspecting, inputId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -212,7 +217,7 @@ export function Scene({
       // Remove stale inspect boxes
       const activeKeys = new Set(entries.map(([id]) => `inspect:${id}`));
       for (const key of Object.keys(next)) {
-        if (key.startsWith("inspect:") && key !== "inspect:input" && !activeKeys.has(key)) {
+        if (key.startsWith("inspect:") && key !== tissueInspectKey && key !== inputInspectKey && !activeKeys.has(key)) {
           const { [key]: _, ...rest } = next;
           next = rest;
         }
@@ -305,19 +310,19 @@ export function Scene({
       <svg
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 15 }}
       >
-        {/* inspect:tissue → inspected neuron */}
-        {boxes["inspect:tissue"] && hasAnyTissueWeights && tCell && (
+        {/* tissue inspect popup → inspected neuron */}
+        {boxes[tissueInspectKey] && hasAnyTissueWeights && tCell && (
           <line
-            x1={boxCenter(boxes["inspect:tissue"]).x} y1={boxCenter(boxes["inspect:tissue"]).y}
+            x1={boxCenter(boxes[tissueInspectKey]).x} y1={boxCenter(boxes[tissueInspectKey]).y}
             x2={tCell.x} y2={tCell.y}
             stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
           />
         )}
 
-        {/* inspect:input → inspected neuron */}
-        {boxes["inspect:input"] && tCell && (
+        {/* input inspect popup → inspected neuron */}
+        {inputInspectKey && boxes[inputInspectKey] && tCell && (
           <line
-            x1={boxCenter(boxes["inspect:input"]).x} y1={boxCenter(boxes["inspect:input"]).y}
+            x1={boxCenter(boxes[inputInspectKey]).x} y1={boxCenter(boxes[inputInspectKey]).y}
             x2={tCell.x} y2={tCell.y}
             stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
           />
@@ -422,15 +427,15 @@ export function Scene({
       })}
 
       {/* ── Inspect popup: tissue weights ── */}
-      {boxes["inspect:tissue"] && connectionMap && hasAnyTissueWeights && (() => {
+      {boxes[tissueInspectKey] && connectionMap && hasAnyTissueWeights && (() => {
         const grid = regions[tissueId];
         const gw = grid?.[0]?.length ?? 1;
         const gh = grid?.length ?? 1;
         return (
           <LayerBox
-            id="inspect:tissue"
+            id={tissueInspectKey}
             label={`weights ← ${inspectedRegionId ?? tissueId}`}
-            layout={boxes["inspect:tissue"]}
+            layout={boxes[tissueInspectKey]}
             onUpdate={updateBox}
             highlighted
           >
@@ -440,7 +445,7 @@ export function Scene({
               height={gh}
               weightGrid={connectionMap}
               nerveCircles={nerveCircles}
-              overlayGrid={overlayGrid}
+              overlayGrid={regionOverlays?.[tissueId] ?? null}
               onCellClick={() => {}}
             />
           </LayerBox>
@@ -448,15 +453,15 @@ export function Scene({
       })()}
 
       {/* ── Inspect popup: input weights ── */}
-      {boxes["inspect:input"] && inputWeightGrid && inputId && (() => {
+      {inputInspectKey && boxes[inputInspectKey] && inputWeightGrid && inputId && (() => {
         const grid = regions[inputId];
         const gw = grid?.[0]?.length ?? 1;
         const gh = grid?.length ?? 1;
         return (
           <LayerBox
-            id="inspect:input"
+            id={inputInspectKey}
             label={`weights ← ${inputId}`}
-            layout={boxes["inspect:input"]}
+            layout={boxes[inputInspectKey]}
             onUpdate={updateBox}
             highlighted
           >

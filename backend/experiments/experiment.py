@@ -1535,31 +1535,45 @@ class Experiment(Experimento):
         else:
             result["input_weight_grid"] = None
 
-        # Nociceptor → tissue grid (one per nociceptor region, shown when inspecting non-tissue neurons)
-        if not is_tissue:
-            noc_regions = [r for r in self._regions if r.source_type in _NOCICEPTOR_SOURCE_TYPES]
+        # Source-region footprints on their on-region, keyed by on-region ID.
+        # Each entry is a merged overlay (first non-null wins per cell across sources).
+        noc_regions = [r for r in self._regions if r.source_type in _NOCICEPTOR_SOURCE_TYPES]
+        if noc_regions and self._tissue is not None:
+            on_rs = self._tissue
+            region_overlays: dict[str, list[list[float | None]]] = {}
+            bt = self.brain_tensor
+            t_size = on_rs.n
+            t_start = on_rs.start
+            srcs_t  = bt.indices_fuente[t_start : t_start + t_size]
+            ws_t    = bt.pesos_sinapsis[t_start : t_start + t_size]
+            dws_t   = bt.pesos_dendrita[t_start : t_start + t_size]
+            valid_t = bt.mascara_valida[t_start : t_start + t_size]
+            merged: list[list[float | None]] | None = None
             for noc_rs in noc_regions:
-                bt = self.brain_tensor
-                t_size = self._tissue.n
-                t_start = self._tissue.start
-                srcs_t = bt.indices_fuente[t_start : t_start + t_size]
-                ws_t   = bt.pesos_sinapsis[t_start : t_start + t_size]
-                dws_t  = bt.pesos_dendrita[t_start : t_start + t_size]
-                valid_t = bt.mascara_valida[t_start : t_start + t_size]
                 noc_mask = (srcs_t >= noc_rs.start) & (srcs_t < noc_rs.end) & valid_t
                 eff = ws_t * dws_t * noc_mask.float()
                 noc_flat = eff.sum(dim=1).cpu().tolist()
                 max_abs = max(abs(v) for v in noc_flat) if noc_flat else 0.0
-                if max_abs > 1e-9:
-                    inv = 1.0 / max_abs
-                    noc_grid: list[list[float | None]] = []
-                    for r in range(self.height):
-                        row_g: list[float | None] = []
-                        for c in range(self.width):
-                            v = noc_flat[r * self.width + c]
-                            row_g.append(round(v * inv, 4) if abs(v) > 1e-12 else None)
-                        noc_grid.append(row_g)
-                    result[f"{noc_rs.id}_tissue_grid"] = noc_grid
+                if max_abs <= 1e-9:
+                    continue
+                inv = 1.0 / max_abs
+                noc_grid: list[list[float | None]] = []
+                for r in range(on_rs.height):
+                    row_g: list[float | None] = []
+                    for c in range(on_rs.width):
+                        v = noc_flat[r * on_rs.width + c]
+                        row_g.append(round(v * inv, 4) if abs(v) > 1e-12 else None)
+                    noc_grid.append(row_g)
+                if merged is None:
+                    merged = [row[:] for row in noc_grid]
+                else:
+                    for r_i, row in enumerate(noc_grid):
+                        for c_i, v in enumerate(row):
+                            if v is not None and merged[r_i][c_i] is None:
+                                merged[r_i][c_i] = v
+            if merged is not None:
+                region_overlays[on_rs.id] = merged
+                result["region_overlays"] = region_overlays
 
         # Generic per-source-region grids (output / nociceptor / etc.)
         for src_region in self._regions:

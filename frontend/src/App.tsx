@@ -165,7 +165,7 @@ function App() {
     tensionMode,
     inputWeightGrid,
     sourceWeightGrids,
-    overlayGrid,
+    regionOverlays,
     nerveCircles,
     regions,
     tensionRegions,
@@ -570,7 +570,7 @@ function App() {
               inspectInfo={inspectInfo}
               inputWeightGrid={inputWeightGrid}
               sourceWeightGrids={sourceWeightGrids}
-              overlayGrid={overlayGrid}
+              regionOverlays={regionOverlays}
               nerveCircles={nerveCircles}
               onCellClick={handleCellClick}
               onCellDrag={handleCellDrag}

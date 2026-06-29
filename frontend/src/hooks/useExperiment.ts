@@ -27,7 +27,7 @@ interface UseExperimentReturn {
   inputWeightGrid: number[][] | null;
   inputWeightDims: { width: number; height: number } | null;
   sourceWeightGrids: Record<string, { grid: (number | null)[][], width: number, height: number }>;
-  overlayGrid: (number | null)[][] | null;
+  regionOverlays: Record<string, (number | null)[][]>;
   nerveCircles: Array<{ cx: number; cy: number; radius: number }> | null;
   regions: Record<string, number[][]>;
   tensionRegions: Record<string, number[][]>;
@@ -85,21 +85,8 @@ function _parseSourceWeightGrids(
   return result;
 }
 
-function _mergeNociceptorTissueGrids(msg: Record<string, unknown>): (number | null)[][] | null {
-  const grids: (number | null)[][][] = [];
-  for (const key of Object.keys(msg)) {
-    if (key.endsWith("_tissue_grid")) grids.push(msg[key] as (number | null)[][]);
-  }
-  if (grids.length === 0) return null;
-  if (grids.length === 1) return grids[0];
-  const rows = grids[0].length;
-  const cols = grids[0][0]?.length ?? 0;
-  return Array.from({ length: rows }, (_, r) =>
-    Array.from({ length: cols }, (__, c) => {
-      for (const g of grids) { const v = g[r]?.[c] ?? null; if (v !== null) return v; }
-      return null;
-    })
-  );
+function _parseRegionOverlays(msg: Record<string, unknown>): Record<string, (number | null)[][]> {
+  return (msg["region_overlays"] as Record<string, (number | null)[][]> | undefined) ?? {};
 }
 
 export function useExperiment(): UseExperimentReturn {
@@ -126,7 +113,7 @@ export function useExperiment(): UseExperimentReturn {
   const [inputWeightGrid, setInputWeightGrid] = useState<number[][] | null>(null);
   const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
   const [sourceWeightGrids, setSourceWeightGrids] = useState<Record<string, { grid: (number | null)[][], width: number, height: number }>>({});
-  const [overlayGrid, setOverlayGrid] = useState<(number | null)[][] | null>(null);
+  const [regionOverlays, setRegionOverlays] = useState<Record<string, (number | null)[][]>>({});
   const [nerveCircles, setNerveCircles] = useState<Array<{ cx: number; cy: number; radius: number }> | null>(null);
   const [regions, setRegions] = useState<Record<string, number[][]>>({});
   const [tensionRegions, setTensionRegions] = useState<Record<string, number[][]>>({});
@@ -187,7 +174,7 @@ export function useExperiment(): UseExperimentReturn {
               setInputWeightDims({ width: msg.inspect.input_weight_width as number, height: msg.inspect.input_weight_height as number });
             }
             setSourceWeightGrids(_parseSourceWeightGrids(msg.inspect));
-            setOverlayGrid(_mergeNociceptorTissueGrids(msg.inspect));
+            setOverlayGrid(_parseRegionOverlays(msg.inspect));
             setNerveCircles((msg.inspect.nerve_circles as Array<{ cx: number; cy: number; radius: number }> | null) ?? null);
           }
           break;
@@ -208,7 +195,7 @@ export function useExperiment(): UseExperimentReturn {
             setInputWeightDims(null);
           }
           setSourceWeightGrids(_parseSourceWeightGrids(msg));
-          setOverlayGrid(_mergeNociceptorTissueGrids(msg));
+          setOverlayGrid(_parseRegionOverlays(msg));
           setNerveCircles((msg.nerve_circles as Array<{ cx: number; cy: number; radius: number }> | null) ?? null);
           break;
         case "status":
@@ -290,7 +277,7 @@ export function useExperiment(): UseExperimentReturn {
     setInspectedCell(null);
     setInspectedRegionId(null);
     setInspectInfo(null);
-    setOverlayGrid(null);
+    setRegionOverlays({});
     setNerveCircles(null);
     setState("initializing");
     send({ action: "reset" });
@@ -332,7 +319,7 @@ export function useExperiment(): UseExperimentReturn {
         setInputWeightGrid(null);
         setInputWeightDims(null);
         setSourceWeightGrids({});
-        setOverlayGrid(null);
+        setRegionOverlays({});
         setNerveCircles(null);
         send({ action: "uninspect" });
       }
@@ -354,7 +341,7 @@ export function useExperiment(): UseExperimentReturn {
     inputWeightGrid,
     inputWeightDims,
     sourceWeightGrids,
-    overlayGrid,
+    regionOverlays,
     nerveCircles,
     regions,
     tensionRegions,
