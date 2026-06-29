@@ -37,7 +37,7 @@ interface SceneProps {
   } | null;
   inputWeightGrid?: number[][] | null;
   sourceWeightGrids?: Record<string, { grid: (number | null)[][], width: number, height: number }>;
-  tissueOverlayGrid?: (number | null)[][] | null;
+  overlayGrid?: (number | null)[][] | null;
   nerveCircles?: Array<{ cx: number; cy: number; radius: number }> | null;
 
   tensionMode?: boolean;
@@ -76,7 +76,7 @@ export function Scene({
   inputWeightGrid,
   sourceWeightGrids,
   tensionMode,
-  tissueOverlayGrid,
+  overlayGrid,
   nerveCircles,
   onCellClick, onCellDrag, onCellDragEnd,
   brushSize, brushMode, inspectMode, canInspect,
@@ -440,7 +440,7 @@ export function Scene({
               height={gh}
               weightGrid={connectionMap}
               nerveCircles={nerveCircles}
-              overlayGrid={tissueOverlayGrid}
+              overlayGrid={overlayGrid}
               onCellClick={() => {}}
             />
           </LayerBox>
