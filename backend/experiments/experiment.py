@@ -459,7 +459,7 @@ class Experiment(Experimento):
         self._handler: object | None = None
 
         # Tissue shortcuts (the first wiring region; used for grid/get_frame/stats)
-        self._tissue: RegionState | None = None
+        self._wiring_region: RegionState | None = None
         self.process_mode: str = "min_vs_max"
 
         # Learning
@@ -522,7 +522,7 @@ class Experiment(Experimento):
 
     def _region_specs(self) -> list[tuple[int, int, str, list]]:
         """Per-region (start, end, mode, fns). Regions without wiring inherit the
-        tissue's process_mode/tension_fns (matching legacy output behaviour)."""
+        wiring region's process_mode/tension_fns (matching legacy output behaviour)."""
         specs = []
         for r in self._processed_regions():
             if r.has_wiring:
@@ -543,8 +543,10 @@ class Experiment(Experimento):
         return len(text)
 
     @property
-    def _tissue_id(self) -> str:
-        return self._tissue.id if self._tissue else "tissue"
+    def _wiring_region_id(self) -> str:
+        if self._wiring_region is None:
+            raise AssertionError("main region not initialized — experiment not built yet")
+        return self._wiring_region.id
 
     @property
     def _input_id(self) -> str | None:
@@ -565,7 +567,7 @@ class Experiment(Experimento):
     @property
     def _input_start_idx(self) -> int:
         r = self._ascii_region()
-        return r.start if r else (self._tissue.end if self._tissue else 0)
+        return r.start if r else (self._wiring_region.end if self._wiring_region else 0)
 
     # ── Setup ──
 
@@ -642,14 +644,14 @@ class Experiment(Experimento):
 
         self._apply_handler_methods()
 
-        self._tissue = self._wiring_regions()[0]
+        self._wiring_region = self._wiring_regions()[0]
         self._mask_type = "kohonen"
-        self.process_mode = self._tissue.process_mode
-        self.width = self._tissue.width
-        self.height = self._tissue.height
+        self.process_mode = self._wiring_region.process_mode
+        self.width = self._wiring_region.width
+        self.height = self._wiring_region.height
 
         # Assign spans tissue-first, then declaration order
-        layout = [self._tissue] + [r for r in self._regions if r is not self._tissue]
+        layout = [self._wiring_region] + [r for r in self._regions if r is not self._wiring_region]
         cursor = 0
         for rs in layout:
             n = rs.width * rs.height
@@ -665,7 +667,7 @@ class Experiment(Experimento):
             for i in range(rs.n):
                 if rs.is_entrada:
                     neuron = NeuronaEntrada(id=f"{rs.id}_{i}")
-                elif rs is self._tissue:
+                elif rs is self._wiring_region:
                     x, y = i % rs.width, i // rs.width
                     neuron = Neurona(id=Constructor.key_by_coord(x, y), umbral=rs.umbral)
                 else:
@@ -679,7 +681,7 @@ class Experiment(Experimento):
         # ── Intra-region wiring ──
         for rs in self._wiring_regions():
             mask, random_weights = _compile_mask(rs.wiring_cfg)
-            if rs is self._tissue:
+            if rs is self._wiring_region:
                 centroid_cfg = rs.wiring_cfg.get("deamon", {}).get("centroid") or {}
                 centroid_jitter = 1 if centroid_cfg.get("random") else 0
                 Constructor().aplicar_mascara_2d(
@@ -746,7 +748,7 @@ class Experiment(Experimento):
         )]
         self._regions_by_id = {self._regions[0].id: self._regions[0]}
         self._connections = []
-        self._tissue = self._regions[0]
+        self._wiring_region = self._regions[0]
 
         for neurona in self.brain.neuronas:
             neurona.activar_external(0.0)
@@ -904,7 +906,7 @@ class Experiment(Experimento):
                 refractory_steps=self.down_ticks,
                 adaptation_enabled=self.adaptation_enabled,
                 process_mode=self.process_mode,
-                tension_fns=self._tissue.tension_fns if self._tissue else [],
+                tension_fns=self._wiring_region.tension_fns if self._wiring_region else [],
             )
             self.learning_enabled = False
             self._lr_per_syn = None
@@ -938,7 +940,7 @@ class Experiment(Experimento):
             refractory_steps=self.down_ticks,
             adaptation_enabled=self.adaptation_enabled,
             process_mode=self.process_mode,
-            tension_fns=self._tissue.tension_fns if self._tissue else [],
+            tension_fns=self._wiring_region.tension_fns if self._wiring_region else [],
             connections=conn_spans,
             region_specs=region_specs,
         )
@@ -1106,7 +1108,7 @@ class Experiment(Experimento):
         out_id = rs.source_cfg.get("label_region") or rs.source_cfg.get("output_region")
         out_region = self._regions_by_id.get(out_id) if out_id else None
         if out_region is None:
-            out_region = next((r for r in self._wiring_regions() if r is not self._tissue), None)
+            out_region = next((r for r in self._wiring_regions() if r is not self._wiring_region), None)
         if out_region is None:
             return
 
@@ -1313,9 +1315,9 @@ class Experiment(Experimento):
         """Paint cells on a draw region, keeping draw_base in sync with brain_tensor."""
         if self.brain_tensor is None:
             return
-        region = self._regions_by_id.get(region_id) if region_id else self._tissue
+        region = self._regions_by_id.get(region_id) if region_id else self._wiring_region
         if region is None:
-            region = self._tissue
+            region = self._wiring_region
         if region is None:
             return
         rw, rh, start = region.width, region.height, region.start
@@ -1335,7 +1337,7 @@ class Experiment(Experimento):
         return result
 
     def click(self, x: int, y: int) -> None:
-        if self.brain_tensor is None or self._tissue is None:
+        if self.brain_tensor is None or self._wiring_region is None:
             return
         idx = y * self.width + x
         ascii_r = self._ascii_region()
@@ -1364,12 +1366,12 @@ class Experiment(Experimento):
             return {}
         result: dict[str, list[list[float]]] = {}
         for rs in self._regions:
+            if rs.is_ascii_input:
+                continue
             vals = self._region_values(rs).reshape(rs.height, rs.width).tolist()
-            if rs.is_entrada and rs.source_type not in (None, "ascii", "draw"):
-                # error_diff / label: continuous values make sense
+            if rs.is_entrada and rs.source_type not in (None, "draw"):
                 result[rs.id] = [[round(v, 3) for v in row] for row in vals]
             else:
-                # tissue, ascii input, draw input: binary display
                 result[rs.id] = [[round(v) for v in row] for row in vals]
         return result
 
@@ -1485,17 +1487,17 @@ class Experiment(Experimento):
     def _region_at(self, region_id: str | None) -> RegionState:
         if region_id and region_id in self._regions_by_id:
             return self._regions_by_id[region_id]
-        return self._tissue
+        return self._wiring_region
 
     def inspect(self, x: int, y: int, region_id: str | None = None) -> dict[str, Any]:
         if self.brain_tensor is None:
             result = super().inspect(x, y)
             result["input_weight_grid"] = None
-            result["region_id"] = region_id or self._tissue_id
+            result["region_id"] = region_id
             return result
 
         target = self._region_at(region_id)
-        is_tissue = target is self._tissue
+        is_wiring_region = target is self._wiring_region
         neuron_idx = target.start + y * target.width + x
 
         sources = self.brain_tensor.indices_fuente[neuron_idx]
@@ -1525,31 +1527,31 @@ class Experiment(Experimento):
                 acc = per_region[src_region.id]
                 acc[local_src] = max(-1.0, min(1.0, acc.get(local_src, 0.0) + w * dw))
 
-        tissue_pesos = per_region.get(self._tissue.id, {})
+        wiring_pesos = per_region.get(self._wiring_region.id, {})
         weight_grid: list[list[float | None]] = []
         for row in range(self.height):
             fila: list[float | None] = []
             for col in range(self.width):
-                if is_tissue and col == x and row == y:
+                if is_wiring_region and col == x and row == y:
                     fila.append(999)
                 else:
-                    fila.append(tissue_pesos.get(row * self.width + col))
+                    fila.append(wiring_pesos.get(row * self.width + col))
             weight_grid.append(fila)
 
         activation = self.brain_tensor.valores[neuron_idx].item()
         tension = self.brain_tensor.tensiones[neuron_idx].item()
 
         target_linear_idx = y * target.width + x
-        tissue_nerve_circles: list[dict] = []
+        region_nerve_circles: list[dict] = []
         for entry in self._nerve_circles:
-            if entry["on"] != self._tissue_id:
+            if entry["on"] != _wiring_region_id:
                 continue
             # When inspecting a non-tissue region, only include circles wired to it
-            if not is_tissue:
+            if not is_wiring_region:
                 to_id = entry.get("to")
                 if to_id is not None and to_id != target.id:
                     continue
-            tissue_nerve_circles.extend(entry["circles"])
+            region_nerve_circles.extend(entry["circles"])
 
         result: dict[str, Any] = {
             "type": "connections",
@@ -1562,11 +1564,11 @@ class Experiment(Experimento):
             "total_sinapsis": total_sinapsis,
             "weight_grid": weight_grid,
         }
-        if tissue_nerve_circles:
-            result["nerve_circles"] = tissue_nerve_circles
+        if region_nerve_circles:
+            result["nerve_circles"] = region_nerve_circles
 
         ascii_r = self._ascii_region()
-        if ascii_r is not None and is_tissue:
+        if ascii_r is not None and is_wiring_region:
             res = ascii_r.width
             inp = per_region.get(ascii_r.id, {})
             grid: list[list[float]] = []
@@ -1582,8 +1584,8 @@ class Experiment(Experimento):
         # Each entry: {"grid": ..., "density": max_abs} — grid normalized to [-1, 1].
         # Frontend sorts by density descending and renders highest-density first so all layers stay visible.
         noc_regions = [r for r in self._regions if r.source_type in _NOCICEPTOR_SOURCE_TYPES]
-        if noc_regions and self._tissue is not None:
-            on_rs = self._tissue
+        if noc_regions and self._wiring_region is not None:
+            on_rs = self._wiring_region
             region_overlays: dict[str, dict] = {}
             bt = self.brain_tensor
             t_size = on_rs.n
@@ -1613,7 +1615,7 @@ class Experiment(Experimento):
 
         # Generic per-source-region grids (output / nociceptor / etc.)
         for src_region in self._regions:
-            if src_region is self._tissue or src_region is ascii_r:
+            if src_region is self._wiring_region or src_region is ascii_r:
                 continue
             pesos = per_region.get(src_region.id)
             if not pesos:
@@ -1724,14 +1726,14 @@ class Experiment(Experimento):
                 rs.source_cfg = new_source
 
         # Sync brain_tensor global mode/specs/spiking from tissue
-        if self._tissue is not None:
-            self.process_mode = self._tissue.process_mode
+        if self._wiring_region is not None:
+            self.process_mode = self._wiring_region.process_mode
             self.brain_tensor.process_mode = self.process_mode
-            self.brain_tensor.tension_fns = self._tissue.tension_fns
+            self.brain_tensor.tension_fns = self._wiring_region.tension_fns
         self.brain_tensor.region_specs = self._region_specs()
 
-        new_tissue_cfg = new_regions.get(self._tissue.id, {}) if self._tissue else {}
-        new_spiking = new_tissue_cfg.get("spiking")
+        new_wiring_cfg = new_regions.get(self._wiring_region.id, {}) if self._wiring_region else {}
+        new_spiking = new_wiring_cfg.get("spiking")
         if new_spiking:
             self.adaptation_enabled = True
             self.up_ticks = int(new_spiking.get("up_ticks", self.up_ticks))

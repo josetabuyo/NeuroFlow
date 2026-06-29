@@ -287,7 +287,7 @@ class ExperimentSession:
         region_frames = self.experiment.get_region_frames()
         if region_frames:
             msg["regions"] = region_frames
-            msg["tissue_id"] = self.experiment._tissue_id
+            msg["tissue_id"] = self.experiment._wiring_region_id
             if self.experiment._input_id:
                 msg["input_id"] = self.experiment._input_id
 
