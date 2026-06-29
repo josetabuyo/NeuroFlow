@@ -26,8 +26,7 @@ interface UseExperimentReturn {
   labelGrid: number[][] | null;
   inputWeightGrid: number[][] | null;
   inputWeightDims: { width: number; height: number } | null;
-  outputWeightGrid: (number | null)[][] | null;
-  nociceptorWeightGrid: (number | null)[][] | null;
+  sourceWeightGrids: Record<string, { grid: (number | null)[][], width: number, height: number }>;
   nociceptorTissueGrid: (number | null)[][] | null;
   nerveCircles: Array<{ cx: number; cy: number; radius: number }> | null;
   regions: Record<string, number[][]>;
@@ -71,6 +70,38 @@ interface UseExperimentReturn {
   toggleBrushMode: () => void;
 }
 
+function _parseSourceWeightGrids(
+  msg: Record<string, unknown>
+): Record<string, { grid: (number | null)[][], width: number, height: number }> {
+  const result: Record<string, { grid: (number | null)[][], width: number, height: number }> = {};
+  for (const key of Object.keys(msg)) {
+    if (!key.endsWith("_weight_grid") || key === "input_weight_grid" || key === "weight_grid") continue;
+    const id = key.slice(0, -"_weight_grid".length);
+    const grid = msg[key] as (number | null)[][];
+    const width = (msg[`${id}_weight_width`] as number | undefined) ?? grid[0]?.length ?? 1;
+    const height = (msg[`${id}_weight_height`] as number | undefined) ?? grid.length ?? 1;
+    result[id] = { grid, width, height };
+  }
+  return result;
+}
+
+function _mergeNociceptorTissueGrids(msg: Record<string, unknown>): (number | null)[][] | null {
+  const grids: (number | null)[][][] = [];
+  for (const key of Object.keys(msg)) {
+    if (key.endsWith("_tissue_grid")) grids.push(msg[key] as (number | null)[][]);
+  }
+  if (grids.length === 0) return null;
+  if (grids.length === 1) return grids[0];
+  const rows = grids[0].length;
+  const cols = grids[0][0]?.length ?? 0;
+  return Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (__, c) => {
+      for (const g of grids) { const v = g[r]?.[c] ?? null; if (v !== null) return v; }
+      return null;
+    })
+  );
+}
+
 export function useExperiment(): UseExperimentReturn {
   const [grid, setGrid] = useState<number[][]>([]);
   const [state, setState] = useState<ExperimentState>("disconnected");
@@ -94,8 +125,7 @@ export function useExperiment(): UseExperimentReturn {
   const [labelGrid, setLabelGrid] = useState<number[][] | null>(null);
   const [inputWeightGrid, setInputWeightGrid] = useState<number[][] | null>(null);
   const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
-  const [outputWeightGrid, setOutputWeightGrid] = useState<(number | null)[][] | null>(null);
-  const [nociceptorWeightGrid, setNociceptorWeightGrid] = useState<(number | null)[][] | null>(null);
+  const [sourceWeightGrids, setSourceWeightGrids] = useState<Record<string, { grid: (number | null)[][], width: number, height: number }>>({});
   const [nociceptorTissueGrid, setNociceptorTissueGrid] = useState<(number | null)[][] | null>(null);
   const [nerveCircles, setNerveCircles] = useState<Array<{ cx: number; cy: number; radius: number }> | null>(null);
   const [regions, setRegions] = useState<Record<string, number[][]>>({});
@@ -154,12 +184,11 @@ export function useExperiment(): UseExperimentReturn {
             });
             setInputWeightGrid(msg.inspect.input_weight_grid ?? null);
             if (msg.inspect.input_weight_width && msg.inspect.input_weight_height) {
-              setInputWeightDims({ width: msg.inspect.input_weight_width, height: msg.inspect.input_weight_height });
+              setInputWeightDims({ width: msg.inspect.input_weight_width as number, height: msg.inspect.input_weight_height as number });
             }
-            setOutputWeightGrid(msg.inspect.output_weight_grid ?? null);
-            setNociceptorWeightGrid(msg.inspect.nociceptor_weight_grid ?? null);
-            setNociceptorTissueGrid(msg.inspect.nociceptor_tissue_grid ?? null);
-            setNerveCircles(msg.inspect.nerve_circles ?? null);
+            setSourceWeightGrids(_parseSourceWeightGrids(msg.inspect));
+            setNociceptorTissueGrid(_mergeNociceptorTissueGrids(msg.inspect));
+            setNerveCircles((msg.inspect.nerve_circles as Array<{ cx: number; cy: number; radius: number }> | null) ?? null);
           }
           break;
         case "connections":
@@ -174,14 +203,13 @@ export function useExperiment(): UseExperimentReturn {
           });
           setInputWeightGrid(msg.input_weight_grid ?? null);
           if (msg.input_weight_width && msg.input_weight_height) {
-            setInputWeightDims({ width: msg.input_weight_width, height: msg.input_weight_height });
+            setInputWeightDims({ width: msg.input_weight_width as number, height: msg.input_weight_height as number });
           } else {
             setInputWeightDims(null);
           }
-          setOutputWeightGrid(msg.output_weight_grid ?? null);
-          setNociceptorWeightGrid(msg.nociceptor_weight_grid ?? null);
-          setNociceptorTissueGrid(msg.nociceptor_tissue_grid ?? null);
-          setNerveCircles(msg.nerve_circles ?? null);
+          setSourceWeightGrids(_parseSourceWeightGrids(msg));
+          setNociceptorTissueGrid(_mergeNociceptorTissueGrids(msg));
+          setNerveCircles((msg.nerve_circles as Array<{ cx: number; cy: number; radius: number }> | null) ?? null);
           break;
         case "status":
           setState(msg.state);
@@ -303,8 +331,7 @@ export function useExperiment(): UseExperimentReturn {
         setInspectInfo(null);
         setInputWeightGrid(null);
         setInputWeightDims(null);
-        setOutputWeightGrid(null);
-        setNociceptorWeightGrid(null);
+        setSourceWeightGrids({});
         setNociceptorTissueGrid(null);
         setNerveCircles(null);
         send({ action: "uninspect" });
@@ -326,8 +353,7 @@ export function useExperiment(): UseExperimentReturn {
     labelGrid,
     inputWeightGrid,
     inputWeightDims,
-    outputWeightGrid,
-    nociceptorWeightGrid,
+    sourceWeightGrids,
     nociceptorTissueGrid,
     nerveCircles,
     regions,

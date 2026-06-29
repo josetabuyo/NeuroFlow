@@ -164,8 +164,7 @@ function App() {
     grid,
     tensionMode,
     inputWeightGrid,
-    outputWeightGrid,
-    nociceptorWeightGrid,
+    sourceWeightGrids,
     nociceptorTissueGrid,
     nerveCircles,
     regions,
@@ -570,8 +569,7 @@ function App() {
               inspectedRegionId={inspectedRegionId}
               inspectInfo={inspectInfo}
               inputWeightGrid={inputWeightGrid}
-              outputWeightGrid={outputWeightGrid}
-              nociceptorWeightGrid={nociceptorWeightGrid}
+              sourceWeightGrids={sourceWeightGrids}
               nociceptorTissueGrid={nociceptorTissueGrid}
               nerveCircles={nerveCircles}
               onCellClick={handleCellClick}

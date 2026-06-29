@@ -788,30 +788,6 @@ class Experiment(Experimento):
 
         from_cfg = nerve_cfg.get("from") or {}
         to_cfg = nerve_cfg.get("to") or {}
-        paired = bool(nerve_cfg.get("paired", False))
-
-        if paired and to_cfg:
-            to_rs = self._regions_by_id.get(to_cfg.get("region"))
-            if to_rs is not None:
-                n_to = to_rs.n
-                # One circle per to-neuron; use random_glue for adjacent placement
-                paired_cfg = dict(nerve_cfg)
-                paired_cfg["count"] = n_to
-                if nerve_cfg.get("insertion", "random") == "random":
-                    paired_cfg["insertion"] = "random_glue"
-                circles = place_nerve_circles(paired_cfg, on_rs.width, on_rs.height, rng)
-                self._nerve_circles.append({
-                    "on": on_rs.id,
-                    "paired_to": to_rs.id,
-                    "circles": [{"cx": c.cx, "cy": c.cy, "radius": c.radius} for c in circles],
-                })
-                if from_cfg:
-                    from_rs = self._regions_by_id.get(from_cfg.get("region"))
-                    if from_rs:
-                        self._wire_nerve_from(circles, on_rs, from_rs, from_cfg)
-                to_neurons = list(self.regiones[to_rs.id].neuronas.values())
-                self._wire_nerve_to_paired(circles, on_rs, to_neurons, to_cfg)
-                return
 
         circles = place_nerve_circles(nerve_cfg, on_rs.width, on_rs.height, rng)
         self._nerve_circles.append({
@@ -825,9 +801,9 @@ class Experiment(Experimento):
                 self._wire_nerve_from(circles, on_rs, from_rs, from_cfg)
 
         if to_cfg:
-            to_rs2 = self._regions_by_id.get(to_cfg.get("region"))
-            if to_rs2:
-                self._wire_nerve_to(circles, on_rs, to_rs2, to_cfg)
+            to_rs = self._regions_by_id.get(to_cfg.get("region"))
+            if to_rs:
+                self._wire_nerve_to(circles, on_rs, to_rs, to_cfg)
 
     def _wire_nerve_from(
         self,
@@ -881,32 +857,6 @@ class Experiment(Experimento):
                     for n, grad in sampled
                 ]
                 to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
-
-    def _wire_nerve_to_paired(
-        self,
-        circles: list[NerveCircle],
-        on_rs: RegionState,
-        to_neurons: list[Neurona],
-        to_cfg: dict[str, Any],
-    ) -> None:
-        """Wire: on_region neurons in circles[i] → to_neurons[i] exclusively (paired mode)."""
-        density = float(to_cfg.get("density", 0.1))
-        weight = float(to_cfg.get("weight", 0.5))
-        on_neurons = list(self.regiones[on_rs.id].neuronas.values())
-        for circle, to_n in zip(circles, to_neurons):
-            participating: list[tuple[Neurona, float]] = []
-            for x, y, gradient in circle_cells_with_weights(circle, on_rs.width, on_rs.height):
-                if random.random() <= gradient:
-                    participating.append((on_neurons[y * on_rs.width + x], gradient))
-            if not participating:
-                continue
-            k = max(1, round(len(participating) * density))
-            sampled = sorted(participating, key=lambda t: t[1], reverse=True)[:k]
-            sinapsis_list = [
-                Sinapsis(neurona_entrante=n, peso=grad)
-                for n, grad in sampled
-            ]
-            to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
 
     def _compile(self) -> None:
         if self._is_wolfram:
@@ -1556,13 +1506,7 @@ class Experiment(Experimento):
         for entry in self._nerve_circles:
             if entry["on"] != self._tissue_id:
                 continue
-            circles_list = entry["circles"]
-            paired_to = entry.get("paired_to")
-            if paired_to == target.id:
-                if target_linear_idx < len(circles_list):
-                    tissue_nerve_circles.append(circles_list[target_linear_idx])
-            else:
-                tissue_nerve_circles.extend(circles_list)
+            tissue_nerve_circles.extend(entry["circles"])
 
         result: dict[str, Any] = {
             "type": "connections",

@@ -36,8 +36,7 @@ interface SceneProps {
     total_sinapsis: number;
   } | null;
   inputWeightGrid?: number[][] | null;
-  outputWeightGrid?: (number | null)[][] | null;
-  nociceptorWeightGrid?: (number | null)[][] | null;
+  sourceWeightGrids?: Record<string, { grid: (number | null)[][], width: number, height: number }>;
   nociceptorTissueGrid?: (number | null)[][] | null;
   nerveCircles?: Array<{ cx: number; cy: number; radius: number }> | null;
 
@@ -75,9 +74,8 @@ export function Scene({
   inspectedRegionId,
   inspectInfo,
   inputWeightGrid,
-  outputWeightGrid,
+  sourceWeightGrids,
   tensionMode,
-  nociceptorWeightGrid,
   nociceptorTissueGrid,
   nerveCircles,
   onCellClick, onCellDrag, onCellDragEnd,
@@ -205,40 +203,36 @@ export function Scene({
     });
   }, [inputWeightGrid !== null, isInspecting, inputId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Show/hide inspect:output box based on outputWeightGrid availability
+  // Show/hide inspect:{id} boxes based on sourceWeightGrids content
   useEffect(() => {
     if (!isInspecting) return;
+    const entries = Object.entries(sourceWeightGrids ?? {});
     setBoxes(prev => {
-      if (outputWeightGrid) {
-        if (prev["inspect:output"]) return prev;
-        const ob = inspectedRegionId ? prev[inspectedRegionId] : null;
-        if (!ob) return prev;
-        return { ...prev, "inspect:output": { x: ob.x + ob.w + GAP, y: ob.y, w: ob.w, h: ob.h } };
-      } else {
-        if (!prev["inspect:output"]) return prev;
-        const { "inspect:output": _, ...rest } = prev;
-        return rest;
+      let next = { ...prev };
+      // Remove stale inspect boxes
+      const activeKeys = new Set(entries.map(([id]) => `inspect:${id}`));
+      for (const key of Object.keys(next)) {
+        if (key.startsWith("inspect:") && key !== "inspect:input" && !activeKeys.has(key)) {
+          const { [key]: _, ...rest } = next;
+          next = rest;
+        }
       }
-    });
-  }, [outputWeightGrid !== null, isInspecting, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Show/hide inspect:nociceptor box based on nociceptorWeightGrid availability
-  useEffect(() => {
-    if (!isInspecting) return;
-    setBoxes(prev => {
-      if (nociceptorWeightGrid) {
-        if (prev["inspect:nociceptor"]) return prev;
-        // Anchor to the nociceptor region box (same pattern as inspect:input → input box)
-        const nb = prev["nociceptor"] || (inspectedRegionId ? prev[inspectedRegionId] : null);
-        if (!nb) return prev;
-        return { ...prev, "inspect:nociceptor": { x: nb.x + nb.w + GAP, y: nb.y, w: 120, h: 80 } };
-      } else {
-        if (!prev["inspect:nociceptor"]) return prev;
-        const { "inspect:nociceptor": _, ...rest } = prev;
-        return rest;
+      // Add new inspect boxes
+      let offset = 0;
+      for (const [id, { width, height }] of entries) {
+        const boxKey = `inspect:${id}`;
+        if (next[boxKey]) continue;
+        const anchor = next[id] ?? (inspectedRegionId ? next[inspectedRegionId] : null);
+        if (!anchor) continue;
+        const ps = autoPixelSize(width, height);
+        const bw = width * ps + 24;
+        const bh = height * ps + HEADER_H + 8;
+        next = { ...next, [boxKey]: { x: anchor.x + anchor.w + GAP + offset, y: anchor.y, w: bw, h: bh } };
+        offset += GAP;
       }
+      return next;
     });
-  }, [nociceptorWeightGrid !== null, isInspecting, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(Object.keys(sourceWeightGrids ?? {})), isInspecting, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Position info panel when inspecting a new cell
   useEffect(() => {
@@ -477,52 +471,29 @@ export function Scene({
         );
       })()}
 
-      {/* ── Inspect popup: output (lateral) weights ── */}
-      {boxes["inspect:output"] && outputWeightGrid && inspectedRegionId && (() => {
-        const grid = regions[inspectedRegionId];
-        const gw = grid?.[0]?.length ?? 1;
-        const gh = grid?.length ?? 1;
+      {/* ── Inspect popups: per-source-region weight grids (output_L/T, nociceptor_L/T, …) ── */}
+      {Object.entries(sourceWeightGrids ?? {}).map(([id, { grid, width, height }]) => {
+        const boxKey = `inspect:${id}`;
+        if (!boxes[boxKey]) return null;
         return (
           <LayerBox
-            id="inspect:output"
-            label={`lateral weights ← ${inspectedRegionId}`}
-            layout={boxes["inspect:output"]}
+            key={boxKey}
+            id={boxKey}
+            label={`weights ← ${id}`}
+            layout={boxes[boxKey]}
             onUpdate={updateBox}
             highlighted
           >
             <PixelCanvas
               grid={[]}
-              width={gw}
-              height={gh}
-              weightGrid={outputWeightGrid}
+              width={width}
+              height={height}
+              weightGrid={grid}
               onCellClick={() => {}}
             />
           </LayerBox>
         );
-      })()}
-
-      {/* ── Inspect popup: nociceptor weights ── */}
-      {boxes["inspect:nociceptor"] && nociceptorWeightGrid && (() => {
-        const nw = nociceptorWeightGrid[0]?.length ?? 1;
-        const nh = nociceptorWeightGrid.length;
-        return (
-          <LayerBox
-            id="inspect:nociceptor"
-            label="weights ← nociceptor"
-            layout={boxes["inspect:nociceptor"]}
-            onUpdate={updateBox}
-            highlighted
-          >
-            <PixelCanvas
-              grid={[]}
-              width={nw}
-              height={nh}
-              weightGrid={nociceptorWeightGrid}
-              onCellClick={() => {}}
-            />
-          </LayerBox>
-        );
-      })()}
+      })}
 
       {/* ── Floating neuron info panel ── */}
       {infoPanelPos && isInspecting && inspectInfo && inspectedCell && inspectedRegionId && (

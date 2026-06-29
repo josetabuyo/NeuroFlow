@@ -1,13 +1,10 @@
 """Tests for the nerve connection type — spatial bundles of cross-region connections."""
 
-import math
 import random
 
 import pytest
 from core.nerve import (
     NerveCircle,
-    _circles_overlap,
-    _in_bounds,
     place_nerve_circles,
     circle_cells_with_weights,
 )
@@ -20,18 +17,6 @@ from experiments.experiment import Experiment
 
 def _rng(seed: int = 42) -> random.Random:
     return random.Random(seed)
-
-
-def _nerve_cfg(
-    insertion: str = "random",
-    count: int = 3,
-    radius: int = 4,
-    position: dict | None = None,
-) -> dict:
-    cfg: dict = {"insertion": insertion, "count": count, "radius": radius}
-    if position is not None:
-        cfg["position"] = position
-    return cfg
 
 
 def _experiment_config(nerve_cfg: dict) -> dict:
@@ -56,99 +41,47 @@ def _experiment_config(nerve_cfg: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Placement: exact position
+# ---------------------------------------------------------------------------
+
+class TestPlacePosition:
+    def test_exact_coordinates(self) -> None:
+        circles = place_nerve_circles({"insertion": {"x": 10, "y": 15}, "radius": 6}, 50, 50)
+        assert len(circles) == 1
+        assert circles[0].cx == 10
+        assert circles[0].cy == 15
+        assert circles[0].radius == 6
+
+    def test_exact_position_in_bounds(self) -> None:
+        circles = place_nerve_circles({"insertion": {"x": 8, "y": 8}, "radius": 4}, 30, 30)
+        c = circles[0]
+        assert 0 <= c.cx < 30
+        assert 0 <= c.cy < 30
+
+    def test_radius_preserved(self) -> None:
+        circles = place_nerve_circles({"insertion": {"x": 20, "y": 20}, "radius": 9}, 50, 50)
+        assert circles[0].radius == 9
+
+
+# ---------------------------------------------------------------------------
 # Placement: random
 # ---------------------------------------------------------------------------
 
 class TestPlaceRandom:
-    def test_no_overlap(self) -> None:
-        circles = place_nerve_circles(_nerve_cfg("random", count=5, radius=4), 50, 50, _rng())
-        for i, a in enumerate(circles):
-            for b in circles[i + 1:]:
-                assert not _circles_overlap(a, b)
-
-    def test_correct_count_when_space_available(self) -> None:
-        circles = place_nerve_circles(_nerve_cfg("random", count=4, radius=3), 50, 50, _rng())
-        assert len(circles) == 4
-
-    def test_fewer_than_count_when_region_too_small(self) -> None:
-        # radius=10 on a 25x25 grid — very limited space for 10 circles
-        circles = place_nerve_circles(_nerve_cfg("random", count=10, radius=10), 25, 25, _rng())
-        assert len(circles) <= 10
+    def test_returns_one_circle(self) -> None:
+        circles = place_nerve_circles({"insertion": "random", "radius": 4}, 50, 50, _rng())
+        assert len(circles) == 1
 
     def test_within_bounds(self) -> None:
-        w, h, r = 40, 40, 5
-        circles = place_nerve_circles(_nerve_cfg("random", count=4, radius=r), w, h, _rng())
-        for c in circles:
-            assert r <= c.cx < w - r
-            assert r <= c.cy < h - r
-
-
-# ---------------------------------------------------------------------------
-# Placement: line
-# ---------------------------------------------------------------------------
-
-class TestPlaceLine:
-    def test_positions_spacing(self) -> None:
-        r = 4
-        circles = place_nerve_circles(
-            _nerve_cfg("line", count=3, radius=r, position={"x": r, "y": r}), 50, 50
-        )
-        assert len(circles) == 3
-        for i, c in enumerate(circles):
-            assert c.cx == r + i * 2 * r
-            assert c.cy == r
-
-    def test_stays_in_bounds(self) -> None:
         r = 5
-        # 6 circles need x = 5, 15, 25, 35, 45, 55 — last one (55) out of bounds on 50-wide grid
-        circles = place_nerve_circles(
-            _nerve_cfg("line", count=6, radius=r, position={"x": r, "y": r}), 50, 50
-        )
-        for c in circles:
-            assert _in_bounds(c.cx, c.cy, r, 50, 50)
+        circles = place_nerve_circles({"insertion": "random", "radius": r}, 40, 40, _rng())
+        c = circles[0]
+        assert r <= c.cx < 40 - r
+        assert r <= c.cy < 40 - r
 
-    def test_drops_out_of_bounds_circles(self) -> None:
-        r = 8
-        # On a 30-wide grid: x = 8, 24 (ok), 40 out of bounds (need cx < 30-8=22)
-        circles = place_nerve_circles(
-            _nerve_cfg("line", count=4, radius=r, position={"x": r, "y": r}), 30, 30
-        )
-        # Only circles within bounds should be returned
-        for c in circles:
-            assert _in_bounds(c.cx, c.cy, r, 30, 30)
-
-
-# ---------------------------------------------------------------------------
-# Placement: random_glue
-# ---------------------------------------------------------------------------
-
-class TestPlaceRandomGlue:
-    def test_no_overlap(self) -> None:
-        circles = place_nerve_circles(_nerve_cfg("random_glue", count=4, radius=4), 60, 60, _rng())
-        for i, a in enumerate(circles):
-            for b in circles[i + 1:]:
-                assert not _circles_overlap(a, b)
-
-    def test_each_circle_adjacent_to_another(self) -> None:
-        r = 4
-        circles = place_nerve_circles(_nerve_cfg("random_glue", count=4, radius=r), 60, 60, _rng())
-        if len(circles) <= 1:
-            return  # trivially satisfied
-        for i, c in enumerate(circles[1:], 1):
-            # Must be adjacent (center-to-center ≈ 2r) to at least one earlier circle
-            dists = [
-                math.sqrt((c.cx - p.cx) ** 2 + (c.cy - p.cy) ** 2)
-                for p in circles[:i]
-            ]
-            assert any(abs(d - 2 * r) < 2.0 for d in dists), (
-                f"circle {i} not adjacent to any earlier circle (dists={dists})"
-            )
-
-    def test_within_bounds(self) -> None:
-        r = 4
-        circles = place_nerve_circles(_nerve_cfg("random_glue", count=4, radius=r), 60, 60, _rng())
-        for c in circles:
-            assert _in_bounds(c.cx, c.cy, r, 60, 60)
+    def test_default_insertion_is_random(self) -> None:
+        circles = place_nerve_circles({"radius": 4}, 50, 50, _rng())
+        assert len(circles) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +139,7 @@ class TestCircleCells:
 # ---------------------------------------------------------------------------
 
 _NERVE_CFG_INTEGRATION = {
-    "insertion": "random",
-    "count": 2,
+    "insertion": {"x": 10, "y": 10},
     "radius": 3,
     "from": {"region": "noci", "density": 1.0, "weight": -0.01},
     "to": {"region": "out", "density": 0.5, "weight": 0.5},
@@ -230,12 +162,11 @@ class TestNerveExperiment:
         assert result["generation"] == 1
 
     def test_nerve_from_creates_synapses_in_tissue(self) -> None:
-        """Tissue neurons inside nerve circles get synapses FROM noci."""
+        """Tissue neurons inside the nerve circle get synapses FROM noci."""
         exp = self._setup()
         noci_rs = exp._regions_by_id["noci"]
         on_rs = exp._regions_by_id["tissue"]
 
-        # Count tissue neurons that have any synapse sourced from noci
         noci_indices = set(range(noci_rs.start, noci_rs.end))
         bt = exp.brain_tensor
         tissue_with_noci = 0
@@ -247,12 +178,10 @@ class TestNerveExperiment:
                     tissue_with_noci += 1
                     break
 
-        # With density=1.0 and count=2 circles of radius=3, many tissue neurons
-        # should receive noci projections
         assert tissue_with_noci > 0, "No tissue neurons received noci synapses"
 
     def test_nerve_to_creates_synapses_in_out_region(self) -> None:
-        """Output neurons get synapses FROM tissue neurons inside nerve circles."""
+        """Output neurons get synapses FROM tissue neurons inside the nerve circle."""
         exp = self._setup()
         on_rs = exp._regions_by_id["tissue"]
         out_rs = exp._regions_by_id["out"]
@@ -272,16 +201,11 @@ class TestNerveExperiment:
 
     def test_nerve_gradient_center_more_connected(self) -> None:
         """Center tissue neurons receive more noci synapses on average than edge neurons."""
-        # Use a deterministic seed via fixed circle placement (line insertion)
         nerve_cfg = {
-            "insertion": "line",
-            "count": 1,
+            "insertion": {"x": 10, "y": 10},
             "radius": 5,
-            "position": {"x": 10, "y": 10},
             "from": {"region": "noci", "density": 1.0, "weight": -0.01},
         }
-        exp = Experiment()
-        # Run many times and average to overcome stochasticity
         center_counts = []
         edge_counts = []
         for seed in range(10):

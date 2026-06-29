@@ -1,8 +1,8 @@
 {
   "name": "ITON: Nociceptor Study",
-  "description": "Stage 3 ITON: tissue forms daemons tracking input, output learns to reconstruct, nociceptor fires on error. Nerve bundles connect nociceptor and output through tissue.",
+  "description": "Stage 3 ITON: tissue forms daemons tracking input, two independent output+nociceptor channels (L and T), each with its own nerve.",
   "config": {
-    "description": "ITON nociceptor experiment. Tissue forms daemons driven by input. Output learns to reconstruct input pattern. Nociceptor fires on reconstruction error. Paired nerves: one circle per output neuron, adjacently placed on tissue.",
+    "description": "ITON nociceptor experiment. Tissue forms daemons driven by input. Two output neurons (output_L, output_T) each learn independently via their own nerve from a dedicated nociceptor.",
     "regions": [
       {
         "id": "input",
@@ -36,12 +36,12 @@
         "process_mode": "group_avg"
       },
       {
-        "id": "output",
+        "id": "output_L",
         "grid": {
           "width": 1,
-          "height": 2
+          "height": 1
         },
-        "neuron_labels": [["L"], ["T"]],
+        "neuron_labels": [["L"]],
         "tension": {
           "function": {
             "x": 1,
@@ -52,16 +52,46 @@
         "process_mode": "group_avg"
       },
       {
-        "id": "nociceptor",
+        "id": "output_T",
         "grid": {
           "width": 1,
-          "height": 2
+          "height": 1
+        },
+        "neuron_labels": [["T"]],
+        "tension": {
+          "function": {
+            "x": 1,
+            "x_pow_3": 20,
+            "x_pow_2": 3
+          }
+        },
+        "process_mode": "group_avg"
+      },
+      {
+        "id": "nociceptor_L",
+        "grid": {
+          "width": 1,
+          "height": 1
         },
         "source": {
           "type": "label_mismatch",
           "char_region": "input",
-          "label_region": "output"
-        }
+          "label_region": "output_L"
+        },
+        "target": "output_L"
+      },
+      {
+        "id": "nociceptor_T",
+        "grid": {
+          "width": 1,
+          "height": 1
+        },
+        "source": {
+          "type": "label_mismatch",
+          "char_region": "input",
+          "label_region": "output_T"
+        },
+        "target": "output_T"
       }
     ],
     "connections": [
@@ -86,7 +116,25 @@
         }
       },
       {
-        "on": "output",
+        "on": "output_L",
+        "deamon": {
+          "shape": "square",
+          "excitatory": {
+            "weight": 0.65,
+            "offset": 1,
+            "noise": 0.0,
+            "weights": [1]
+          },
+          "inhibitory": {
+            "weight": -1.0,
+            "offset": 1,
+            "noise": 0.0,
+            "weights": [1]
+          }
+        }
+      },
+      {
+        "on": "output_T",
         "deamon": {
           "shape": "square",
           "excitatory": {
@@ -115,16 +163,33 @@
       {
         "on": "tissue",
         "nerve": {
-          "insertion": "random",
-          "paired": true,
+          "insertion": {"x": 14, "y": 14},
           "radius": 6,
           "from": {
-            "region": "nociceptor",
+            "region": "nociceptor_L",
             "density": 0.5,
             "weight": -0.005
           },
           "to": {
-            "region": "output",
+            "region": "output_L",
+            "density": 0.02,
+            "weight": 0.65,
+            "learning": { "rate": 0.002 }
+          }
+        }
+      },
+      {
+        "on": "tissue",
+        "nerve": {
+          "insertion": {"x": 36, "y": 36},
+          "radius": 6,
+          "from": {
+            "region": "nociceptor_T",
+            "density": 0.5,
+            "weight": -0.005
+          },
+          "to": {
+            "region": "output_T",
             "density": 0.02,
             "weight": 0.65,
             "learning": { "rate": 0.002 }
