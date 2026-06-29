@@ -91,8 +91,6 @@ export function BrushPalette({
   const pixelCount = generateCircleBrush(brushSize).length;
   const canIncrease = !inspectMode && brushSize < MAX_BRUSH_SIZE;
   const canDecrease = !inspectMode && brushSize > MIN_BRUSH_SIZE;
-  const brushActive = !inspectMode;
-
   return (
     <div
       data-testid="brush-palette"

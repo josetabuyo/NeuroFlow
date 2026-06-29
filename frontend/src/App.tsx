@@ -169,7 +169,7 @@ function App() {
     nerveCircles,
     regions,
     tensionRegions,
-    tissueId,
+    regionId,
     inputId,
     labels,
     neuronLabelMap,
@@ -559,7 +559,7 @@ function App() {
             <Scene
               regions={regions}
               tensionRegions={tensionRegions}
-              tissueId={tissueId}
+              regionId={regionId}
               inputId={inputId}
               labels={labels}
               neuronLabelMap={neuronLabelMap}

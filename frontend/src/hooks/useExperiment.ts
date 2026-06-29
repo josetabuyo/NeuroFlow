@@ -23,8 +23,6 @@ interface UseExperimentReturn {
   tensionGrid: number[][] | null;
   tensionMode: boolean;
   inputFrame: number[][] | null;
-  outputGrid: number[][] | null;
-  labelGrid: number[][] | null;
   inputWeightGrid: number[][] | null;
   inputWeightDims: { width: number; height: number } | null;
   sourceWeightGrids: Record<string, { grid: (number | null)[][], width: number, height: number }>;
@@ -32,7 +30,7 @@ interface UseExperimentReturn {
   nerveCircles: Array<{ cx: number; cy: number; radius: number }> | null;
   regions: Record<string, number[][]>;
   tensionRegions: Record<string, number[][]>;
-  tissueId: string;
+  regionId: string;
   inputId: string | null;
   labels: Record<string, number[][]>;
   neuronLabelMap: Record<string, string[][]>;
@@ -109,8 +107,6 @@ export function useExperiment(): UseExperimentReturn {
   const [tensionGrid, setTensionGrid] = useState<number[][] | null>(null);
   const [tensionMode, setTensionMode] = useState(false);
   const [inputFrame, setInputFrame] = useState<number[][] | null>(null);
-  const [outputGrid, setOutputGrid] = useState<number[][] | null>(null);
-  const [labelGrid, setLabelGrid] = useState<number[][] | null>(null);
   const [inputWeightGrid, setInputWeightGrid] = useState<number[][] | null>(null);
   const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
   const [sourceWeightGrids, setSourceWeightGrids] = useState<Record<string, { grid: (number | null)[][], width: number, height: number }>>({});
@@ -118,7 +114,7 @@ export function useExperiment(): UseExperimentReturn {
   const [nerveCircles, setNerveCircles] = useState<Array<{ cx: number; cy: number; radius: number }> | null>(null);
   const [regions, setRegions] = useState<Record<string, number[][]>>({});
   const [tensionRegions, setTensionRegions] = useState<Record<string, number[][]>>({});
-  const [tissueId, setTissueId] = useState<string>("");
+  const [regionId, setRegionId] = useState<string>("");
   const [inputId, setInputId] = useState<string | null>(null);
   const [labels, setLabels] = useState<Record<string, number[][]>>({});
   const [neuronLabelMap, setNeuronLabelMap] = useState<Record<string, string[][]>>({});
@@ -156,7 +152,7 @@ export function useExperiment(): UseExperimentReturn {
           setInputFrame(msg.input_frame ?? null);
           if (msg.regions) setRegions(msg.regions);
           if (msg.tension_regions) setTensionRegions(msg.tension_regions);
-          if (msg.tissue_id) setTissueId(msg.tissue_id);
+          if (msg.tissue_id) setRegionId(msg.tissue_id);
           if (msg.input_id !== undefined) setInputId(msg.input_id ?? null);
           setLabels(msg.labels ?? {});
           if (msg.neuron_label_map) setNeuronLabelMap(msg.neuron_label_map);
@@ -337,8 +333,6 @@ export function useExperiment(): UseExperimentReturn {
     tensionGrid,
     tensionMode,
     inputFrame,
-    outputGrid,
-    labelGrid,
     inputWeightGrid,
     inputWeightDims,
     sourceWeightGrids,
@@ -346,7 +340,7 @@ export function useExperiment(): UseExperimentReturn {
     nerveCircles,
     regions,
     tensionRegions,
-    tissueId,
+    regionId,
     inputId,
     labels,
     neuronLabelMap,

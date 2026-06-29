@@ -245,7 +245,7 @@ export function JsonConfigEditor({ config, onChange, metadata }: JsonConfigEdito
   const [text, setText] = useState(() => stringify(config));
   const [parseError, setParseError] = useState<string | null>(null);
   const lastExternalConfig = useRef(config);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const configJson = useMemo(() => stringify(config), [config]);
 

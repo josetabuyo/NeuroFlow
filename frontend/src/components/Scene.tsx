@@ -22,7 +22,7 @@ type Boxes = Record<string, BoxLayout>;
 interface SceneProps {
   regions: Record<string, number[][]>;
   tensionRegions?: Record<string, number[][]>;
-  tissueId: string;
+  regionId: string;
   inputId?: string | null;
   labels?: Record<string, number[][]>;
   neuronLabelMap?: Record<string, string[][]>;
@@ -66,7 +66,7 @@ interface SceneProps {
 export function Scene({
   regions,
   tensionRegions = {},
-  tissueId,
+  regionId,
   inputId,
   labels = {},
   neuronLabelMap = {},
@@ -96,7 +96,7 @@ export function Scene({
   const lastInspectedKeyRef = useRef<string | null>(null);
 
   const isInspecting = connectionMap != null;
-  const tissueInspectKey = `inspect:${tissueId}`;
+  const regionInspectKey = `inspect:${regionId}`;
   const inputInspectKey = inputId ? `inspect:${inputId}` : null;
   // Only show the tissue weight popup if there are actual non-null weights
   const hasAnyTissueWeights = !!connectionMap?.some(row => row.some(v => v !== null));
@@ -167,9 +167,9 @@ export function Scene({
   useEffect(() => {
     if (!isInspecting || isInputNeuron) {
       setBoxes(prev => {
-        if (!prev[tissueInspectKey]) return prev;
+        if (!prev[regionInspectKey]) return prev;
         const without: Boxes = { ...prev };
-        delete without[tissueInspectKey];
+        delete without[regionInspectKey];
         if (inputInspectKey) delete without[inputInspectKey];
         return without;
       });
@@ -181,15 +181,15 @@ export function Scene({
     }
     // Place tissue inspect popup (once per region change, next to tissue box)
     setBoxes(prev => {
-      if (prev[tissueInspectKey]) return prev;
-      const tb = prev[tissueId];
+      if (prev[regionInspectKey]) return prev;
+      const tb = prev[regionId];
       if (!tb) return prev;
       return {
         ...prev,
-        [tissueInspectKey]: { x: tb.x + tb.w + GAP, y: tb.y, w: tb.w, h: tb.h },
+        [regionInspectKey]: { x: tb.x + tb.w + GAP, y: tb.y, w: tb.w, h: tb.h },
       };
     });
-  }, [isInspecting, isInputNeuron, tissueId, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isInspecting, isInputNeuron, regionId, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show/hide inspect:input box based on inputWeightGrid availability
   useEffect(() => {
@@ -218,7 +218,7 @@ export function Scene({
       // Remove stale inspect boxes
       const activeKeys = new Set(entries.map(([id]) => `inspect:${id}`));
       for (const key of Object.keys(next)) {
-        if (key.startsWith("inspect:") && key !== tissueInspectKey && key !== inputInspectKey && !activeKeys.has(key)) {
+        if (key.startsWith("inspect:") && key !== regionInspectKey && key !== inputInspectKey && !activeKeys.has(key)) {
           const { [key]: _, ...rest } = next;
           next = rest;
         }
@@ -306,11 +306,11 @@ export function Scene({
   // Used as the origin of the dashed connector line (center→center).
   const nerveLineStart = (() => {
     if (!nerveCircles || nerveCircles.length === 0) return null;
-    const pb = boxes[tissueInspectKey];
+    const pb = boxes[regionInspectKey];
     if (!pb) return null;
-    const tissueGrid = regions[tissueId];
-    const tw = tissueGrid?.[0]?.length ?? 1;
-    const th = tissueGrid?.length ?? 1;
+    const regionGrid = regions[regionId];
+    const tw = regionGrid?.[0]?.length ?? 1;
+    const th = regionGrid?.length ?? 1;
     const c = nerveCircles[0];
     return {
       x: pb.x + (c.cx + 0.5) * (pb.w / tw),
@@ -328,8 +328,8 @@ export function Scene({
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 15 }}
       >
         {/* tissue inspect popup → inspected neuron (center-to-center via nerve circle if available) */}
-        {boxes[tissueInspectKey] && hasAnyTissueWeights && tCell && (() => {
-          const start = nerveLineStart ?? boxCenter(boxes[tissueInspectKey]);
+        {boxes[regionInspectKey] && hasAnyTissueWeights && tCell && (() => {
+          const start = nerveLineStart ?? boxCenter(boxes[regionInspectKey]);
           return (
             <line
               x1={start.x} y1={start.y}
@@ -394,7 +394,6 @@ export function Scene({
       {Object.entries(regions).map(([id, grid]) => {
         const box = boxes[id];
         if (!box) return null;
-        const isTissue = id === tissueId;
         const gh = grid.length;
         const gw = grid[0]?.length ?? 1;
         const labelGrid = labels[id];
@@ -447,15 +446,15 @@ export function Scene({
       })}
 
       {/* ── Inspect popup: tissue weights ── */}
-      {boxes[tissueInspectKey] && connectionMap && hasAnyTissueWeights && (() => {
-        const grid = regions[tissueId];
+      {boxes[regionInspectKey] && connectionMap && hasAnyTissueWeights && (() => {
+        const grid = regions[regionId];
         const gw = grid?.[0]?.length ?? 1;
         const gh = grid?.length ?? 1;
         return (
           <LayerBox
-            id={tissueInspectKey}
-            label={`weights ← ${inspectedRegionId ?? tissueId}`}
-            layout={boxes[tissueInspectKey]}
+            id={regionInspectKey}
+            label={`weights ← ${inspectedRegionId ?? regionId}`}
+            layout={boxes[regionInspectKey]}
             onUpdate={updateBox}
             highlighted
           >
