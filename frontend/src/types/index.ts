@@ -230,6 +230,11 @@ export interface ErrorMessage {
   message: string;
 }
 
+export interface RegionOverlay {
+  grid: (number | null)[][];
+  density: number;
+}
+
 export interface ConnectionsMessage {
   type: "connections";
   x: number;
@@ -244,8 +249,8 @@ export interface ConnectionsMessage {
   input_weight_width?: number;
   input_weight_height?: number;
   nerve_circles?: Array<{ cx: number; cy: number; radius: number }> | null;
+  region_overlays?: Record<string, RegionOverlay>;
   // Dynamic per-source-region grids: {id}_weight_grid, {id}_weight_width, {id}_weight_height
-  // Dynamic nociceptor→tissue grids: {id}_tissue_grid
   [key: string]: unknown;
 }
 

@@ -7,6 +7,7 @@ import type {
   ExperimentState,
   ExperimentStats,
   PerfMetrics,
+  RegionOverlay,
   ServerMessage,
 } from "../types";
 import { nextBrushSize, prevBrushSize } from "../brushes";
@@ -27,7 +28,7 @@ interface UseExperimentReturn {
   inputWeightGrid: number[][] | null;
   inputWeightDims: { width: number; height: number } | null;
   sourceWeightGrids: Record<string, { grid: (number | null)[][], width: number, height: number }>;
-  regionOverlays: Record<string, (number | null)[][]>;
+  regionOverlays: Record<string, RegionOverlay>;
   nerveCircles: Array<{ cx: number; cy: number; radius: number }> | null;
   regions: Record<string, number[][]>;
   tensionRegions: Record<string, number[][]>;
@@ -85,8 +86,8 @@ function _parseSourceWeightGrids(
   return result;
 }
 
-function _parseRegionOverlays(msg: Record<string, unknown>): Record<string, (number | null)[][]> {
-  return (msg["region_overlays"] as Record<string, (number | null)[][]> | undefined) ?? {};
+function _parseRegionOverlays(msg: Record<string, unknown>): Record<string, RegionOverlay> {
+  return (msg["region_overlays"] as Record<string, RegionOverlay> | undefined) ?? {};
 }
 
 export function useExperiment(): UseExperimentReturn {
@@ -113,11 +114,11 @@ export function useExperiment(): UseExperimentReturn {
   const [inputWeightGrid, setInputWeightGrid] = useState<number[][] | null>(null);
   const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
   const [sourceWeightGrids, setSourceWeightGrids] = useState<Record<string, { grid: (number | null)[][], width: number, height: number }>>({});
-  const [regionOverlays, setRegionOverlays] = useState<Record<string, (number | null)[][]>>({});
+  const [regionOverlays, setRegionOverlays] = useState<Record<string, RegionOverlay>>({});
   const [nerveCircles, setNerveCircles] = useState<Array<{ cx: number; cy: number; radius: number }> | null>(null);
   const [regions, setRegions] = useState<Record<string, number[][]>>({});
   const [tensionRegions, setTensionRegions] = useState<Record<string, number[][]>>({});
-  const [tissueId, setTissueId] = useState<string>("tissue");
+  const [tissueId, setTissueId] = useState<string>("");
   const [inputId, setInputId] = useState<string | null>(null);
   const [labels, setLabels] = useState<Record<string, number[][]>>({});
   const [neuronLabelMap, setNeuronLabelMap] = useState<Record<string, string[][]>>({});

@@ -15,7 +15,7 @@ interface PixelCanvasProps {
    */
   weightGrid?: (number | null)[][] | null;
   nerveCircles?: Array<{ cx: number; cy: number; radius: number }> | null;
-  overlayGrid?: (number | null)[][] | null;
+  overlayGrids?: Array<(number | null)[][]> | null;
   neuronLabels?: (string | null)[][] | null;
   inspectedCell?: { x: number; y: number } | null;
   onCellClick: (x: number, y: number) => void;
@@ -70,7 +70,7 @@ export function PixelCanvas({
   height,
   weightGrid,
   nerveCircles,
-  overlayGrid,
+  overlayGrids,
   neuronLabels,
   inspectedCell,
   onCellClick,
@@ -116,7 +116,7 @@ export function PixelCanvas({
           ctx.fillRect(col * cellSize, row * cellSize, cellSize - 1, cellSize - 1);
         }
       }
-      if (overlayGrid && overlayGrid.length > 0) {
+      for (const overlayGrid of overlayGrids ?? []) {
         for (let row = 0; row < Math.min(height, overlayGrid.length); row++) {
           for (let col = 0; col < Math.min(width, overlayGrid[row]?.length ?? 0); col++) {
             const v = overlayGrid[row][col];
@@ -213,7 +213,7 @@ export function PixelCanvas({
         }
       }
     }
-  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, nerveCircles, overlayGrid, neuronLabels, inspectedCell, getCellSize, hoverCell, brushSize, brushMode, isDragging]);
+  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, nerveCircles, overlayGrids, neuronLabels, inspectedCell, getCellSize, hoverCell, brushSize, brushMode, isDragging]);
 
   useEffect(() => { draw(); }, [draw]);
 

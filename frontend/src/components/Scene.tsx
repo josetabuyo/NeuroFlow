@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { LayerBox, HEADER_H, type BoxLayout } from "./LayerBox";
 import { PixelCanvas } from "./PixelCanvas";
 import { BrushPalette } from "./BrushPalette";
+import type { RegionOverlay } from "../types";
 
 const TARGET_PX = 360;
 const GAP       = 44;
@@ -37,7 +38,7 @@ interface SceneProps {
   } | null;
   inputWeightGrid?: number[][] | null;
   sourceWeightGrids?: Record<string, { grid: (number | null)[][], width: number, height: number }>;
-  regionOverlays?: Record<string, (number | null)[][]>;
+  regionOverlays?: Record<string, RegionOverlay>;
   nerveCircles?: Array<{ cx: number; cy: number; radius: number }> | null;
 
   tensionMode?: boolean;
@@ -464,7 +465,9 @@ export function Scene({
               height={gh}
               weightGrid={connectionMap}
               nerveCircles={nerveCircles}
-              overlayGrid={regionOverlays?.[tissueId] ?? null}
+              overlayGrids={Object.values(regionOverlays ?? {})
+                .sort((a, b) => b.density - a.density)
+                .map(o => o.grid)}
               onCellClick={() => {}}
             />
           </LayerBox>
