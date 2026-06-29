@@ -46,6 +46,7 @@ _DAEMON_THRESHOLD = 0.5
 _MIN_DAEMON_SIZE = 3
 
 _SOURCE_TYPES_NON_INPUT = {"label", "error_diff", "label_mismatch"}
+_NOCICEPTOR_SOURCE_TYPES = {"label_mismatch", "error_diff"}
 _SYNTHETIC_PATTERNS = {"HALF_TOP", "HALF_BOT", "BARS_H", "BARS_V", "DOT_TL", "DOT_BR"}
 
 
@@ -1114,7 +1115,8 @@ class Experiment(Experimento):
         if self.brain_tensor is None:
             return
         n = rs.n
-        out_region = self._regions_by_id.get("output")
+        out_id = rs.source_cfg.get("label_region") or rs.source_cfg.get("output_region")
+        out_region = self._regions_by_id.get(out_id) if out_id else None
         if out_region is None:
             out_region = next((r for r in self._wiring_regions() if r is not self._tissue), None)
         if out_region is None:
@@ -1148,12 +1150,31 @@ class Experiment(Experimento):
         self.brain_tensor.valores[rs.start:rs.start + n] = error.to(self.brain_tensor.device)
 
     def _inject_label_mismatch(self, rs: RegionState) -> None:
-        """Nociceptor: neuron i = activation of label_region[i] when its label ≠ current char, else 0."""
+        """Nociceptor injection — two modes controlled by source.mode:
+
+        "mismatch" (default): neuron i fires with label_region[i]'s activation
+          when its label ≠ current char, else 0.
+        "active_avg": signal = mean of all label_region activations (0-1),
+          broadcast uniformly to all nociceptor neurons.
+        """
         if self.brain_tensor is None:
             return
-        char_r = self._regions_by_id.get(rs.source_cfg.get("char_region", "input"))
         label_r = self._regions_by_id.get(rs.source_cfg.get("label_region", ""))
-        if char_r is None or label_r is None or not label_r.neuron_labels:
+        if label_r is None:
+            return
+
+        mode = rs.source_cfg.get("mode", "mismatch")
+
+        if mode == "active_avg":
+            label_vals = self.brain_tensor.valores[label_r.start : label_r.end].cpu()
+            avg = label_vals.clamp(0.0, 1.0).mean().item()
+            values = torch.full((rs.n,), avg)
+            self.brain_tensor.valores[rs.start : rs.start + rs.n] = values.to(self.brain_tensor.device)
+            return
+
+        # mode == "mismatch" (default)
+        char_r = self._regions_by_id.get(rs.source_cfg.get("char_region", "input"))
+        if char_r is None or not label_r.neuron_labels:
             return
         text = char_r.source_cfg.get("text", "")
         if not text:
@@ -1570,13 +1591,10 @@ class Experiment(Experimento):
         else:
             result["input_weight_grid"] = None
 
-        # Nociceptor → tissue grid (shown when inspecting non-tissue neurons)
+        # Nociceptor → tissue grid (one per nociceptor region, shown when inspecting non-tissue neurons)
         if not is_tissue:
-            noc_rs = next(
-                (r for r in self._regions if r.source_type in ("label_mismatch", "error_diff")),
-                None,
-            )
-            if noc_rs is not None:
+            noc_regions = [r for r in self._regions if r.source_type in _NOCICEPTOR_SOURCE_TYPES]
+            for noc_rs in noc_regions:
                 bt = self.brain_tensor
                 t_size = self._tissue.n
                 t_start = self._tissue.start
@@ -1597,7 +1615,7 @@ class Experiment(Experimento):
                             v = noc_flat[r * self.width + c]
                             row_g.append(round(v * inv, 4) if abs(v) > 1e-12 else None)
                         noc_grid.append(row_g)
-                    result["nociceptor_tissue_grid"] = noc_grid
+                    result[f"{noc_rs.id}_tissue_grid"] = noc_grid
 
         # Generic per-source-region grids (output / nociceptor / etc.)
         for src_region in self._regions:
