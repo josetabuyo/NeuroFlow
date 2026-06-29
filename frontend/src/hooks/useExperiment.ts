@@ -25,7 +25,7 @@ interface UseExperimentReturn {
   inputFrame: number[][] | null;
   inputWeightGrid: number[][] | null;
   inputWeightDims: { width: number; height: number } | null;
-  sourceWeightGrids: Record<string, { grid: (number | null)[][], width: number, height: number }>;
+  sourceWeightGrids: Record<string, { grid: (number | null)[][], width: number, height: number, density: number }>;
   regionOverlays: Record<string, RegionOverlay>;
   nerveCircles: Array<{ cx: number; cy: number; radius: number }> | null;
   regions: Record<string, number[][]>;
@@ -71,15 +71,21 @@ interface UseExperimentReturn {
 
 function _parseSourceWeightGrids(
   msg: Record<string, unknown>
-): Record<string, { grid: (number | null)[][], width: number, height: number }> {
-  const result: Record<string, { grid: (number | null)[][], width: number, height: number }> = {};
+): Record<string, { grid: (number | null)[][], width: number, height: number, density: number }> {
+  const result: Record<string, { grid: (number | null)[][], width: number, height: number, density: number }> = {};
   for (const key of Object.keys(msg)) {
     if (!key.endsWith("_weight_grid") || key === "input_weight_grid" || key === "weight_grid") continue;
     const id = key.slice(0, -"_weight_grid".length);
     const grid = msg[key] as (number | null)[][];
     const width = (msg[`${id}_weight_width`] as number | undefined) ?? grid[0]?.length ?? 1;
     const height = (msg[`${id}_weight_height`] as number | undefined) ?? grid.length ?? 1;
-    result[id] = { grid, width, height };
+    let density = 0;
+    for (const row of grid) {
+      for (const v of row) {
+        if (v !== null && Math.abs(v) > density) density = Math.abs(v);
+      }
+    }
+    result[id] = { grid, width, height, density };
   }
   return result;
 }
@@ -109,7 +115,7 @@ export function useExperiment(): UseExperimentReturn {
   const [inputFrame, setInputFrame] = useState<number[][] | null>(null);
   const [inputWeightGrid, setInputWeightGrid] = useState<number[][] | null>(null);
   const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
-  const [sourceWeightGrids, setSourceWeightGrids] = useState<Record<string, { grid: (number | null)[][], width: number, height: number }>>({});
+  const [sourceWeightGrids, setSourceWeightGrids] = useState<Record<string, { grid: (number | null)[][], width: number, height: number, density: number }>>({});
   const [regionOverlays, setRegionOverlays] = useState<Record<string, RegionOverlay>>({});
   const [nerveCircles, setNerveCircles] = useState<Array<{ cx: number; cy: number; radius: number }> | null>(null);
   const [regions, setRegions] = useState<Record<string, number[][]>>({});

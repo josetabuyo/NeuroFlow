@@ -109,6 +109,7 @@ export function PixelCanvas({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // ── Weight-only mode (inspect popup) ──
+    const isInspectMode = (weightGrid && weightGrid.length > 0) || (grid.length === 0 && nerveCircles && nerveCircles.length > 0);
     if (weightGrid && weightGrid.length > 0) {
       for (let row = 0; row < Math.min(height, weightGrid.length); row++) {
         for (let col = 0; col < Math.min(width, weightGrid[row]?.length ?? 0); col++) {
@@ -128,19 +129,19 @@ export function PixelCanvas({
           }
         }
       }
-      if (nerveCircles && nerveCircles.length > 0) {
-        ctx.strokeStyle = "rgba(0, 220, 255, 0.6)";
-        ctx.lineWidth = 1.5;
-        for (const c of nerveCircles) {
-          const px = c.cx * cellSize + cellSize / 2;
-          const py = c.cy * cellSize + cellSize / 2;
-          ctx.beginPath();
-          ctx.arc(px, py, c.radius * cellSize, 0, 2 * Math.PI);
-          ctx.stroke();
-        }
-      }
-      return;
     }
+    if (isInspectMode && nerveCircles && nerveCircles.length > 0) {
+      ctx.strokeStyle = "rgba(0, 220, 255, 0.6)";
+      ctx.lineWidth = 1.5;
+      for (const c of nerveCircles) {
+        const px = c.cx * cellSize + cellSize / 2;
+        const py = c.cy * cellSize + cellSize / 2;
+        ctx.beginPath();
+        ctx.arc(px, py, c.radius * cellSize, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+    if (isInspectMode) return;
 
     if (grid.length === 0) return;
 

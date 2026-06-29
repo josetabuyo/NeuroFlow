@@ -37,7 +37,7 @@ interface SceneProps {
     total_sinapsis: number;
   } | null;
   inputWeightGrid?: number[][] | null;
-  sourceWeightGrids?: Record<string, { grid: (number | null)[][], width: number, height: number }>;
+  sourceWeightGrids?: Record<string, { grid: (number | null)[][], width: number, height: number, density: number }>;
   regionOverlays?: Record<string, RegionOverlay>;
   nerveCircles?: Array<{ cx: number; cy: number; radius: number }> | null;
 
@@ -211,7 +211,8 @@ export function Scene({
   // Show/hide inspect:{id} boxes based on sourceWeightGrids content
   useEffect(() => {
     if (!isInspecting) return;
-    const entries = Object.entries(sourceWeightGrids ?? {});
+    // Sort ascending by density: less dense = higher on screen (smaller y), more dense = lower
+    const entries = Object.entries(sourceWeightGrids ?? {}).sort(([, a], [, b]) => a.density - b.density);
     setBoxes(prev => {
       let next = { ...prev };
       // Remove stale inspect boxes
@@ -222,18 +223,18 @@ export function Scene({
           next = rest;
         }
       }
-      // Add new inspect boxes
-      let offset = 0;
+      // Add new inspect boxes stacked vertically next to their anchor, sorted ascending by density
+      const anchor = inspectedRegionId ? (next[inspectedRegionId] ?? null) : null;
+      if (!anchor) return next;
+      let yOffset = 0;
       for (const [id, { width, height }] of entries) {
         const boxKey = `inspect:${id}`;
         if (next[boxKey]) continue;
-        const anchor = next[id] ?? (inspectedRegionId ? next[inspectedRegionId] : null);
-        if (!anchor) continue;
         const ps = autoPixelSize(width, height);
         const bw = width * ps + 24;
         const bh = height * ps + HEADER_H + 8;
-        next = { ...next, [boxKey]: { x: anchor.x + anchor.w + GAP + offset, y: anchor.y, w: bw, h: bh } };
-        offset += GAP;
+        next = { ...next, [boxKey]: { x: anchor.x + anchor.w + GAP, y: anchor.y + yOffset, w: bw, h: bh } };
+        yOffset += bh + GAP;
       }
       return next;
     });
@@ -445,14 +446,18 @@ export function Scene({
       })}
 
       {/* ── Inspect popup: region weights ── */}
-      {boxes[regionInspectKey] && connectionMap && hasAnyWeights && (() => {
+      {boxes[regionInspectKey] && connectionMap && (() => {
+        const hasNerves = nerveCircles && nerveCircles.length > 0;
+        // Nerve-only mode: tissue neuron in a region that has nerve connections
+        const nerveOnlyMode = inspectedRegionId === regionId && hasNerves;
+        if (!hasAnyWeights && !hasNerves) return null;
         const grid = regions[regionId];
         const gw = grid?.[0]?.length ?? 1;
         const gh = grid?.length ?? 1;
         return (
           <LayerBox
             id={regionInspectKey}
-            label={`weights ← ${inspectedRegionId ?? regionId}`}
+            label={nerveOnlyMode ? `nerve circuit` : `weights ← ${inspectedRegionId ?? regionId}`}
             layout={boxes[regionInspectKey]}
             onUpdate={updateBox}
             highlighted
@@ -461,9 +466,9 @@ export function Scene({
               grid={[]}
               width={gw}
               height={gh}
-              weightGrid={connectionMap}
+              weightGrid={nerveOnlyMode ? null : connectionMap}
               nerveCircles={nerveCircles}
-              overlayGrids={Object.values(regionOverlays ?? {})
+              overlayGrids={nerveOnlyMode ? [] : Object.values(regionOverlays ?? {})
                 .sort((a, b) => b.density - a.density)
                 .map(o => o.grid)}
               onCellClick={() => {}}
@@ -496,29 +501,32 @@ export function Scene({
         );
       })()}
 
-      {/* ── Inspect popups: per-source-region weight grids (output_L/T, nociceptor_L/T, …) ── */}
-      {Object.entries(sourceWeightGrids ?? {}).map(([id, { grid, width, height }]) => {
-        const boxKey = `inspect:${id}`;
-        if (!boxes[boxKey]) return null;
-        return (
-          <LayerBox
-            key={boxKey}
-            id={boxKey}
-            label={`weights ← ${id}`}
-            layout={boxes[boxKey]}
-            onUpdate={updateBox}
-            highlighted
-          >
-            <PixelCanvas
-              grid={[]}
-              width={width}
-              height={height}
-              weightGrid={grid}
-              onCellClick={() => {}}
-            />
-          </LayerBox>
-        );
-      })}
+      {/* ── Inspect popups: per-source-region weight grids (output_L/T, nociceptor_L/T, …) sorted by density ── */}
+      {Object.entries(sourceWeightGrids ?? {})
+        .sort(([, a], [, b]) => a.density - b.density)
+        .map(([id, { grid, width, height }]) => {
+          const boxKey = `inspect:${id}`;
+          if (!boxes[boxKey]) return null;
+          return (
+            <LayerBox
+              key={boxKey}
+              id={boxKey}
+              label={`weights ← ${id}`}
+              layout={boxes[boxKey]}
+              onUpdate={updateBox}
+              highlighted
+            >
+              <PixelCanvas
+                grid={[]}
+                width={width}
+                height={height}
+                weightGrid={grid}
+                nerveCircles={nerveCircles}
+                onCellClick={() => {}}
+              />
+            </LayerBox>
+          );
+        })}
 
       {/* ── Floating neuron info panel ── */}
       {infoPanelPos && isInspecting && inspectInfo && inspectedCell && inspectedRegionId && (

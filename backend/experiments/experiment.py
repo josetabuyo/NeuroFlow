@@ -829,9 +829,11 @@ class Experiment(Experimento):
 
         circles = place_nerve_circles(nerve_cfg, on_rs.width, on_rs.height, rng)
         to_rs_id = self._regions_by_id.get(to_cfg.get("region"), None)
+        from_rs_id = self._regions_by_id.get(from_cfg.get("region"), None) if from_cfg else None
         self._nerve_circles.append({
             "on": on_rs.id,
             "to": to_rs_id.id if to_rs_id else None,
+            "from": from_rs_id.id if from_rs_id else None,
             "circles": [{"cx": c.cx, "cy": c.cy, "radius": c.radius} for c in circles],
         })
 
@@ -865,7 +867,7 @@ class Experiment(Experimento):
                 tissue_n = on_neurons[y * on_rs.width + x]
                 sampled = random.sample(from_neurons, min(k, len(from_neurons)))
                 sinapsis_list = [
-                    Sinapsis(neurona_entrante=s, peso=gradient)
+                    Sinapsis(neurona_entrante=s, peso=1.0)
                     for s in sampled
                 ]
                 tissue_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
@@ -1544,10 +1546,11 @@ class Experiment(Experimento):
         for entry in self._nerve_circles:
             if entry["on"] != self._wiring_region_id:
                 continue
-            # When inspecting a non-tissue region, only include circles wired to it
+            # When inspecting a non-tissue region, only include circles wired to/from it
             if not is_wiring_region:
                 to_id = entry.get("to")
-                if to_id is not None and to_id != target.id:
+                from_id = entry.get("from")
+                if to_id != target.id and from_id != target.id:
                     continue
             region_nerve_circles.extend(entry["circles"])
 
@@ -1582,7 +1585,7 @@ class Experiment(Experimento):
         # Each entry: {"grid": ..., "density": max_abs} — grid normalized to [-1, 1].
         # Frontend sorts by density descending and renders highest-density first so all layers stay visible.
         noc_regions = [r for r in self._regions if r.source_type in _NOCICEPTOR_SOURCE_TYPES]
-        if noc_regions and self._wiring_region is not None:
+        if noc_regions and self._wiring_region is not None and is_wiring_region:
             on_rs = self._wiring_region
             region_overlays: dict[str, dict] = {}
             bt = self.brain_tensor
@@ -1614,6 +1617,8 @@ class Experiment(Experimento):
         # Generic per-source-region grids (output / nociceptor / etc.)
         for src_region in self._regions:
             if src_region is self._wiring_region or src_region is ascii_r:
+                continue
+            if src_region is target:
                 continue
             pesos = per_region.get(src_region.id)
             if not pesos:
