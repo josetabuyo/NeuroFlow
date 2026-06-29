@@ -176,3 +176,106 @@ class TestInspect:
         grid = result["weight_grid"]
 
         assert grid[0][0] == pytest.approx(0.3, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Nerve inspection: tissue daemon connections + nociceptor outgoing footprint
+# ---------------------------------------------------------------------------
+
+def _nerve_inspect_config() -> dict:
+    """10×10 tissue with daemon + nerve at (5,5,r=3) from nociceptor to output."""
+    return {
+        "regions": [
+            {"id": "tissue", "grid": {"width": 10, "height": 10}},
+            {"id": "output", "grid": {"width": 1, "height": 1}},
+            {"id": "nociceptor", "grid": {"width": 1, "height": 1}},
+        ],
+        "connections": [
+            {
+                "on": "tissue",
+                "deamon": {
+                    "shape": "square",
+                    "fixed": True,
+                    "excitatory": {"weight": 0.9, "offset": 1, "noise": 0, "weights": [1]},
+                    "inhibitory": {"weight": -1.0, "offset": 3, "noise": 0, "sectors": 4, "weights": [1]},
+                },
+            },
+            {
+                "on": "tissue",
+                "nerve": {
+                    "insertion": {"x": 5, "y": 5},
+                    "radius": 3,
+                    "from": {"region": "nociceptor", "density": 1.0, "weight": -0.5},
+                    "to": {"region": "output", "density": 1.0, "weight": 0.5},
+                },
+            },
+        ],
+    }
+
+
+class TestInspectNerve:
+    """inspect() correctness when a nerve connects regions via the wiring region."""
+
+    def test_tissue_weight_grid_shows_daemon_connections(self) -> None:
+        """Tissue inspection always returns daemon weight_grid even when nerve circles exist."""
+        random.seed(42)
+        exp = Experiment()
+        exp.setup(_nerve_inspect_config())
+        result = exp.inspect(5, 5)
+        grid = result["weight_grid"]
+        non_null = [v for row in grid for v in row if v is not None and v != 999]
+        assert len(non_null) > 0, "Daemon connections must be visible in tissue weight_grid"
+        # Excitatory neighbors are positive
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            v = grid[5 + dy][5 + dx]
+            assert v is not None and v > 0
+
+    def test_tissue_inspect_no_nociceptor_source_grid(self) -> None:
+        """Tissue inspection must NOT return nociceptor_weight_grid (1×1 box is redundant/confusing)."""
+        random.seed(42)
+        exp = Experiment()
+        exp.setup(_nerve_inspect_config())
+        # Inspect a neuron inside the nerve circle — nociceptor has connections here
+        result = exp.inspect(5, 5)
+        assert "nociceptor_weight_grid" not in result, (
+            "Nociceptor source weight grid must be excluded from tissue inspection"
+        )
+
+    def test_tissue_inspect_returns_nerve_circles(self) -> None:
+        """Tissue inspection includes nerve circles so the UI can draw them."""
+        random.seed(42)
+        exp = Experiment()
+        exp.setup(_nerve_inspect_config())
+        result = exp.inspect(5, 5)
+        assert "nerve_circles" in result
+        circles = result["nerve_circles"]
+        assert any(c["cx"] == 5 and c["cy"] == 5 and c["radius"] == 3 for c in circles)
+
+    def test_nociceptor_shows_outgoing_footprint_on_tissue(self) -> None:
+        """Nociceptor inspection returns weight_grid = outgoing footprint on the wiring region."""
+        random.seed(42)
+        exp = Experiment()
+        exp.setup(_nerve_inspect_config())
+        result = exp.inspect(0, 0, region_id="nociceptor")
+        grid = result["weight_grid"]
+        # Dimensions match tissue (10×10)
+        assert len(grid) == 10
+        assert all(len(row) == 10 for row in grid)
+        # Some non-null values (neurons inside nerve circle at 5,5 r=3 receive from nociceptor)
+        non_null = [v for row in grid for v in row if v is not None]
+        assert len(non_null) > 0, "Nociceptor outgoing footprint must have non-null weights"
+        # All negative (inhibitory weight=-0.5)
+        assert all(v <= 0 for v in non_null), "Nociceptor→tissue connections are inhibitory"
+
+    def test_nociceptor_inspect_returns_nerve_circles(self) -> None:
+        """Nociceptor inspection includes nerve circles from the nerve it participates in."""
+        random.seed(42)
+        exp = Experiment()
+        exp.setup(_nerve_inspect_config())
+        result = exp.inspect(0, 0, region_id="nociceptor")
+        assert "nerve_circles" in result
+        circles = result["nerve_circles"]
+        assert len(circles) >= 1
+        assert circles[0]["cx"] == 5
+        assert circles[0]["cy"] == 5
+        assert circles[0]["radius"] == 3

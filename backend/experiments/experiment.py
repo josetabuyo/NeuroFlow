@@ -1644,11 +1644,17 @@ class Experiment(Experimento):
             if region_overlays:
                 result["region_overlays"] = region_overlays
 
-        # Generic per-source-region grids (output / nociceptor / etc.)
+        # Nerve 'from' regions — when inspecting wiring region their contribution is already
+        # captured by region_overlays and nerve circles; a 1×1 source grid is redundant.
+        nerve_from_ids = {entry.get("from") for entry in self._nerve_circles if entry.get("from")}
+
+        # Generic per-source-region grids (output / etc.)
         for src_region in self._regions:
             if src_region is self._wiring_region or src_region is ascii_r:
                 continue
             if src_region is target:
+                continue
+            if is_wiring_region and src_region.id in nerve_from_ids:
                 continue
             pesos = per_region.get(src_region.id)
             if not pesos:

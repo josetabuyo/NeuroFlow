@@ -448,16 +448,19 @@ export function Scene({
       {/* ── Inspect popup: region weights ── */}
       {boxes[regionInspectKey] && connectionMap && (() => {
         const hasNerves = nerveCircles && nerveCircles.length > 0;
-        // Nerve-only mode: tissue neuron in a region that has nerve connections
-        const nerveOnlyMode = inspectedRegionId === regionId && hasNerves;
         if (!hasAnyWeights && !hasNerves) return null;
         const grid = regions[regionId];
         const gw = grid?.[0]?.length ?? 1;
         const gh = grid?.length ?? 1;
+        // When nerve circles are present, suppress nociceptor region_overlays — they're
+        // redundant with the nerve circle visualization and add noise.
+        const overlays = hasNerves
+          ? []
+          : Object.values(regionOverlays ?? {}).sort((a, b) => b.density - a.density).map(o => o.grid);
         return (
           <LayerBox
             id={regionInspectKey}
-            label={nerveOnlyMode ? `nerve circuit` : `weights ← ${inspectedRegionId ?? regionId}`}
+            label={`weights ← ${inspectedRegionId ?? regionId}`}
             layout={boxes[regionInspectKey]}
             onUpdate={updateBox}
             highlighted
@@ -466,11 +469,9 @@ export function Scene({
               grid={[]}
               width={gw}
               height={gh}
-              weightGrid={nerveOnlyMode ? null : connectionMap}
+              weightGrid={connectionMap}
               nerveCircles={nerveCircles}
-              overlayGrids={nerveOnlyMode ? [] : Object.values(regionOverlays ?? {})
-                .sort((a, b) => b.density - a.density)
-                .map(o => o.grid)}
+              overlayGrids={overlays}
               onCellClick={() => {}}
             />
           </LayerBox>
@@ -521,7 +522,6 @@ export function Scene({
                 width={width}
                 height={height}
                 weightGrid={grid}
-                nerveCircles={nerveCircles}
                 onCellClick={() => {}}
               />
             </LayerBox>
