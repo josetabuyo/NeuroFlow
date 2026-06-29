@@ -629,8 +629,8 @@ class TestArbitraryRegions:
         exp.setup(config)
         exp.step()
         frames = exp.get_region_frames()
-        # ascii input region ("src") is excluded from region frames (hidden when source=ascii)
-        assert list(frames.keys()) == ["core", "readout"]
+        # ascii input region ("src") is included in region frames
+        assert list(frames.keys()) == ["src", "core", "readout"]
         # core is the tissue → laid out at index 0
         assert exp._regions_by_id["core"].start == 0
 

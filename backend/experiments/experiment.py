@@ -1366,8 +1366,6 @@ class Experiment(Experimento):
             return {}
         result: dict[str, list[list[float]]] = {}
         for rs in self._regions:
-            if rs.is_ascii_input:
-                continue
             vals = self._region_values(rs).reshape(rs.height, rs.width).tolist()
             if rs.is_entrada and rs.source_type not in (None, "draw"):
                 result[rs.id] = [[round(v, 3) for v in row] for row in vals]
@@ -1544,7 +1542,7 @@ class Experiment(Experimento):
         target_linear_idx = y * target.width + x
         region_nerve_circles: list[dict] = []
         for entry in self._nerve_circles:
-            if entry["on"] != _wiring_region_id:
+            if entry["on"] != self._wiring_region_id:
                 continue
             # When inspecting a non-tissue region, only include circles wired to it
             if not is_wiring_region:
