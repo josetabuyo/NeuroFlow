@@ -1528,6 +1528,36 @@ class Experiment(Experimento):
                 acc[local_src] = max(-1.0, min(1.0, acc.get(local_src, 0.0) + w * dw))
 
         wiring_pesos = per_region.get(self._wiring_region.id, {})
+
+        # When inspecting a nerve `from` region (e.g. nociceptor), its outgoing synapses
+        # live in tissue neurons' dendrites, not in its own. Compute the reverse footprint:
+        # which tissue neurons receive from this specific neuron, and with what weight.
+        is_nerve_from = (
+            not is_wiring_region
+            and self._wiring_region is not None
+            and any(entry.get("from") == target.id for entry in self._nerve_circles)
+        )
+        if is_nerve_from:
+            bt = self.brain_tensor
+            on_rs = self._wiring_region
+            t_size = on_rs.n
+            t_start = on_rs.start
+            srcs_t = bt.indices_fuente[t_start : t_start + t_size]
+            ws_t = bt.pesos_sinapsis[t_start : t_start + t_size]
+            dws_t = bt.pesos_dendrita[t_start : t_start + t_size]
+            valid_t = bt.mascara_valida[t_start : t_start + t_size]
+            hit = (srcs_t == neuron_idx) & valid_t
+            eff = (ws_t * dws_t * hit.float()).sum(dim=1).cpu().tolist()
+            max_abs = max(abs(v) for v in eff) if eff else 0.0
+            if max_abs > 1e-9:
+                inv = 1.0 / max_abs
+                wiring_pesos = {
+                    r * on_rs.width + c: round(eff[r * on_rs.width + c] * inv, 4)
+                    for r in range(on_rs.height)
+                    for c in range(on_rs.width)
+                    if abs(eff[r * on_rs.width + c]) > 1e-12
+                }
+
         weight_grid: list[list[float | None]] = []
         for row in range(self.height):
             fila: list[float | None] = []
