@@ -23,8 +23,8 @@ const DEFAULT_CONFIG: ExperimentConfig = {
 function getConfigGrid(config: ExperimentConfig): { width: number; height: number } {
   const any = config as unknown as Record<string, unknown>;
   if (Array.isArray(any.regions)) {
-    const tissue = (any.regions as Array<Record<string, unknown>>).find(r => r.wiring);
-    const g = tissue?.grid as { width?: number; height?: number } | undefined;
+    const mainRegion = (any.regions as Array<Record<string, unknown>>).find(r => r.wiring);
+    const g = mainRegion?.grid as { width?: number; height?: number } | undefined;
     return { width: g?.width ?? 50, height: g?.height ?? 50 };
   }
   return { width: config.grid?.width ?? 50, height: config.grid?.height ?? 50 };

@@ -98,8 +98,7 @@ export function Scene({
   const isInspecting = connectionMap != null;
   const regionInspectKey = `inspect:${regionId}`;
   const inputInspectKey = inputId ? `inspect:${inputId}` : null;
-  // Only show the tissue weight popup if there are actual non-null weights
-  const hasAnyTissueWeights = !!connectionMap?.some(row => row.some(v => v !== null));
+  const hasAnyWeights = !!connectionMap?.some(row => row.some(v => v !== null));
 
   // ── Initialize layout ───────────────────────────────────────────────
   useEffect(() => {
@@ -179,7 +178,7 @@ export function Scene({
       }
       return;
     }
-    // Place tissue inspect popup (once per region change, next to tissue box)
+    // Place region inspect popup (once per region change, next to region box)
     setBoxes(prev => {
       if (prev[regionInspectKey]) return prev;
       const tb = prev[regionId];
@@ -302,7 +301,7 @@ export function Scene({
 
   const tCell = (inspectedCell && inspectedRegionId) ? cellPos(inspectedRegionId, inspectedCell.x, inspectedCell.y) : null;
 
-  // ── Nerve circle center in tissue-inspect popup scene coords ────────
+  // ── Nerve circle center in region-inspect popup scene coords ────────
   // Used as the origin of the dashed connector line (center→center).
   const nerveLineStart = (() => {
     if (!nerveCircles || nerveCircles.length === 0) return null;
@@ -327,8 +326,8 @@ export function Scene({
       <svg
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 15 }}
       >
-        {/* tissue inspect popup → inspected neuron (center-to-center via nerve circle if available) */}
-        {boxes[regionInspectKey] && hasAnyTissueWeights && tCell && (() => {
+        {/* region inspect popup → inspected neuron (center-to-center via nerve circle if available) */}
+        {boxes[regionInspectKey] && hasAnyWeights && tCell && (() => {
           const start = nerveLineStart ?? boxCenter(boxes[regionInspectKey]);
           return (
             <line
@@ -445,8 +444,8 @@ export function Scene({
         );
       })}
 
-      {/* ── Inspect popup: tissue weights ── */}
-      {boxes[regionInspectKey] && connectionMap && hasAnyTissueWeights && (() => {
+      {/* ── Inspect popup: region weights ── */}
+      {boxes[regionInspectKey] && connectionMap && hasAnyWeights && (() => {
         const grid = regions[regionId];
         const gw = grid?.[0]?.length ?? 1;
         const gh = grid?.length ?? 1;
