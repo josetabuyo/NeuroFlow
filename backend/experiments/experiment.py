@@ -801,6 +801,7 @@ class Experiment(Experimento):
                 circles = place_nerve_circles(paired_cfg, on_rs.width, on_rs.height, rng)
                 self._nerve_circles.append({
                     "on": on_rs.id,
+                    "paired_to": to_rs.id,
                     "circles": [{"cx": c.cx, "cy": c.cy, "radius": c.radius} for c in circles],
                 })
                 if from_cfg:
@@ -873,7 +874,7 @@ class Experiment(Experimento):
                 continue
             k = max(1, round(len(participating) * density))
             for to_n in to_neurons:
-                sampled = random.sample(participating, min(k, len(participating)))
+                sampled = sorted(participating, key=lambda t: t[1], reverse=True)[:k]
                 sinapsis_list = [
                     Sinapsis(neurona_entrante=n, peso=grad)
                     for n, grad in sampled
@@ -899,7 +900,7 @@ class Experiment(Experimento):
             if not participating:
                 continue
             k = max(1, round(len(participating) * density))
-            sampled = random.sample(participating, min(k, len(participating)))
+            sampled = sorted(participating, key=lambda t: t[1], reverse=True)[:k]
             sinapsis_list = [
                 Sinapsis(neurona_entrante=n, peso=grad)
                 for n, grad in sampled
@@ -1529,10 +1530,18 @@ class Experiment(Experimento):
         activation = self.brain_tensor.valores[neuron_idx].item()
         tension = self.brain_tensor.tensiones[neuron_idx].item()
 
-        tissue_nerve_circles = [
-            c for entry in self._nerve_circles if entry["on"] == self._tissue_id
-            for c in entry["circles"]
-        ]
+        target_linear_idx = y * target.width + x
+        tissue_nerve_circles: list[dict] = []
+        for entry in self._nerve_circles:
+            if entry["on"] != self._tissue_id:
+                continue
+            circles_list = entry["circles"]
+            paired_to = entry.get("paired_to")
+            if paired_to == target.id:
+                if target_linear_idx < len(circles_list):
+                    tissue_nerve_circles.append(circles_list[target_linear_idx])
+            else:
+                tissue_nerve_circles.extend(circles_list)
 
         result: dict[str, Any] = {
             "type": "connections",

@@ -121,9 +121,10 @@ export function PixelCanvas({
           for (let col = 0; col < Math.min(width, overlayGrid[row]?.length ?? 0); col++) {
             const v = overlayGrid[row][col];
             if (v === null || v === 0) continue;
-            const alpha = Math.min(0.8, Math.abs(v) * 0.75);
-            ctx.fillStyle = `rgba(255, 140, 0, ${alpha})`;
+            ctx.globalAlpha = Math.min(0.85, Math.abs(v) * 0.85);
+            ctx.fillStyle = weightToColor(v);
             ctx.fillRect(col * cellSize, row * cellSize, cellSize - 1, cellSize - 1);
+            ctx.globalAlpha = 1.0;
           }
         }
       }
