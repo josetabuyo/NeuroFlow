@@ -174,7 +174,7 @@ export function useExperiment(): UseExperimentReturn {
               setInputWeightDims({ width: msg.inspect.input_weight_width as number, height: msg.inspect.input_weight_height as number });
             }
             setSourceWeightGrids(_parseSourceWeightGrids(msg.inspect));
-            setOverlayGrid(_parseRegionOverlays(msg.inspect));
+            setRegionOverlays(_parseRegionOverlays(msg.inspect));
             setNerveCircles((msg.inspect.nerve_circles as Array<{ cx: number; cy: number; radius: number }> | null) ?? null);
           }
           break;
@@ -195,7 +195,7 @@ export function useExperiment(): UseExperimentReturn {
             setInputWeightDims(null);
           }
           setSourceWeightGrids(_parseSourceWeightGrids(msg));
-          setOverlayGrid(_parseRegionOverlays(msg));
+          setRegionOverlays(_parseRegionOverlays(msg));
           setNerveCircles((msg.nerve_circles as Array<{ cx: number; cy: number; radius: number }> | null) ?? null);
           break;
         case "status":

@@ -2,6 +2,7 @@
   "name": "ITON: Nociceptor Study",
   "description": "Stage 3 ITON: tissue forms daemons tracking input, two independent output+nociceptor channels (L and T), each with its own nerve.",
   "config": {
+    "handler": "ITON_Nociceptor_Study",
     "description": "ITON nociceptor experiment. Tissue forms daemons driven by input. Two output neurons (output_L, output_T) each learn independently via their own nerve from a dedicated nociceptor.",
     "regions": [
       {
@@ -41,7 +42,7 @@
           "width": 1,
           "height": 1
         },
-        "neuron_labels": [["L"]],
+        "handler_method": "label_L",
         "tension": {
           "function": {
             "x": 1,
@@ -57,7 +58,7 @@
           "width": 1,
           "height": 1
         },
-        "neuron_labels": [["T"]],
+        "handler_method": "label_T",
         "tension": {
           "function": {
             "x": 1,

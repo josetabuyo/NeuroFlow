@@ -301,6 +301,22 @@ export function Scene({
 
   const tCell = (inspectedCell && inspectedRegionId) ? cellPos(inspectedRegionId, inspectedCell.x, inspectedCell.y) : null;
 
+  // ── Nerve circle center in tissue-inspect popup scene coords ────────
+  // Used as the origin of the dashed connector line (center→center).
+  const nerveLineStart = (() => {
+    if (!nerveCircles || nerveCircles.length === 0) return null;
+    const pb = boxes[tissueInspectKey];
+    if (!pb) return null;
+    const tissueGrid = regions[tissueId];
+    const tw = tissueGrid?.[0]?.length ?? 1;
+    const th = tissueGrid?.length ?? 1;
+    const c = nerveCircles[0];
+    return {
+      x: pb.x + (c.cx + 0.5) * (pb.w / tw),
+      y: pb.y + HEADER_H + (c.cy + 0.5) * (pb.h / th),
+    };
+  })();
+
   return (
     <div
       ref={containerRef}
@@ -310,14 +326,17 @@ export function Scene({
       <svg
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 15 }}
       >
-        {/* tissue inspect popup → inspected neuron */}
-        {boxes[tissueInspectKey] && hasAnyTissueWeights && tCell && (
-          <line
-            x1={boxCenter(boxes[tissueInspectKey]).x} y1={boxCenter(boxes[tissueInspectKey]).y}
-            x2={tCell.x} y2={tCell.y}
-            stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
-          />
-        )}
+        {/* tissue inspect popup → inspected neuron (center-to-center via nerve circle if available) */}
+        {boxes[tissueInspectKey] && hasAnyTissueWeights && tCell && (() => {
+          const start = nerveLineStart ?? boxCenter(boxes[tissueInspectKey]);
+          return (
+            <line
+              x1={start.x} y1={start.y}
+              x2={tCell.x} y2={tCell.y}
+              stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
+            />
+          );
+        })()}
 
         {/* input inspect popup → inspected neuron */}
         {inputInspectKey && boxes[inputInspectKey] && tCell && (

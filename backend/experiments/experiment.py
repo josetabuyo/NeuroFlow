@@ -71,6 +71,8 @@ class RegionState:
     tension_fns: list[tuple[str, float]] = field(default_factory=list)
     neuron_labels: list[list[str]] | None = None
 
+    handler_method: str | None = None
+
     # Runtime state (source regions)
     char_index: int = 0
     frame_in_char: int = 0
@@ -454,6 +456,7 @@ class Experiment(Experimento):
         self._regions_by_id: dict[str, RegionState] = {}
         self._connections: list[dict[str, Any]] = []
         self._nerve_circles: list[dict] = []
+        self._handler: object | None = None
 
         # Tissue shortcuts (the first wiring region; used for grid/get_frame/stats)
         self._tissue: RegionState | None = None
@@ -478,6 +481,35 @@ class Experiment(Experimento):
         self._is_wolfram: bool = False
         self._n_classes: int = 0
         self._rng: np.random.Generator = np.random.default_rng()
+
+    # ── Handler ──
+
+    def _load_handler(self, handler_name: str | None) -> None:
+        if not handler_name:
+            self._handler = None
+            return
+        import importlib
+        module_name = handler_name.lower()
+        try:
+            mod = importlib.import_module(f"experiments.handlers.{module_name}")
+            cls = getattr(mod, handler_name)
+            self._handler = cls()
+        except (ImportError, AttributeError) as exc:
+            logger.warning("Could not load handler '%s': %s", handler_name, exc)
+            self._handler = None
+
+    def _apply_handler_methods(self) -> None:
+        """Call handler methods to populate neuron_labels for regions that declare one."""
+        if self._handler is None:
+            return
+        for rs in self._regions:
+            if not rs.handler_method:
+                continue
+            method = getattr(self._handler, rs.handler_method, None)
+            if callable(method):
+                result = method()
+                if isinstance(result, list):
+                    rs.neuron_labels = result
 
     # ── Region helpers ──
 
@@ -544,6 +576,7 @@ class Experiment(Experimento):
         config = _inject_wiring_from_connections(config)  # internal copy with wiring in regions
         self.generation = 0
         self._nerve_circles = []
+        self._load_handler(config.get("handler"))
 
         region_cfgs = config["regions"]
         connections = config.get("connections", [])
@@ -602,9 +635,12 @@ class Experiment(Experimento):
                 process_mode=wiring_cfg.get("process_mode", "min_vs_max"),
                 tension_fns=_tension_fns_of(rc),
                 neuron_labels=rc.get("neuron_labels"),
+                handler_method=rc.get("handler_method"),
             )
             self._regions.append(rs)
             self._regions_by_id[rs.id] = rs
+
+        self._apply_handler_methods()
 
         self._tissue = self._wiring_regions()[0]
         self._mask_type = "kohonen"
@@ -790,8 +826,10 @@ class Experiment(Experimento):
         to_cfg = nerve_cfg.get("to") or {}
 
         circles = place_nerve_circles(nerve_cfg, on_rs.width, on_rs.height, rng)
+        to_rs_id = self._regions_by_id.get(to_cfg.get("region"), None)
         self._nerve_circles.append({
             "on": on_rs.id,
+            "to": to_rs_id.id if to_rs_id else None,
             "circles": [{"cx": c.cx, "cy": c.cy, "radius": c.radius} for c in circles],
         })
 
@@ -1506,6 +1544,11 @@ class Experiment(Experimento):
         for entry in self._nerve_circles:
             if entry["on"] != self._tissue_id:
                 continue
+            # When inspecting a non-tissue region, only include circles wired to it
+            if not is_tissue:
+                to_id = entry.get("to")
+                if to_id is not None and to_id != target.id:
+                    continue
             tissue_nerve_circles.extend(entry["circles"])
 
         result: dict[str, Any] = {
