@@ -14,6 +14,8 @@ interface PixelCanvasProps {
    * The normal activation grid is ignored.
    */
   weightGrid?: (number | null)[][] | null;
+  nerveCircles?: Array<{ cx: number; cy: number; radius: number }> | null;
+  overlayGrid?: (number | null)[][] | null;
   neuronLabels?: (string | null)[][] | null;
   inspectedCell?: { x: number; y: number } | null;
   onCellClick: (x: number, y: number) => void;
@@ -67,6 +69,8 @@ export function PixelCanvas({
   width,
   height,
   weightGrid,
+  nerveCircles,
+  overlayGrid,
   neuronLabels,
   inspectedCell,
   onCellClick,
@@ -110,6 +114,28 @@ export function PixelCanvas({
         for (let col = 0; col < Math.min(width, weightGrid[row]?.length ?? 0); col++) {
           ctx.fillStyle = weightToColor(weightGrid[row][col]);
           ctx.fillRect(col * cellSize, row * cellSize, cellSize - 1, cellSize - 1);
+        }
+      }
+      if (overlayGrid && overlayGrid.length > 0) {
+        for (let row = 0; row < Math.min(height, overlayGrid.length); row++) {
+          for (let col = 0; col < Math.min(width, overlayGrid[row]?.length ?? 0); col++) {
+            const v = overlayGrid[row][col];
+            if (v === null || v === 0) continue;
+            const alpha = Math.min(0.8, Math.abs(v) * 0.75);
+            ctx.fillStyle = `rgba(255, 140, 0, ${alpha})`;
+            ctx.fillRect(col * cellSize, row * cellSize, cellSize - 1, cellSize - 1);
+          }
+        }
+      }
+      if (nerveCircles && nerveCircles.length > 0) {
+        ctx.strokeStyle = "rgba(0, 220, 255, 0.6)";
+        ctx.lineWidth = 1.5;
+        for (const c of nerveCircles) {
+          const px = c.cx * cellSize + cellSize / 2;
+          const py = c.cy * cellSize + cellSize / 2;
+          ctx.beginPath();
+          ctx.arc(px, py, c.radius * cellSize, 0, 2 * Math.PI);
+          ctx.stroke();
         }
       }
       return;
@@ -186,7 +212,7 @@ export function PixelCanvas({
         }
       }
     }
-  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, neuronLabels, inspectedCell, getCellSize, hoverCell, brushSize, brushMode, isDragging]);
+  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, nerveCircles, overlayGrid, neuronLabels, inspectedCell, getCellSize, hoverCell, brushSize, brushMode, isDragging]);
 
   useEffect(() => { draw(); }, [draw]);
 

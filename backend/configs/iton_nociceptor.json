@@ -1,8 +1,8 @@
 {
   "name": "ITON: Nociceptor Study",
-  "description": "Stage 3 ITON: tissue forms daemons tracking input, output learns to reconstruct, nociceptor fires on error.",
+  "description": "Stage 3 ITON: tissue forms daemons tracking input, output learns to reconstruct, nociceptor fires on error. Nerve bundles connect nociceptor and output through tissue.",
   "config": {
-    "description": "ITON nociceptor experiment. Tissue forms daemons driven by input. Output learns to reconstruct input pattern. Nociceptor fires on reconstruction error.",
+    "description": "ITON nociceptor experiment. Tissue forms daemons driven by input. Output learns to reconstruct input pattern. Nociceptor fires on reconstruction error. Paired nerves: one circle per output neuron, adjacently placed on tissue.",
     "regions": [
       {
         "id": "input",
@@ -38,8 +38,8 @@
       {
         "id": "output",
         "grid": {
-          "width": 40,
-          "height": 20
+          "width": 1,
+          "height": 2
         },
         "neuron_labels": [["L"], ["T"]],
         "tension": {
@@ -92,15 +92,14 @@
           "excitatory": {
             "weight": 0.65,
             "offset": 1,
-            "noise": 0.5,
-            "weights": [1, 1, 1]
+            "noise": 0.0,
+            "weights": [1]
           },
           "inhibitory": {
-            "weight": -0.92,
-            "offset": 3,
-            "noise": 0.5,
-            "sectors": 12,
-            "weights": [1, 1, 1, 1, 1, 1]
+            "weight": -1.0,
+            "offset": 1,
+            "noise": 0.0,
+            "weights": [1]
           }
         }
       },
@@ -114,21 +113,22 @@
         }
       },
       {
-        "from": "tissue",
-        "to": "output",
-        "full": {
-          "weight": 0.65,
-          "density": 0.4,
-          "learning": { "rate": 0.002 }
-        }
-      },
-      {
-        "from": "nociceptor",
-        "to": "output",
-        "full": {
-          "weight": 0,
-          "density": 0.3,
-          "learning": { "rate": 0 }
+        "on": "tissue",
+        "nerve": {
+          "insertion": "random",
+          "paired": true,
+          "radius": 6,
+          "from": {
+            "region": "nociceptor",
+            "density": 0.5,
+            "weight": -0.005
+          },
+          "to": {
+            "region": "output",
+            "density": 0.02,
+            "weight": 0.65,
+            "learning": { "rate": 0.002 }
+          }
         }
       }
     ]

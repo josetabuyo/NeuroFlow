@@ -35,6 +35,7 @@ from core.region import Region
 from core.sinapsis import Sinapsis
 from core.dendrita import Dendrita
 from core.masks import get_mask, get_mask_type, get_random_weights, compile_deamon_wiring
+from core.nerve import place_nerve_circles, circle_cells_with_weights, NerveCircle
 from core.ascii_renderer import render_char, apply_white_noise, apply_shift_noise
 from .base import Experimento
 
@@ -149,7 +150,7 @@ def _migrate_config(config: dict[str, Any]) -> dict[str, Any]:
     new_conns: list[dict[str, Any]] = []
     for conn in config.get("connections", []):
         ctype = conn.get("type")
-        if "on" in conn and "deamon" not in conn:
+        if "on" in conn and "deamon" not in conn and "nerve" not in conn:
             # Old-style intra-region connection → deamon key
             deamon: dict[str, Any] = {}
             for k in ("mask", "shape", "centroid", "fixed"):
@@ -221,7 +222,7 @@ def _inject_wiring_from_connections(config: dict[str, Any]) -> dict[str, Any]:
     import copy
     config = copy.deepcopy(config)
     connections = config.get("connections", [])
-    on_conns = [c for c in connections if "on" in c]
+    on_conns = [c for c in connections if "on" in c and "nerve" not in c]
     if not on_conns:
         return config
     region_map = {r["id"]: r for r in config.get("regions", [])}
@@ -243,7 +244,7 @@ def _inject_wiring_from_connections(config: dict[str, Any]) -> dict[str, Any]:
             if lr is not None:
                 wiring["learning_rate"] = lr
         r["wiring"] = wiring
-    config["connections"] = [c for c in connections if "on" not in c]
+    config["connections"] = [c for c in connections if "on" not in c or "nerve" in c]
     return config
 
 
@@ -451,6 +452,7 @@ class Experiment(Experimento):
         self._regions: list[RegionState] = []
         self._regions_by_id: dict[str, RegionState] = {}
         self._connections: list[dict[str, Any]] = []
+        self._nerve_circles: list[dict] = []
 
         # Tissue shortcuts (the first wiring region; used for grid/get_frame/stats)
         self._tissue: RegionState | None = None
@@ -540,6 +542,7 @@ class Experiment(Experimento):
         self._config = config
         config = _inject_wiring_from_connections(config)  # internal copy with wiring in regions
         self.generation = 0
+        self._nerve_circles = []
 
         region_cfgs = config["regions"]
         connections = config.get("connections", [])
@@ -720,6 +723,9 @@ class Experiment(Experimento):
         self._last_history_gen = -1
 
     def _wire_connection(self, conn: dict[str, Any]) -> None:
+        if "nerve" in conn:
+            self._wire_nerve_connection(conn)
+            return
         src = self._regions_by_id.get(conn.get("from"))
         dst = self._regions_by_id.get(conn.get("to"))
         if src is None or dst is None:
@@ -772,6 +778,134 @@ class Experiment(Experimento):
             ]
             dst_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
 
+    def _wire_nerve_connection(self, conn: dict[str, Any]) -> None:
+        on_rs = self._regions_by_id.get(conn.get("on"))
+        if on_rs is None:
+            return
+        nerve_cfg = conn["nerve"]
+        rng = random.Random()
+
+        from_cfg = nerve_cfg.get("from") or {}
+        to_cfg = nerve_cfg.get("to") or {}
+        paired = bool(nerve_cfg.get("paired", False))
+
+        if paired and to_cfg:
+            to_rs = self._regions_by_id.get(to_cfg.get("region"))
+            if to_rs is not None:
+                n_to = to_rs.n
+                # One circle per to-neuron; use random_glue for adjacent placement
+                paired_cfg = dict(nerve_cfg)
+                paired_cfg["count"] = n_to
+                if nerve_cfg.get("insertion", "random") == "random":
+                    paired_cfg["insertion"] = "random_glue"
+                circles = place_nerve_circles(paired_cfg, on_rs.width, on_rs.height, rng)
+                self._nerve_circles.append({
+                    "on": on_rs.id,
+                    "circles": [{"cx": c.cx, "cy": c.cy, "radius": c.radius} for c in circles],
+                })
+                if from_cfg:
+                    from_rs = self._regions_by_id.get(from_cfg.get("region"))
+                    if from_rs:
+                        self._wire_nerve_from(circles, on_rs, from_rs, from_cfg)
+                to_neurons = list(self.regiones[to_rs.id].neuronas.values())
+                self._wire_nerve_to_paired(circles, on_rs, to_neurons, to_cfg)
+                return
+
+        circles = place_nerve_circles(nerve_cfg, on_rs.width, on_rs.height, rng)
+        self._nerve_circles.append({
+            "on": on_rs.id,
+            "circles": [{"cx": c.cx, "cy": c.cy, "radius": c.radius} for c in circles],
+        })
+
+        if from_cfg:
+            from_rs = self._regions_by_id.get(from_cfg.get("region"))
+            if from_rs:
+                self._wire_nerve_from(circles, on_rs, from_rs, from_cfg)
+
+        if to_cfg:
+            to_rs2 = self._regions_by_id.get(to_cfg.get("region"))
+            if to_rs2:
+                self._wire_nerve_to(circles, on_rs, to_rs2, to_cfg)
+
+    def _wire_nerve_from(
+        self,
+        circles: list[NerveCircle],
+        on_rs: RegionState,
+        from_rs: RegionState,
+        from_cfg: dict[str, Any],
+    ) -> None:
+        """Wire: from_region neurons → on_region neurons inside circles."""
+        density = float(from_cfg.get("density", 0.1))
+        weight = float(from_cfg.get("weight", 0.5))
+        from_neurons = list(self.regiones[from_rs.id].neuronas.values())
+        on_neurons = list(self.regiones[on_rs.id].neuronas.values())
+        k = max(1, round(len(from_neurons) * density))
+        for circle in circles:
+            for x, y, gradient in circle_cells_with_weights(circle, on_rs.width, on_rs.height):
+                if random.random() > gradient:
+                    continue
+                tissue_n = on_neurons[y * on_rs.width + x]
+                sampled = random.sample(from_neurons, min(k, len(from_neurons)))
+                sinapsis_list = [
+                    Sinapsis(neurona_entrante=s, peso=gradient)
+                    for s in sampled
+                ]
+                tissue_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
+
+    def _wire_nerve_to(
+        self,
+        circles: list[NerveCircle],
+        on_rs: RegionState,
+        to_rs: RegionState,
+        to_cfg: dict[str, Any],
+    ) -> None:
+        """Wire: on_region neurons inside circles → to_region neurons."""
+        density = float(to_cfg.get("density", 0.1))
+        weight = float(to_cfg.get("weight", 0.5))
+        to_neurons = list(self.regiones[to_rs.id].neuronas.values())
+        on_neurons = list(self.regiones[on_rs.id].neuronas.values())
+        for circle in circles:
+            participating: list[tuple[Neurona, float]] = []
+            for x, y, gradient in circle_cells_with_weights(circle, on_rs.width, on_rs.height):
+                if random.random() <= gradient:
+                    participating.append((on_neurons[y * on_rs.width + x], gradient))
+            if not participating:
+                continue
+            k = max(1, round(len(participating) * density))
+            for to_n in to_neurons:
+                sampled = random.sample(participating, min(k, len(participating)))
+                sinapsis_list = [
+                    Sinapsis(neurona_entrante=n, peso=grad)
+                    for n, grad in sampled
+                ]
+                to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
+
+    def _wire_nerve_to_paired(
+        self,
+        circles: list[NerveCircle],
+        on_rs: RegionState,
+        to_neurons: list[Neurona],
+        to_cfg: dict[str, Any],
+    ) -> None:
+        """Wire: on_region neurons in circles[i] → to_neurons[i] exclusively (paired mode)."""
+        density = float(to_cfg.get("density", 0.1))
+        weight = float(to_cfg.get("weight", 0.5))
+        on_neurons = list(self.regiones[on_rs.id].neuronas.values())
+        for circle, to_n in zip(circles, to_neurons):
+            participating: list[tuple[Neurona, float]] = []
+            for x, y, gradient in circle_cells_with_weights(circle, on_rs.width, on_rs.height):
+                if random.random() <= gradient:
+                    participating.append((on_neurons[y * on_rs.width + x], gradient))
+            if not participating:
+                continue
+            k = max(1, round(len(participating) * density))
+            sampled = random.sample(participating, min(k, len(participating)))
+            sinapsis_list = [
+                Sinapsis(neurona_entrante=n, peso=grad)
+                for n, grad in sampled
+            ]
+            to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
+
     def _compile(self) -> None:
         if self._is_wolfram:
             self.brain_tensor = ConstructorTensor.compilar(
@@ -787,13 +921,26 @@ class Experiment(Experimento):
             return
 
         region_specs = self._region_specs()
-        conn_spans = [
-            (s.start, s.end, d.start, d.end)
-            for c in self._connections
-            for s in [self._regions_by_id.get(c.get("from"))]
-            for d in [self._regions_by_id.get(c.get("to"))]
-            if s is not None and d is not None
-        ]
+        conn_spans: list[tuple[int, int, int, int]] = []
+        for c in self._connections:
+            if "nerve" in c:
+                on_rs = self._regions_by_id.get(c.get("on"))
+                if on_rs is None:
+                    continue
+                nerve_cfg = c["nerve"]
+                from_cfg = nerve_cfg.get("from") or {}
+                to_cfg = nerve_cfg.get("to") or {}
+                from_rs = self._regions_by_id.get(from_cfg.get("region")) if from_cfg else None
+                to_rs = self._regions_by_id.get(to_cfg.get("region")) if to_cfg else None
+                if from_rs:
+                    conn_spans.append((from_rs.start, from_rs.end, on_rs.start, on_rs.end))
+                if to_rs:
+                    conn_spans.append((on_rs.start, on_rs.end, to_rs.start, to_rs.end))
+            else:
+                s = self._regions_by_id.get(c.get("from"))
+                d = self._regions_by_id.get(c.get("to"))
+                if s is not None and d is not None:
+                    conn_spans.append((s.start, s.end, d.start, d.end))
 
         self.brain_tensor = ConstructorTensor.compilar(
             self.brain,
@@ -840,6 +987,31 @@ class Experiment(Experimento):
         # Cross-region connection synapses
         exclude_range: tuple[float, float] | None = None
         for c in self._connections:
+            if "nerve" in c:
+                nerve_cfg = c["nerve"]
+                on_rs = self._regions_by_id.get(c.get("on"))
+                if on_rs is None:
+                    continue
+                for side_key in ("from", "to"):
+                    side = nerve_cfg.get(side_key) or {}
+                    learning = side.get("learning")
+                    if not learning:
+                        continue
+                    rate = float(learning.get("rate", 0.0))
+                    if rate == 0.0:
+                        continue
+                    other_rs = self._regions_by_id.get(side.get("region"))
+                    if other_rs is None:
+                        continue
+                    if side_key == "from":
+                        dst_in = (dst_idx >= on_rs.start) & (dst_idx < on_rs.end)
+                        src_in = (src_safe >= other_rs.start) & (src_safe < other_rs.end)
+                    else:
+                        dst_in = (dst_idx >= other_rs.start) & (dst_idx < other_rs.end)
+                        src_in = (src_safe >= on_rs.start) & (src_safe < on_rs.end)
+                    conn_mask = dst_in & src_in & bt.mascara_valida
+                    lr = torch.where(conn_mask, torch.full_like(lr, rate), lr)
+                continue
             s = self._regions_by_id.get(c.get("from"))
             d = self._regions_by_id.get(c.get("to"))
             if s is None or d is None:
@@ -1357,6 +1529,11 @@ class Experiment(Experimento):
         activation = self.brain_tensor.valores[neuron_idx].item()
         tension = self.brain_tensor.tensiones[neuron_idx].item()
 
+        tissue_nerve_circles = [
+            c for entry in self._nerve_circles if entry["on"] == self._tissue_id
+            for c in entry["circles"]
+        ]
+
         result: dict[str, Any] = {
             "type": "connections",
             "x": x,
@@ -1368,6 +1545,8 @@ class Experiment(Experimento):
             "total_sinapsis": total_sinapsis,
             "weight_grid": weight_grid,
         }
+        if tissue_nerve_circles:
+            result["nerve_circles"] = tissue_nerve_circles
 
         ascii_r = self._ascii_region()
         if ascii_r is not None and is_tissue:
@@ -1381,6 +1560,35 @@ class Experiment(Experimento):
             result["input_weight_height"] = ascii_r.height
         else:
             result["input_weight_grid"] = None
+
+        # Nociceptor → tissue grid (shown when inspecting non-tissue neurons)
+        if not is_tissue:
+            noc_rs = next(
+                (r for r in self._regions if r.source_type in ("label_mismatch", "error_diff")),
+                None,
+            )
+            if noc_rs is not None:
+                bt = self.brain_tensor
+                t_size = self._tissue.n
+                t_start = self._tissue.start
+                srcs_t = bt.indices_fuente[t_start : t_start + t_size]
+                ws_t   = bt.pesos_sinapsis[t_start : t_start + t_size]
+                dws_t  = bt.pesos_dendrita[t_start : t_start + t_size]
+                valid_t = bt.mascara_valida[t_start : t_start + t_size]
+                noc_mask = (srcs_t >= noc_rs.start) & (srcs_t < noc_rs.end) & valid_t
+                eff = ws_t * dws_t * noc_mask.float()
+                noc_flat = eff.sum(dim=1).cpu().tolist()
+                max_abs = max(abs(v) for v in noc_flat) if noc_flat else 0.0
+                if max_abs > 1e-9:
+                    inv = 1.0 / max_abs
+                    noc_grid: list[list[float | None]] = []
+                    for r in range(self.height):
+                        row_g: list[float | None] = []
+                        for c in range(self.width):
+                            v = noc_flat[r * self.width + c]
+                            row_g.append(round(v * inv, 4) if abs(v) > 1e-12 else None)
+                        noc_grid.append(row_g)
+                    result["nociceptor_tissue_grid"] = noc_grid
 
         # Generic per-source-region grids (output / nociceptor / etc.)
         for src_region in self._regions:
@@ -1445,6 +1653,16 @@ class Experiment(Experimento):
         if not needs_reconnect:
             # Inter-region connection topology (weights / density / from / to) → rebuild
             def conn_key(c: dict) -> tuple:
+                if "nerve" in c:
+                    nerve = c["nerve"]
+                    return (
+                        "nerve", c.get("on"),
+                        nerve.get("insertion"), nerve.get("count"),
+                        nerve.get("radius"),
+                        nerve.get("paired", False),
+                        (nerve.get("from") or {}).get("region"),
+                        (nerve.get("to") or {}).get("region"),
+                    )
                 _full = c.get("full") or {}
                 return (c.get("from"), c.get("to"),
                         "full" if "full" in c else c.get("type"),

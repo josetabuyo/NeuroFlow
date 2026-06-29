@@ -28,6 +28,8 @@ interface UseExperimentReturn {
   inputWeightDims: { width: number; height: number } | null;
   outputWeightGrid: (number | null)[][] | null;
   nociceptorWeightGrid: (number | null)[][] | null;
+  nociceptorTissueGrid: (number | null)[][] | null;
+  nerveCircles: Array<{ cx: number; cy: number; radius: number }> | null;
   regions: Record<string, number[][]>;
   tensionRegions: Record<string, number[][]>;
   tissueId: string;
@@ -94,6 +96,8 @@ export function useExperiment(): UseExperimentReturn {
   const [inputWeightDims, setInputWeightDims] = useState<{ width: number; height: number } | null>(null);
   const [outputWeightGrid, setOutputWeightGrid] = useState<(number | null)[][] | null>(null);
   const [nociceptorWeightGrid, setNociceptorWeightGrid] = useState<(number | null)[][] | null>(null);
+  const [nociceptorTissueGrid, setNociceptorTissueGrid] = useState<(number | null)[][] | null>(null);
+  const [nerveCircles, setNerveCircles] = useState<Array<{ cx: number; cy: number; radius: number }> | null>(null);
   const [regions, setRegions] = useState<Record<string, number[][]>>({});
   const [tensionRegions, setTensionRegions] = useState<Record<string, number[][]>>({});
   const [tissueId, setTissueId] = useState<string>("tissue");
@@ -154,6 +158,8 @@ export function useExperiment(): UseExperimentReturn {
             }
             setOutputWeightGrid(msg.inspect.output_weight_grid ?? null);
             setNociceptorWeightGrid(msg.inspect.nociceptor_weight_grid ?? null);
+            setNociceptorTissueGrid(msg.inspect.nociceptor_tissue_grid ?? null);
+            setNerveCircles(msg.inspect.nerve_circles ?? null);
           }
           break;
         case "connections":
@@ -174,6 +180,8 @@ export function useExperiment(): UseExperimentReturn {
           }
           setOutputWeightGrid(msg.output_weight_grid ?? null);
           setNociceptorWeightGrid(msg.nociceptor_weight_grid ?? null);
+          setNociceptorTissueGrid(msg.nociceptor_tissue_grid ?? null);
+          setNerveCircles(msg.nerve_circles ?? null);
           break;
         case "status":
           setState(msg.state);
@@ -254,6 +262,8 @@ export function useExperiment(): UseExperimentReturn {
     setInspectedCell(null);
     setInspectedRegionId(null);
     setInspectInfo(null);
+    setNociceptorTissueGrid(null);
+    setNerveCircles(null);
     setState("initializing");
     send({ action: "reset" });
   }, [send]);
@@ -295,6 +305,8 @@ export function useExperiment(): UseExperimentReturn {
         setInputWeightDims(null);
         setOutputWeightGrid(null);
         setNociceptorWeightGrid(null);
+        setNociceptorTissueGrid(null);
+        setNerveCircles(null);
         send({ action: "uninspect" });
       }
       return !prev;
@@ -316,6 +328,8 @@ export function useExperiment(): UseExperimentReturn {
     inputWeightDims,
     outputWeightGrid,
     nociceptorWeightGrid,
+    nociceptorTissueGrid,
+    nerveCircles,
     regions,
     tensionRegions,
     tissueId,
