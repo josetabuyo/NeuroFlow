@@ -71,6 +71,80 @@ See [Roadmap](../../docs/STAGES.md) for details on each stage.
 
 ---
 
+## Config Reference
+
+The canonical config is a JSON object with `regions[]` and `connections[]`.
+
+### Region fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique region identifier |
+| `grid.width` / `grid.height` | int | Neuron grid dimensions |
+| `wiring` | object | Intra-region connectivity (makes neurons regular `Neurona`) |
+| `source` | object | External injection (makes neurons `NeuronaEntrada`) |
+| `threshold` / `umbral` | float | Firing threshold, default `0.0` |
+| `process_mode` | string | Tension combination: `min_vs_max` (default), `sum`, `avg_vs_avg`, `avg_vs_avg_normalized`, `pos_vs_neg`, `group_avg` |
+| `activation` | string | `"soft"` — maps tension directly to `[0,1]` instead of binary threshold (see below) |
+| `tension.function` | object | Composable tension transform: `{"x": N, "x_pow_2": N, "x_pow_3": N, "b": N}` |
+| `spiking` | object | Spike-frequency adaptation: `{"up_ticks": N, "down_ticks": N}` |
+
+### `activation: "soft"`
+
+When set on any region with `wiring`, neurons output their surface tension clamped
+to `[0, 1]` instead of firing binary 0/1.
+
+```json
+{
+  "id": "output",
+  "grid": { "width": 4, "height": 4 },
+  "wiring": { "deamon": { ... } },
+  "activation": "soft"
+}
+```
+
+**Applies to:** any region — tissue, output, nociceptor with wiring.
+**Not applicable to:** pure source regions (`NeuronaEntrada`), which always
+  take their values from external injection.
+
+**Effect on serialization:** `get_region_frames()` emits 3-decimal floats
+  instead of rounded 0/1 for soft regions, so the frontend receives the full
+  analog signal.
+
+**Typical use cases:**
+- Output region as a continuous classifier score instead of winner-take-all
+- Nociceptor region that propagates graded error magnitude rather than spikes
+- Any intermediate region where preserving analog information matters
+
+### `wiring` fields
+
+| Field | Description |
+|-------|-------------|
+| `deamon` | Intra-region daemon wiring (shape, excitatory, inhibitory, fixed) |
+| `process_mode` | Overrides the region-level `process_mode` |
+| `learning_rate` | Learning rate for intra-region synapses (0 = frozen) |
+
+### `source` types
+
+| `type` | Description |
+|--------|-------------|
+| `"ascii"` | Rendered text / synthetic patterns (`HALF_TOP`, `HALF_BOT`, …) |
+| `"label"` | One-hot class signal (supervised target) |
+| `"error_diff"` | `abs(target − output)` diff each step (nociceptor) |
+| `"label_mismatch"` | Fires when label ≠ predicted class (nociceptor) |
+| `"draw"` | User-painted values, with optional background noise |
+
+### Connection fields
+
+| Field | Description |
+|-------|-------------|
+| `from` / `to` | Source and destination region IDs |
+| `full.weight` | Dendrite weight for the connection |
+| `full.density` | Fraction of source neurons each dest neuron connects to |
+| `full.learning.rate` | Learning rate for this connection (0 = frozen) |
+
+---
+
 ## How to add an experiment
 
 1. Create a new file in this folder (e.g. `dynamic_som.py`)

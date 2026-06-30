@@ -69,6 +69,7 @@ class RegionState:
     umbral: float = 0.0
     process_mode: str = "min_vs_max"
     tension_fns: list[tuple[str, float]] = field(default_factory=list)
+    soft_activation: bool = False
     neuron_labels: list[list[str]] | None = None
 
     handler_method: str | None = None
@@ -520,15 +521,15 @@ class Experiment(Experimento):
         """Regions whose neurons are processed by BrainTensor (all non-NeuronaEntrada)."""
         return [r for r in self._regions if not r.is_entrada]
 
-    def _region_specs(self) -> list[tuple[int, int, str, list]]:
-        """Per-region (start, end, mode, fns). Regions without wiring inherit the
+    def _region_specs(self) -> list[tuple[int, int, str, list, bool]]:
+        """Per-region (start, end, mode, fns, soft). Regions without wiring inherit the
         wiring region's process_mode/tension_fns (matching legacy output behaviour)."""
         specs = []
         for r in self._processed_regions():
             if r.has_wiring:
-                specs.append((r.start, r.end, r.process_mode, r.tension_fns))
+                specs.append((r.start, r.end, r.process_mode, r.tension_fns, r.soft_activation))
             else:
-                specs.append((r.start, r.end, self.process_mode, r.tension_fns))
+                specs.append((r.start, r.end, self.process_mode, r.tension_fns, r.soft_activation))
         return specs
 
     def _ascii_region(self) -> RegionState | None:
@@ -636,6 +637,7 @@ class Experiment(Experimento):
                 umbral=_get_threshold(rc),
                 process_mode=wiring_cfg.get("process_mode", "min_vs_max"),
                 tension_fns=_tension_fns_of(rc),
+                soft_activation=rc.get("activation") == "soft",
                 neuron_labels=rc.get("neuron_labels"),
                 handler_method=rc.get("handler_method"),
             )
@@ -1371,6 +1373,8 @@ class Experiment(Experimento):
             vals = self._region_values(rs).reshape(rs.height, rs.width).tolist()
             if rs.is_entrada and rs.source_type not in (None, "draw"):
                 result[rs.id] = [[round(v, 3) for v in row] for row in vals]
+            elif rs.soft_activation:
+                result[rs.id] = [[round(v, 3) for v in row] for row in vals]
             else:
                 result[rs.id] = [[round(v) for v in row] for row in vals]
         return result
@@ -1751,6 +1755,7 @@ class Experiment(Experimento):
                 rs.process_mode = new_wiring.get("process_mode", "min_vs_max")
             if not rs.is_entrada:
                 rs.tension_fns = _tension_fns_of(new_r)
+                rs.soft_activation = new_r.get("activation") == "soft"
 
             if not rs.is_entrada:
                 new_umbral = _get_threshold(new_r)
@@ -1770,6 +1775,7 @@ class Experiment(Experimento):
             self.brain_tensor.process_mode = self.process_mode
             self.brain_tensor.tension_fns = self._wiring_region.tension_fns
         self.brain_tensor.region_specs = self._region_specs()
+        self.brain_tensor.soft_mask = self.brain_tensor._build_soft_mask()
 
         new_wiring_cfg = new_regions.get(self._wiring_region.id, {}) if self._wiring_region else {}
         new_spiking = new_wiring_cfg.get("spiking")

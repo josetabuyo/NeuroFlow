@@ -32,7 +32,7 @@ class ConstructorTensor:
         tension_fn_param: float = 1.0,
         tension_fns: list[tuple[str, float]] | None = None,
         connections: list[tuple[int, int, int, int]] | None = None,
-        region_specs: list[tuple[int, int, str, list]] | None = None,
+        region_specs: list[tuple[int, int, str, list, bool]] | None = None,
     ) -> BrainTensor:
         """Convert a sequential Brain into a parallel BrainTensor.
 
@@ -43,7 +43,7 @@ class ConstructorTensor:
                 A synapse is cross-region when its destination is in [dst_start, dst_end)
                 and its source is in [src_start, src_end). Used to mark es_cross_region
                 generically (group_avg needs it to separate distant from local dendrites).
-            region_specs: per-region (start, end, process_mode, tension_fns) overrides.
+            region_specs: per-region (start, end, process_mode, tension_fns, soft_activation) overrides.
 
         Returns:
             A BrainTensor ready for vectorized processing.

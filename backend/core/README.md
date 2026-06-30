@@ -46,13 +46,17 @@ Input branch that groups synapses and combines them.
 
 The decision unit. Contains dendrites and resolves the competition.
 
-- **Value**: `{0, 1}` — active or inactive
+- **Value**: `{0, 1}` — active or inactive (or analog `[0, 1]` in soft mode)
 - **Surface tension**: `[-1, 1]` — accumulation before threshold
-- **Processing**:
+- **Processing (binary, default)**:
   1. `max_dendrite = max(dendrites.value)` (excitation)
   2. `min_dendrite = min(dendrites.value)` (inhibition, if negative)
   3. `tension = max + min` (competition)
   4. If `tension > threshold` → active (1), otherwise → inactive (0)
+- **Processing (soft mode, `activation: "soft"` on the region)**:
+  - Steps 1–3 identical
+  - `value = clamp(tension, 0, 1)` — analog output instead of binary threshold
+  - Enables continuous/graded signals; useful for output and nociceptor regions
 - Fuzzy OR: any positive dendrite can activate
 - But negative dendrites can inhibit
 

@@ -205,3 +205,71 @@ class TestBrainTensorProcessing:
         for i in range(N):
             v = brain_tensor.valores[i].item()
             assert v == 0.0 or v == 1.0, f"Neurona {i}: valor={v} (expected 0 or 1)"
+
+
+class TestSoftActivation:
+    """Neurons in soft regions output tension clamped to [0,1], not binary."""
+
+    def test_soft_produces_analog_values(self):
+        """With activation=soft all neurons output non-binary values in [0,1]."""
+        random.seed(42)
+        constructor = Constructor()
+        brain, _ = constructor.crear_grilla(
+            width=6, height=6, filas_entrada=[], filas_salida=[], umbral=0.5,
+        )
+        constructor.aplicar_mascara_2d(brain, 6, 6, MASK_SIMPLE)
+        for n in brain.neuronas:
+            n.activar_external(random.random())
+
+        N = 36
+        region_specs = [(0, N, "min_vs_max", [], True)]
+        bt = ConstructorTensor.compilar(brain, region_specs=region_specs)
+        bt.procesar()
+
+        vals = bt.valores[:N].tolist()
+        assert all(0.0 <= v <= 1.0 for v in vals), "Soft values must stay in [0,1]"
+        non_binary = [v for v in vals if 0.001 < v < 0.999]
+        assert len(non_binary) > 0, "Soft activation must produce analog (non-0/1) values"
+
+    def test_soft_preserves_input_neurons(self):
+        """NeuronaEntrada values are preserved even when their region is soft."""
+        random.seed(7)
+        constructor = Constructor()
+        brain, _ = constructor.crear_grilla(
+            width=4, height=4, filas_entrada=[3], filas_salida=[], umbral=0.0,
+        )
+        constructor.aplicar_mascara_2d(brain, 4, 4, MASK_SIMPLE)
+        for n in brain.neuronas:
+            n.activar_external(0.7)
+
+        N = 16
+        region_specs = [(0, N, "min_vs_max", [], True)]
+        bt = ConstructorTensor.compilar(brain, region_specs=region_specs)
+        for i in range(12, 16):
+            bt.valores[i] = 0.3
+        bt.procesar()
+
+        for i in range(12, 16):
+            assert abs(bt.valores[i].item() - 0.3) < 1e-5, f"Input neuron {i} must be preserved"
+
+    def test_binary_region_still_binary_alongside_soft(self):
+        """Non-soft regions produce binary 0/1 even when other regions are soft."""
+        random.seed(13)
+        constructor = Constructor()
+        brain, _ = constructor.crear_grilla(
+            width=4, height=4, filas_entrada=[], filas_salida=[], umbral=0.0,
+        )
+        constructor.aplicar_mascara_2d(brain, 4, 4, MASK_SIMPLE)
+        for n in brain.neuronas:
+            n.activar_external(random.random())
+
+        N = 16
+        # First half binary, second half soft (no input neurons in this brain)
+        region_specs = [(0, 8, "min_vs_max", [], False), (8, N, "min_vs_max", [], True)]
+        bt = ConstructorTensor.compilar(brain, region_specs=region_specs)
+        bt.procesar()
+
+        # First 8 neurons: binary
+        for i in range(8):
+            v = bt.valores[i].item()
+            assert v == 0.0 or v == 1.0, f"Binary neuron {i} should be 0 or 1, got {v}"

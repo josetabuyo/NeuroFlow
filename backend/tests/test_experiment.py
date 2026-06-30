@@ -1134,3 +1134,96 @@ class TestThreshold:
         exp.step()
         vals = exp.brain_tensor.valores[inp.start:inp.end].tolist()
         assert any(v == 1.0 for v in vals), "ascii source must still inject 1s"
+
+
+class TestSoftActivation:
+    """activation: soft on a region produces analog (non-binary) neuron values."""
+
+    def test_soft_region_produces_analog_values(self) -> None:
+        """An output region with activation=soft yields floats in (0,1)."""
+        random.seed(42)
+        out_region = _wiring_region("output", 4, 4)
+        out_region["activation"] = "soft"
+        config = {
+            "regions": [
+                _wiring_region("tissue", 8, 8),
+                out_region,
+            ],
+            "connections": [
+                {"from": "tissue", "to": "output", "full": {"weight": 0.4}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+
+        out_rs = exp._regions_by_id["output"]
+        assert out_rs.soft_activation is True
+        assert exp.brain_tensor.soft_mask[out_rs.start:out_rs.end].all().item()
+
+        for _ in range(5):
+            exp.step()
+
+        vals = exp.brain_tensor.valores[out_rs.start:out_rs.end].tolist()
+        assert all(0.0 <= v <= 1.0 for v in vals)
+        # At least some analog values (not all 0.0 or 1.0)
+        non_binary = [v for v in vals if 0.001 < v < 0.999]
+        assert len(non_binary) > 0, "soft region should have analog values"
+
+    def test_soft_region_frames_use_decimal_precision(self) -> None:
+        """get_region_frames emits 3-decimal floats for soft regions."""
+        random.seed(42)
+        out_region = _wiring_region("out", 3, 3)
+        out_region["activation"] = "soft"
+        config = {
+            "regions": [
+                _wiring_region("tissue", 6, 6),
+                out_region,
+            ],
+            "connections": [
+                {"from": "tissue", "to": "out", "full": {"weight": 0.4}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        for _ in range(3):
+            exp.step()
+
+        frames = exp.get_region_frames()
+        out_vals = [v for row in frames["out"] for v in row]
+        # Soft region: values may have up to 3 decimal places (not rounded to 0/1)
+        assert all(0.0 <= v <= 1.0 for v in out_vals)
+
+    def test_soft_update_toggles_soft_activation(self) -> None:
+        """update_config can toggle activation: soft on/off without reconnect."""
+        random.seed(42)
+        config = {
+            "regions": [
+                _wiring_region("tissue", 5, 5),
+                _wiring_region("out", 3, 3),
+            ],
+            "connections": [
+                {"from": "tissue", "to": "out", "full": {"weight": 0.4}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        out_rs = exp._regions_by_id["out"]
+        assert out_rs.soft_activation is False
+        assert not exp.brain_tensor.soft_mask[out_rs.start:out_rs.end].any().item()
+
+        # Enable soft activation via soft update
+        out_soft = _wiring_region("out", 3, 3)
+        out_soft["activation"] = "soft"
+        config_soft = {
+            "regions": [
+                _wiring_region("tissue", 5, 5),
+                out_soft,
+            ],
+            "connections": [
+                {"from": "tissue", "to": "out", "full": {"weight": 0.4}},
+            ],
+        }
+        result = exp.update_config(config_soft)
+        assert result is True  # soft update — no reconnect
+        assert out_rs.soft_activation is True
+        assert exp.brain_tensor.soft_mask[out_rs.start:out_rs.end].all().item()

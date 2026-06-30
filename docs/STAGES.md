@@ -77,6 +77,7 @@ between SOMs and convolutional network layers (Deep Dream).
 | Unified `Experiment` class | Single class replaces per-experiment files. All features opt-in via config sections. |
 | Synthetic input patterns | `HALF_TOP`, `HALF_BOT`, `BARS_H`, `BARS_V`, `DOT_TL`, `DOT_BR` — no font needed |
 | Polynomial tension shaping | `tension_function: {"x": N, "x_pow_2": N, "x_pow_3": N}` — composable, soft param |
+| **Soft activation** | `"activation": "soft"` on any wiring region → `value = clamp(tension, 0, 1)` instead of binary threshold; enables analog output for output/nociceptor regions |
 | Config templates + history | Dropdown with presets, SQLite history per preset, JSON editor in UI |
 | Per-dendrite-type learning | `lr_exc`, `lr_inh`, `lr_input` multipliers on top of `rate` — allows freezing recurrent weights while training only input dendrites |
 | Input density | `input.density` (0–1) — fraction of input neurons each tissue neuron connects to; sparse connectivity promotes specialization |
@@ -324,9 +325,12 @@ The tissue→output weights learn via Hebbian rule:
 After the supervised classifier is validated, move to unsupervised reconstruction.
 The label source is replaced by an `error_diff` nociceptor that computes
 `diff(input_clean, output)` and inhibits the tissue neurons responsible for
-reconstruction errors.
+reconstruction errors. The output region uses `"activation": "soft"` so it
+produces a continuous reconstruction signal (not binary), which the `error_diff`
+nociceptor can meaningfully diff against the input.
 
-**Requires:** `error_diff` source, nociceptor→tissue inhibitory connection.
+**Requires:** `error_diff` source, nociceptor→tissue inhibitory connection,
+`"activation": "soft"` on the output region.
 
 ---
 

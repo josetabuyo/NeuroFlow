@@ -106,6 +106,17 @@ class BrainTensor:
         # Tension values (updated each procesar() call)
         self.tensiones = torch.zeros(self.N, device=device)
 
+        # Soft activation mask: neurons where activation = clamp(tension, 0, 1) instead of threshold
+        self.soft_mask = self._build_soft_mask()
+
+    def _build_soft_mask(self) -> torch.BoolTensor:
+        """Per-neuron bool: True means activation = clamp(tension, 0, 1) instead of threshold."""
+        mask = torch.zeros(self.N, dtype=torch.bool, device=self.device)
+        for spec in self.region_specs:
+            if len(spec) >= 5 and spec[4]:
+                mask[spec[0]:spec[1]] = True
+        return mask
+
     def _precompute_input_dendrite_mask(self) -> torch.BoolTensor:
         """Per-dendrite boolean: True if the dendrite is a distant (cross-region) connection."""
         NR = self._safe_dend_ids.shape[0]
@@ -239,7 +250,7 @@ class BrainTensor:
         tension = torch.zeros(NR, device=self.device)
 
         if self.region_specs:
-            for r_start, r_end, r_mode, r_fns in self.region_specs:
+            for r_start, r_end, r_mode, r_fns, *_ in self.region_specs:
                 t = self._compute_tension(dendrita_para_calc[r_start:r_end], r_mode, r_start, r_end)
                 if r_fns:
                     t = self._apply_tension_fns(t, r_fns)
@@ -257,7 +268,10 @@ class BrainTensor:
         mascara_real = self.mascara_entrada[:NR]
         valores_real = self.valores[:NR]
 
-        nuevos_valores = (tension > umbrales_real).float()  # [NR]
+        # 6. Activate: binary threshold for normal neurons, tension for soft neurons
+        binary = (tension > umbrales_real).float()
+        soft = tension.clamp(0.0, 1.0)
+        nuevos_valores = torch.where(self.soft_mask[:NR], soft, binary)
 
         # 7. Preserve NeuronaEntrada values
         self.valores[:NR] = torch.where(mascara_real, valores_real, nuevos_valores)
