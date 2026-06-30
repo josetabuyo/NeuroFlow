@@ -203,6 +203,17 @@ export interface PerfMetrics {
   steps_per_second: number;
 }
 
+export interface OrchestratorEvent {
+  index: number;
+  kind: "gradient" | "at";
+  tick_from?: number;
+  tick_to?: number;
+  tick?: number;
+  expr: string;
+  value?: number;
+  progress?: number;
+}
+
 export interface FrameMessage {
   type: "frame";
   generation: number;
@@ -218,6 +229,7 @@ export interface FrameMessage {
   input_id?: string;
   labels?: Record<string, number[][]>;
   neuron_label_map?: Record<string, string[][]>;
+  orchestrator?: OrchestratorEvent[];
 }
 
 export interface StatusMessage {

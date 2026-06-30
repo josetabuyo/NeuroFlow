@@ -6,6 +6,7 @@ import type {
   ExperimentConfig,
   ExperimentState,
   ExperimentStats,
+  OrchestratorEvent,
   PerfMetrics,
   RegionOverlay,
   ServerMessage,
@@ -34,6 +35,7 @@ interface UseExperimentReturn {
   inputId: string | null;
   labels: Record<string, number[][]>;
   neuronLabelMap: Record<string, string[][]>;
+  orchestratorState: OrchestratorEvent[];
   state: ExperimentState;
   stats: ExperimentStats | null;
   perf: PerfMetrics | null;
@@ -124,6 +126,7 @@ export function useExperiment(): UseExperimentReturn {
   const [inputId, setInputId] = useState<string | null>(null);
   const [labels, setLabels] = useState<Record<string, number[][]>>({});
   const [neuronLabelMap, setNeuronLabelMap] = useState<Record<string, string[][]>>({});
+  const [orchestratorState, setOrchestratorState] = useState<OrchestratorEvent[]>([]);
   const [experimentActive, setExperimentActive] = useState(false);
   const [brushSize, setBrushSize] = useState(1);
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
@@ -162,6 +165,7 @@ export function useExperiment(): UseExperimentReturn {
           if (msg.input_id !== undefined) setInputId(msg.input_id ?? null);
           setLabels(msg.labels ?? {});
           if (msg.neuron_label_map) setNeuronLabelMap(msg.neuron_label_map);
+          setOrchestratorState(msg.orchestrator ?? []);
           if (msg.inspect) {
             setConnectionMap(msg.inspect.weight_grid);
             setInspectedCell({ x: msg.inspect.x, y: msg.inspect.y });
@@ -350,6 +354,7 @@ export function useExperiment(): UseExperimentReturn {
     inputId,
     labels,
     neuronLabelMap,
+    orchestratorState,
     state,
     stats,
     perf,

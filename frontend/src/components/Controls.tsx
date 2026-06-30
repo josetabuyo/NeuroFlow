@@ -1,6 +1,6 @@
 /** Controls — Play/Pause/Step/Reset + stats display + steps per tick. */
 
-import type { ExperimentState, ExperimentStats, PerfMetrics } from "../types";
+import type { ExperimentState, ExperimentStats, OrchestratorEvent, PerfMetrics } from "../types";
 
 interface ControlsProps {
   state: ExperimentState;
@@ -8,6 +8,7 @@ interface ControlsProps {
   perf: PerfMetrics | null;
   generation: number;
   stepsPerTick: number;
+  orchestratorState?: OrchestratorEvent[];
   onPlay: () => void;
   onPause: () => void;
   onStep: () => void;
@@ -42,6 +43,7 @@ export function Controls({
   perf,
   generation,
   stepsPerTick,
+  orchestratorState = [],
   onPlay,
   onPause,
   onStep,
@@ -143,6 +145,44 @@ export function Controls({
           </>
         )}
       </div>
+
+      {/* Row 1b: orchestrator active events */}
+      {orchestratorState.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            fontSize: "0.75rem",
+            fontFamily: "monospace",
+            flexWrap: "wrap",
+            borderTop: "1px solid #1a1a3e",
+            paddingTop: "4px",
+          }}
+        >
+          {orchestratorState.map((ev) => {
+            const label = ev.expr.split("=")[0].trim();
+            if (ev.kind === "gradient") {
+              const pct = Math.round((ev.progress ?? 0) * 100);
+              return (
+                <span key={ev.index} title={ev.expr} style={{ color: "#888" }}>
+                  <span style={{ color: "#7b61ff" }}>~</span>
+                  {" "}{label}{" "}
+                  <strong style={{ color: "#f0a500" }}>
+                    {ev.value?.toFixed(4)}
+                  </strong>
+                  <span style={{ color: "#555" }}> ({pct}%)</span>
+                </span>
+              );
+            }
+            return (
+              <span key={ev.index} title={ev.expr} style={{ color: "#4ade80" }}>
+                <span style={{ color: "#4ade80" }}>✓</span>
+                {" "}{label}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* Row 2: buttons + steps/tick + perf + state */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>

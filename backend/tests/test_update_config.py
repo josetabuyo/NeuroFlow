@@ -288,13 +288,16 @@ class TestHardUpdates:
         cfg["connections"] = []
         assert exp.update_config(cfg) is False
 
-    def test_connection_weight_change_is_hard(self) -> None:
+    def test_connection_weight_change_is_soft(self) -> None:
+        # Weight is not topology — changing it applies to pesos_dendrita without rebuild.
         random.seed(1)
         exp = Experiment()
         exp.setup(_two_region_config())
+        gen_before = exp.generation
         cfg = copy.deepcopy(exp._config)
         cfg["connections"][0]["full"]["weight"] = 0.9
-        assert exp.update_config(cfg) is False
+        assert exp.update_config(cfg) is True
+        assert exp.generation == gen_before  # no reset
 
     def test_connection_density_change_is_hard(self) -> None:
         random.seed(1)

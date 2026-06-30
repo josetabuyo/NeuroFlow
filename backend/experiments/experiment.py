@@ -446,6 +446,33 @@ def _get_threshold(region_cfg: dict[str, Any]) -> float:
     return float(region_cfg.get("threshold", region_cfg.get("umbral", 0.0)))
 
 
+def _parse_orch_expr(expr: str) -> tuple[list, Any]:
+    """Parse 'path = value' orchestrator expression.
+
+    Examples:
+      "connections[4]['nerve']['to']['weight'] = 0.65"  → (['connections',4,'nerve','to','weight'], 0.65)
+      "regions[0]['text'] = '7'"                        → (['regions',0,'text'], '7')
+    """
+    import re, json as _json
+    if not expr or "=" not in expr:
+        return [], None
+    lhs, _, rhs = expr.partition("=")
+    lhs, rhs = lhs.strip(), rhs.strip()
+    try:
+        val: Any = _json.loads(rhs)
+    except Exception:
+        val = rhs.strip("'\"")
+    segs: list = []
+    for m in re.finditer(r'(\w+)|\[(\d+)\]|\[[\'"]([\w]+)[\'"]\]', lhs):
+        if m.group(1):
+            segs.append(m.group(1))
+        elif m.group(2):
+            segs.append(int(m.group(2)))
+        elif m.group(3):
+            segs.append(m.group(3))
+    return segs, val
+
+
 class Experiment(Experimento):
     """Unified NeuroFlow experiment, fully driven by the canonical config."""
 
@@ -482,6 +509,9 @@ class Experiment(Experimento):
         self._is_wolfram: bool = False
         self._n_classes: int = 0
         self._rng: np.random.Generator = np.random.default_rng()
+
+        # Orchestrator
+        self._orchestrator: list[dict[str, Any]] = []
 
     # ── Handler ──
 
@@ -576,6 +606,7 @@ class Experiment(Experimento):
         config = _to_canonical(config)
         config = _migrate_config(config)
         self._config = config
+        self._orchestrator = config.get("orchestrator", [])
         config = _inject_wiring_from_connections(config)  # internal copy with wiring in regions
         self.generation = 0
         self._nerve_circles = []
@@ -1032,6 +1063,195 @@ class Experiment(Experimento):
         self._conn_exclude_range = exclude_range
         self.learning_enabled = bool((lr != 0).any().item())
 
+    # ── Orchestrator ──
+
+    def _apply_orchestrator(self) -> None:
+        """Apply orchestrator events for the current generation tick.
+
+        Each entry supports:
+          {"from": {"tick": N, "set": "path = value"}, "to": {"tick": M, "set": "path = value"}}
+            → linear gradient from tick N to M
+          {"at": {"tick": N, "set": "path = value"}}
+            → one-shot at tick N
+
+        Both can coexist in the same entry for different paths.
+        """
+        if not self._orchestrator:
+            return
+        g = self.generation
+        for entry in self._orchestrator:
+            if "from" in entry and "to" in entry:
+                t0 = entry["from"].get("tick", 0)
+                t1 = entry["to"].get("tick", 0)
+                if t0 <= g <= t1:
+                    segs0, v0 = _parse_orch_expr(entry["from"].get("set", ""))
+                    segs1, v1 = _parse_orch_expr(entry["to"].get("set", ""))
+                    if segs0 and segs0 == segs1:
+                        try:
+                            t = (g - t0) / max(1, t1 - t0)
+                            val = float(v0) + t * (float(v1) - float(v0))
+                            self._apply_orch_segs(segs0, val)
+                        except (TypeError, ValueError):
+                            logger.warning("Orchestrator: gradient requires numeric values")
+            if "at" in entry and entry["at"].get("tick") == g:
+                segs, val = _parse_orch_expr(entry["at"].get("set", ""))
+                if segs:
+                    self._apply_orch_segs(segs, val)
+
+    def _apply_orch_segs(self, segs: list, value: Any) -> None:
+        if not segs or len(segs) < 2 or not isinstance(segs[1], int):
+            return
+        root, idx = segs[0], segs[1]
+        path = segs[2:]
+        if root == "connections":
+            # Use self._config["connections"] for user-visible indices (daemon entries included)
+            cfg_conns = self._config.get("connections", [])
+            if idx >= len(cfg_conns):
+                logger.warning("Orchestrator: connections[%d] out of range (%d entries)", idx, len(cfg_conns))
+                return
+            self._apply_orch_conn(cfg_conns[idx], path, value)
+        elif root == "regions":
+            self._apply_orch_reg(idx, path, value)
+        else:
+            logger.warning("Orchestrator: unknown root '%s'", root)
+
+    def _apply_orch_conn(self, conn: dict, path: list, value: Any) -> None:
+        """Apply orchestrator change to a connection config dict and the runtime state."""
+        leaf = path[-1] if path else None
+        if not leaf:
+            return
+
+        if "nerve" in conn:
+            nerve = conn["nerve"]
+            side_key = next((s for s in path if s in ("from", "to")), None)
+            if side_key is None:
+                return
+            side = nerve.get(side_key, {})
+            on_rs = self._regions_by_id.get(conn.get("on", ""))
+            other_rs = self._regions_by_id.get(side.get("region", ""))
+            if on_rs is None or other_rs is None:
+                return
+            if leaf == "weight":
+                src, dst = (other_rs, on_rs) if side_key == "from" else (on_rs, other_rs)
+                side["weight"] = float(value)
+                self._orch_set_dendrite_weight(src, dst, float(value))
+                # Sync internal _connections entry
+                self._sync_orch_internal_conn(conn, side_key, "weight", float(value))
+            elif leaf == "rate":
+                side.setdefault("learning", {})["rate"] = float(value)
+                self._sync_orch_internal_conn(conn, side_key, "rate", float(value))
+                self._rebuild_lr_per_syn()
+
+        elif "from" in conn and "to" in conn and "deamon" not in conn:
+            from_rs = self._regions_by_id.get(str(conn["from"]))
+            to_rs = self._regions_by_id.get(str(conn["to"]))
+            if from_rs is None or to_rs is None:
+                return
+            _full = conn.setdefault("full", {})
+            if leaf == "weight":
+                _full["weight"] = float(value)
+                self._orch_set_dendrite_weight(from_rs, to_rs, float(value))
+                # Sync internal
+                for c in self._connections:
+                    if c.get("from") == conn.get("from") and c.get("to") == conn.get("to"):
+                        c.setdefault("full", {})["weight"] = float(value)
+                        break
+            elif leaf == "rate":
+                _full.setdefault("learning", {})["rate"] = float(value)
+                for c in self._connections:
+                    if c.get("from") == conn.get("from") and c.get("to") == conn.get("to"):
+                        c.setdefault("full", {}).setdefault("learning", {})["rate"] = float(value)
+                        break
+                self._rebuild_lr_per_syn()
+
+    def _sync_orch_internal_conn(self, cfg_conn: dict, side_key: str, leaf: str, value: Any) -> None:
+        """Sync a nerve connection's side weight/rate to the matching self._connections entry."""
+        for c in self._connections:
+            if "nerve" not in c or c.get("on") != cfg_conn.get("on"):
+                continue
+            cfg_region = cfg_conn.get("nerve", {}).get(side_key, {}).get("region")
+            c_region = c.get("nerve", {}).get(side_key, {}).get("region")
+            if cfg_region and cfg_region == c_region:
+                side = c["nerve"].setdefault(side_key, {})
+                if leaf == "weight":
+                    side["weight"] = value
+                elif leaf == "rate":
+                    side.setdefault("learning", {})["rate"] = value
+                break
+
+    def _apply_orch_reg(self, idx: int, path: list, value: Any) -> None:
+        if idx >= len(self._regions):
+            return
+        rs = self._regions[idx]
+        leaf = path[-1] if path else None
+        if not leaf:
+            return
+        if leaf == "text" and rs.is_ascii_input:
+            new_source = {**rs.source_cfg, "text": str(value)}
+            self._soft_update_ascii(rs, new_source)
+            rs.source_cfg = new_source
+        else:
+            obj = rs.source_cfg
+            for seg in path[:-1]:
+                if not isinstance(obj, dict):
+                    return
+                obj = obj.setdefault(str(seg), {})
+            obj[leaf] = value
+
+    def _orch_set_dendrite_weight(self, src: "RegionState", dst: "RegionState", weight: float) -> None:
+        bt = self.brain_tensor
+        if bt is None:
+            return
+        NR = bt.n_real
+        max_syn = bt.pesos_sinapsis.shape[1]
+        src_safe = bt.indices_fuente.clamp(0, bt.mascara_entrada.shape[0] - 1)
+        dst_idx = torch.arange(NR, device=bt.device).unsqueeze(1).expand(NR, max_syn)
+        mask = (
+            (dst_idx >= dst.start) & (dst_idx < dst.end)
+            & (src_safe >= src.start) & (src_safe < src.end)
+            & bt.mascara_valida
+        )
+        bt.pesos_dendrita[mask] = weight
+        bt._dend_pesos, bt._dendrita_mascara = bt._precompute_dendrite_info()
+
+    def get_orchestrator_state(self) -> list[dict[str, Any]]:
+        """Return active orchestrator events for the current generation, with computed values."""
+        if not self._orchestrator:
+            return []
+        g = self.generation
+        active = []
+        for i, entry in enumerate(self._orchestrator):
+            if "from" in entry and "to" in entry:
+                t0 = entry["from"].get("tick", 0)
+                t1 = entry["to"].get("tick", 0)
+                if t0 <= g <= t1:
+                    segs0, v0 = _parse_orch_expr(entry["from"].get("set", ""))
+                    _, v1 = _parse_orch_expr(entry["to"].get("set", ""))
+                    try:
+                        t = (g - t0) / max(1, t1 - t0)
+                        val = float(v0) + t * (float(v1) - float(v0))
+                        active.append({
+                            "index": i,
+                            "kind": "gradient",
+                            "tick_from": t0,
+                            "tick_to": t1,
+                            "expr": entry["from"].get("set", ""),
+                            "value": round(val, 6),
+                            "progress": round(t, 4),
+                        })
+                    except (TypeError, ValueError):
+                        pass
+            if "at" in entry:
+                at_tick = entry["at"].get("tick")
+                if at_tick is not None and at_tick == g:
+                    active.append({
+                        "index": i,
+                        "kind": "at",
+                        "tick": at_tick,
+                        "expr": entry["at"].get("set", ""),
+                    })
+        return active
+
     # ── Source injection ──
 
     def _init_ascii_region(self, rs: RegionState) -> None:
@@ -1217,6 +1437,7 @@ class Experiment(Experimento):
     # ── Processing ──
 
     def step(self) -> dict[str, Any]:
+        self._apply_orchestrator()
         for rs in self._regions:
             if rs.is_ascii_input:
                 self._inject_ascii(rs)
@@ -1732,7 +1953,6 @@ class Experiment(Experimento):
                 _full = c.get("full") or {}
                 return (c.get("from"), c.get("to"),
                         "full" if "full" in c else c.get("type"),
-                        _full.get("weight"),
                         _full.get("density"),
                         tuple(c.get("portion") or ()))
             old_conns = [conn_key(c) for c in old_internal.get("connections", [])]
@@ -1790,11 +2010,37 @@ class Experiment(Experimento):
             self.adaptation_enabled = False
             self.brain_tensor.adaptation_enabled = False
 
+        # connection weights may have changed — apply to pesos_dendrita without rebuild
+        new_conns_cfg = new_internal.get("connections", [])
+        old_conns_cfg = old_internal.get("connections", [])
+        for new_c, old_c in zip(new_conns_cfg, old_conns_cfg):
+            if "nerve" in new_c or "nerve" in old_c:
+                for side_key in ("from", "to"):
+                    new_side = (new_c.get("nerve") or {}).get(side_key, {})
+                    old_side = (old_c.get("nerve") or {}).get(side_key, {})
+                    new_w = new_side.get("weight")
+                    old_w = old_side.get("weight")
+                    if new_w is not None and new_w != old_w:
+                        on_rs = self._regions_by_id.get(new_c.get("on", ""))
+                        other_rs = self._regions_by_id.get(new_side.get("region", ""))
+                        if on_rs and other_rs:
+                            src, dst = (other_rs, on_rs) if side_key == "from" else (on_rs, other_rs)
+                            self._orch_set_dendrite_weight(src, dst, float(new_w))
+            elif new_c.get("from") and new_c.get("to"):
+                new_w = (new_c.get("full") or {}).get("weight")
+                old_w = (old_c.get("full") or {}).get("weight")
+                if new_w is not None and new_w != old_w:
+                    from_rs = self._regions_by_id.get(str(new_c["from"]))
+                    to_rs = self._regions_by_id.get(str(new_c["to"]))
+                    if from_rs and to_rs:
+                        self._orch_set_dendrite_weight(from_rs, to_rs, float(new_w))
+
         # learning rates may have changed (intra-region wiring lr / connection lr)
         self._connections = new_internal.get("connections", [])
         self._rebuild_lr_per_syn()
 
         self._config = new_config  # store external format for frontend
+        self._orchestrator = new_config.get("orchestrator", [])
         return True
 
     def _soft_update_ascii(self, rs: RegionState, new_source: dict[str, Any]) -> None:

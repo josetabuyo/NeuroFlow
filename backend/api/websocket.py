@@ -321,6 +321,10 @@ class ExperimentSession:
                 )
                 msg["inspect"] = inspect_data
 
+        orch_state = self.experiment.get_orchestrator_state()
+        if orch_state:
+            msg["orchestrator"] = orch_state
+
         await self.send(msg)
 
     def cleanup(self) -> None:

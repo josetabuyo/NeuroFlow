@@ -173,6 +173,7 @@ function App() {
     inputId,
     labels,
     neuronLabelMap,
+    orchestratorState,
     state,
     stats,
     perf,
@@ -536,6 +537,7 @@ function App() {
             perf={perf}
             generation={generation}
             stepsPerTick={stepsPerTick}
+            orchestratorState={orchestratorState}
             onPlay={handlePlay}
             onPause={pause}
             onStep={handleStep}
