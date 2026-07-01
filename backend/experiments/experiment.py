@@ -934,6 +934,9 @@ class Experiment(Experimento):
         to_cfg: dict[str, Any],
     ) -> None:
         """Wire: on_region neurons inside circles → to_region neurons."""
+        if to_cfg.get("deamon"):
+            self._wire_nerve_to_deamon(circles, on_rs, to_rs, to_cfg)
+            return
         density = float(to_cfg.get("density", 0.1))
         weight = float(to_cfg.get("weight", 0.5))
         to_neurons = list(self.regiones[to_rs.id].neuronas.values())
@@ -953,6 +956,48 @@ class Experiment(Experimento):
                     for n, grad in sampled
                 ]
                 to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
+
+    def _wire_nerve_to_deamon(
+        self,
+        circles: list[NerveCircle],
+        on_rs: RegionState,
+        to_rs: RegionState,
+        to_cfg: dict[str, Any],
+    ) -> None:
+        """Wire nerve-to using daemon spatial pattern centred on each circle.
+
+        The daemon mask offsets are resolved against the circle centre (cx, cy)
+        on the ON region (tissue).  Every TO region neuron receives its own
+        dendrite set so learning weights remain independent.
+        """
+        mask, random_weights = _compile_mask(to_cfg)
+        on_neurons = list(self.regiones[on_rs.id].neuronas.values())
+        to_neurons = list(self.regiones[to_rs.id].neuronas.values())
+        for circle in circles:
+            cx, cy = circle.cx, circle.cy
+            for to_n in to_neurons:
+                for dend_def in mask:
+                    peso_d: float = dend_def["peso_dendrita"]
+                    offsets: list[tuple[int, int]] = dend_def["offsets"]
+                    pesos_s: list[float] | None = dend_def.get("pesos_sinapsis")
+                    noise_amp = dend_def.get("random_noise")
+                    sinapsis_list: list[Sinapsis] = []
+                    for i, (dx, dy) in enumerate(offsets):
+                        nx, ny = cx + dx, cy + dy
+                        if not (0 <= nx < on_rs.width and 0 <= ny < on_rs.height):
+                            continue
+                        src = on_neurons[ny * on_rs.width + nx]
+                        base = pesos_s[i] if pesos_s is not None else 1.0
+                        if not random_weights:
+                            peso = base
+                        elif noise_amp is not None:
+                            scale = random.uniform(1.0 - noise_amp, 1.0) if noise_amp > 0 else 1.0
+                            peso = base * scale
+                        else:
+                            peso = base * random.uniform(0.2, 1.0)
+                        sinapsis_list.append(Sinapsis(neurona_entrante=src, peso=peso))
+                    if sinapsis_list:
+                        to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=peso_d))
 
     def _compile(self) -> None:
         if self._is_wolfram:
@@ -1450,7 +1495,7 @@ class Experiment(Experimento):
             for label in row_labels:
                 if flat_idx < rs.n:
                     target = 1.0 if label == current_char else 0.0
-                    values[flat_idx] = abs(target - label_vals[flat_idx].clamp(0, 1).item())
+                    values[flat_idx] = max(0.0, label_vals[flat_idx].clamp(0, 1).item() - target)
                 flat_idx += 1
         self.brain_tensor.valores[rs.start : rs.start + rs.n] = values.to(self.brain_tensor.device)
 

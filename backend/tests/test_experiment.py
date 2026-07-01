@@ -1066,20 +1066,94 @@ class TestSourceTypes:
         noci = exp._regions_by_id["noci"]
         assert noci.is_entrada is True
 
-        # char_index=0 → "T": noci[i] = |target[i] - out[i]|, target = [1, 0]
+        # char_index=0 → "T": noci[i] = relu(out[i] - target[i]), target = [1, 0]
+        # Suppressive-only: correct neuron (T, target=1) never gets noci signal;
+        # incorrect neuron (L, target=0) gets noci = its own activation.
         exp.step()
         out = exp._regions_by_id["out"]
         out_vals = exp.brain_tensor.valores[out.start:out.end].clamp(0, 1).tolist()
         vals = exp.brain_tensor.valores[noci.start:noci.end].tolist()
-        assert vals[0] == pytest.approx(abs(1.0 - out_vals[0]), abs=1e-5)  # "T" matches → |1 - act|
-        assert vals[1] == pytest.approx(abs(0.0 - out_vals[1]), abs=1e-5)  # "L" mismatch → |0 - act|
+        assert vals[0] == pytest.approx(max(0.0, out_vals[0] - 1.0), abs=1e-5)  # T correct → ≈0
+        assert vals[1] == pytest.approx(max(0.0, out_vals[1] - 0.0), abs=1e-5)  # L wrong → activation
 
         # char_index=1 → "L": target = [0, 1]
         exp.step()
         out_vals = exp.brain_tensor.valores[out.start:out.end].clamp(0, 1).tolist()
         vals = exp.brain_tensor.valores[noci.start:noci.end].tolist()
-        assert vals[0] == pytest.approx(abs(0.0 - out_vals[0]), abs=1e-5)  # "T" mismatch → |0 - act|
-        assert vals[1] == pytest.approx(abs(1.0 - out_vals[1]), abs=1e-5)  # "L" matches → |1 - act|
+        assert vals[0] == pytest.approx(max(0.0, out_vals[0] - 0.0), abs=1e-5)  # T wrong → activation
+        assert vals[1] == pytest.approx(max(0.0, out_vals[1] - 1.0), abs=1e-5)  # L correct → ≈0
+
+    def test_label_mismatch_silent_for_correct_neuron(self) -> None:
+        """Nociceptor must stay silent for the correct neuron regardless of its activation.
+
+        This guards against the death-spiral: if the nociceptor fired when the correct
+        neuron is inactive, its inhibitory signal would suppress it further, making it
+        increasingly unlikely to ever activate — inverted learning.
+        """
+        config = {
+            "regions": [
+                {"id": "input", "grid": {"width": 4, "height": 4},
+                 "source": {"type": "ascii", "text": "T", "frames_per_char": 999}},
+                _wiring_region("tissue", 6, 6),
+                {"id": "out", "grid": {"width": 1, "height": 2},
+                 "neuron_labels": [["T"], ["L"]]},
+                {"id": "noci", "grid": {"width": 1, "height": 2},
+                 "source": {"type": "label_mismatch", "char_region": "input", "label_region": "out"}},
+            ],
+            "connections": [
+                {"from": "input", "to": "tissue", "full": {"weight": 0.4, "density": 1.0}},
+                {"from": "tissue", "to": "out", "full": {"weight": 0.5, "density": 1.0}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        out = exp._regions_by_id["out"]
+        noci = exp._regions_by_id["noci"]
+
+        exp.step()
+        # Force the T-output neuron to be inactive (worst case: correct neuron not firing).
+        exp.brain_tensor.valores[out.start] = 0.0
+        exp._inject_label_mismatch(noci)
+
+        noci_vals = exp.brain_tensor.valores[noci.start:noci.end].tolist()
+        # T is the current char: even when T-output is 0.0, noci[0] must be 0 (no punishment).
+        assert noci_vals[0] == pytest.approx(0.0, abs=1e-6), (
+            "Nociceptor must not fire for a correct-but-inactive neuron — "
+            "that would suppress it further and prevent it from ever learning to activate."
+        )
+
+    def test_label_mismatch_suppresses_active_wrong_neuron(self) -> None:
+        """Nociceptor signal is proportional to the activation of a neuron that should NOT fire."""
+        config = {
+            "regions": [
+                {"id": "input", "grid": {"width": 4, "height": 4},
+                 "source": {"type": "ascii", "text": "T", "frames_per_char": 999}},
+                _wiring_region("tissue", 6, 6),
+                {"id": "out", "grid": {"width": 1, "height": 2},
+                 "neuron_labels": [["T"], ["L"]]},
+                {"id": "noci", "grid": {"width": 1, "height": 2},
+                 "source": {"type": "label_mismatch", "char_region": "input", "label_region": "out"}},
+            ],
+            "connections": [
+                {"from": "input", "to": "tissue", "full": {"weight": 0.4, "density": 1.0}},
+                {"from": "tissue", "to": "out", "full": {"weight": 0.5, "density": 1.0}},
+            ],
+        }
+        exp = Experiment()
+        exp.setup(config)
+        out = exp._regions_by_id["out"]
+        noci = exp._regions_by_id["noci"]
+
+        exp.step()
+        # Force the L-output neuron to be highly active (wrong: current char is T).
+        exp.brain_tensor.valores[out.start + 1] = 0.9
+        exp._inject_label_mismatch(noci)
+
+        noci_vals = exp.brain_tensor.valores[noci.start:noci.end].tolist()
+        # L is NOT the current char: noci[1] must equal L's activation.
+        assert noci_vals[1] == pytest.approx(0.9, abs=1e-5), (
+            "Nociceptor signal for a wrong-but-active neuron must equal its activation."
+        )
 
 
 def _threshold_config(threshold: float | None = None, key: str = "threshold") -> dict:

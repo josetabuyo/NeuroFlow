@@ -131,8 +131,53 @@ to `[0, 1]` instead of firing binary 0/1.
 | `"ascii"` | Rendered text / synthetic patterns (`HALF_TOP`, `HALF_BOT`, …) |
 | `"label"` | One-hot class signal (supervised target) |
 | `"error_diff"` | `abs(target − output)` diff each step (nociceptor) |
-| `"label_mismatch"` | Fires when label ≠ predicted class (nociceptor) |
+| `"label_mismatch"` | **Suppressive nociceptor** — fires only when a neuron is active but should NOT be: `relu(activation − target)`. Silent for the correct neuron regardless of whether it is active. |
 | `"draw"` | User-painted values, with optional background noise |
+
+#### `label_mismatch` — Suppressive nociceptor
+
+Designed for antagonistic multi-class setups (e.g. L vs T regions). Each nociceptor
+neuron has a label (via `neuron_labels` on `label_region`) and fires only when its
+corresponding output neuron is active but the current input is a different class.
+
+**Signal formula:** `noci[i] = relu(output[i] − target[i])`
+
+where `target[i] = 1.0` if `neuron_labels[i] == current_char`, else `0.0`.
+
+| Case | Signal |
+|------|--------|
+| Correct neuron active (label matches, output high) | ≈ 0 — no punishment |
+| Correct neuron inactive (label matches, output low) | 0 — **never fires** (prevents death spiral) |
+| Wrong neuron active (label doesn't match, output high) | = activation — suppresses it |
+| Wrong neuron inactive (label doesn't match, output low) | ≈ 0 — already off |
+
+The death-spiral that the previous `abs()` formula caused: when the correct neuron was
+inactive, the symmetric signal would fire the nociceptor → inhibitory connection would
+suppress the neuron further → it would become even less likely to activate → runaway
+negative reinforcement. The `relu` formula eliminates this by making the nociceptor
+purely suppressive.
+
+**Typical wiring:**
+```json
+{
+  "from": "noci_T",
+  "to": "tissue",
+  "full": { "weight": -0.5 }
+}
+```
+
+The nociceptor for class T connects with negative weight to the tissue. When showing L,
+noci_T fires if T is active → suppresses T-related tissue → L can emerge.
+When showing T, noci_T stays silent (T is correct) → no interference.
+
+**Required fields:**
+
+| Field | Description |
+|-------|-------------|
+| `char_region` | Region ID of the ASCII input (provides `current_char`) |
+| `label_region` | Region ID whose `neuron_labels` define expected class per neuron |
+
+---
 
 ### Connection fields
 
