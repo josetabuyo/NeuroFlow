@@ -1262,8 +1262,14 @@ def preview_deamon_wiring(
     grid_height: int = 50,
 ) -> dict[str, Any]:
     """Compute preview_grid, mask_stats and dendrites for an inline deamon wiring."""
-    mask = compile_deamon_wiring(wiring)
-    random_weights = not wiring.get("fixed", False)
+    mask_name = wiring.get("mask")
+    if mask_name and isinstance(mask_name, str) and mask_name in MASK_PRESETS:
+        preset = MASK_PRESETS[mask_name]
+        mask = preset["mask"]
+        random_weights = preset.get("random_weights", True)
+    else:
+        mask = compile_deamon_wiring(wiring)
+        random_weights = not wiring.get("fixed", False)
     return {
         "preview_grid": _compute_preview_grid(mask, grid_width, grid_height, random_weights=random_weights),
         "mask_stats": _compute_mask_stats(mask),
