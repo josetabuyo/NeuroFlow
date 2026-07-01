@@ -1007,6 +1007,15 @@ function HelpContent() {
       <Row name="full.weight" type="hard" desc="initial dendrite weight" />
       <Row name="full.density" type="hard" desc="fraction of source neurons sampled" />
       <Row name="from / to" type="hard" desc="topology" />
+
+      <Section title="Orchestrator" />
+      <Row name='{"from":{"tick":0,"set":"..."},"to":{"tick":N,"set":"..."}}' type="hard" desc="gradient — interpolates scalar between two ticks" />
+      <Row name='{"at":{"tick":N},"set":"..."}' type="hard" desc='one-shot — fires once at tick N. paths: connections[N]["full"]["weight"], regions[N]["text"]' />
+      <Row name='{"at":{"tick":0},"inject":{...}}' type="hard" desc='inject — writes activations directly into a region after procesar(). tick-0 also applies at setup (visible in step 0)' />
+      <Row name='{"at":{"tick":0,"tick_end":20},"inject":{...}}' type="hard" desc="inject sustained — repeats the pattern every tick in [tick, tick_end]" />
+      <Row name="inject.region" type="hard" desc="region id to write into" />
+      <Row name='inject.template: "noise"' type="hard" desc="uniform random [0,1] activations" />
+      <Row name='inject.template: "image"' type="hard" desc='JPG mapped to activations. inject.src — path relative to backend/configs/' />
     </div>
   );
 }
