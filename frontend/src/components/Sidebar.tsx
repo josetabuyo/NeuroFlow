@@ -142,6 +142,168 @@ function MaskPreview({
 }
 
 
+// ── Grip handle ──────────────────────────────────────────────────────────────
+
+function GripHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      title="Drag to reorder"
+      style={{ cursor: 'grab', display: 'flex', alignItems: 'center', padding: '2px 3px', flexShrink: 0, opacity: 0.35 }}
+    >
+      <svg width={8} height={12} viewBox="0 0 8 12">
+        {([[1,1],[5,1],[1,5],[5,5],[1,9],[5,9]] as [number,number][]).map(([x,y]) => (
+          <circle key={`${x}-${y}`} cx={x} cy={y} r={1.3} fill="#aaa" />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+// ── Collapsible + draggable panel ─────────────────────────────────────────────
+
+type PanelId = 'config' | 'daemon' | 'synapses' | 'output_fn';
+const DEFAULT_PANEL_ORDER: PanelId[] = ['config', 'daemon', 'synapses', 'output_fn'];
+
+function PanelSection({
+  id,
+  label,
+  collapsed,
+  onToggle,
+  headerExtra,
+  isDragging,
+  isDragOver,
+  onDragHandleMouseDown,
+  children,
+}: {
+  id: PanelId;
+  label: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  headerExtra?: React.ReactNode;
+  isDragging: boolean;
+  isDragOver: boolean;
+  onDragHandleMouseDown: (e: React.MouseEvent) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      data-panel-id={id}
+      style={{
+        opacity: isDragging ? 0.35 : 1,
+        borderTop: isDragOver ? '2px solid #7c4dff' : '2px solid transparent',
+        transition: 'border-color 0.12s, opacity 0.12s',
+        paddingTop: isDragOver ? 0 : 0,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: collapsed ? 0 : '6px' }}>
+        <GripHandle onMouseDown={onDragHandleMouseDown} />
+        <span
+          onClick={onToggle}
+          style={{
+            flex: 1,
+            fontSize: '0.75rem',
+            textTransform: 'uppercase',
+            color: '#888',
+            letterSpacing: '0.1em',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          {label}
+        </span>
+        {headerExtra}
+        <span
+          onClick={onToggle}
+          style={{ color: '#444', fontSize: '0.65rem', cursor: 'pointer', userSelect: 'none', paddingLeft: '4px' }}
+        >
+          {collapsed ? '▸' : '▾'}
+        </span>
+      </div>
+      {!collapsed && children}
+    </div>
+  );
+}
+
+// ── Tension function visualizer (headless — header lives in PanelSection) ────
+
+function TensionFunctionViz({ fn, softMode }: { fn: Record<string, number>; softMode: boolean }) {
+  const evalFn = (x: number): number => {
+    let v = 0;
+    for (const [key, coeff] of Object.entries(fn)) {
+      if (key === 'x') v += coeff * x;
+      else if (key === 'b') v += coeff;
+      else if (key.startsWith('x_pow_')) v += coeff * Math.pow(x, parseInt(key.split('_pow_')[1]));
+    }
+    return Math.max(-1, Math.min(1, v));
+  };
+
+  const W = 330, H = 120;
+  const PAD = { top: 10, right: 12, bottom: 18, left: 26 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+  const sx = (x: number) => PAD.left + ((x + 1) / 2) * plotW;
+  const sy = (y: number) => PAD.top + ((1 - y) / 2) * plotH;
+
+  const N = 300;
+  const pts = Array.from({ length: N + 1 }, (_, i) => {
+    const x = -1 + (2 * i) / N;
+    return `${sx(x).toFixed(1)},${sy(evalFn(x)).toFixed(1)}`;
+  }).join(' ');
+
+  let crossX: number | null = null;
+  for (let i = 0; i < N; i++) {
+    const x0 = -1 + (2 * i) / N;
+    const x1 = -1 + (2 * (i + 1)) / N;
+    const y0 = evalFn(x0), y1 = evalFn(x1);
+    if (y0 <= 0 && y1 > 0) { crossX = x0 + (x1 - x0) * (-y0) / (y1 - y0); break; }
+  }
+
+  const formulaParts = Object.entries(fn).map(([k, v]) => {
+    const vStr = v > 0 ? `+${v}` : `${v}`;
+    if (k === 'b') return `${vStr}`;
+    if (k === 'x') return `${vStr}x`;
+    return `${vStr}x^${k.split('_pow_')[1]}`;
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <svg width={W} height={H} style={{ background: '#0d0d14', borderRadius: '4px', border: '1px solid #1a1a2e', display: 'block' }}>
+        <line x1={sx(-1)} y1={sy(0)} x2={sx(1)} y2={sy(0)} stroke="#1e1e30" strokeWidth={1} />
+        <line x1={sx(0)} y1={sy(-1)} x2={sx(0)} y2={sy(1)} stroke="#1e1e30" strokeWidth={1} />
+        <line x1={sx(-1)} y1={sy(1)} x2={sx(1)} y2={sy(1)} stroke="#1a1a28" strokeWidth={1} strokeDasharray="2,4" />
+        <line x1={sx(-1)} y1={sy(-1)} x2={sx(1)} y2={sy(-1)} stroke="#1a1a28" strokeWidth={1} strokeDasharray="2,4" />
+        {crossX !== null && (
+          <rect x={sx(crossX)} y={sy(1)} width={sx(1) - sx(crossX)} height={plotH / 2} fill="rgba(74,222,128,0.04)" />
+        )}
+        {softMode && crossX !== null && (
+          <line x1={sx(crossX)} y1={sy(-1)} x2={sx(crossX)} y2={sy(1)} stroke="#4ade80" strokeWidth={1} strokeDasharray="3,3" strokeOpacity={0.3} />
+        )}
+        <text x={PAD.left - 4} y={sy(1) + 3} fontSize={8} fill="#444" textAnchor="end">1</text>
+        <text x={PAD.left - 4} y={sy(0) + 3} fontSize={8} fill="#444" textAnchor="end">0</text>
+        <text x={PAD.left - 4} y={sy(-1) + 3} fontSize={8} fill="#444" textAnchor="end">-1</text>
+        <text x={sx(-1)} y={H - 4} fontSize={8} fill="#444" textAnchor="middle">-1</text>
+        <text x={sx(0)} y={H - 4} fontSize={8} fill="#444" textAnchor="middle">0</text>
+        <text x={sx(1)} y={H - 4} fontSize={8} fill="#444" textAnchor="middle">1</text>
+        <polyline points={pts} fill="none" stroke="#ff8c00" strokeWidth={1.5} strokeLinejoin="round" />
+        {crossX !== null && (
+          <>
+            <circle cx={sx(crossX)} cy={sy(0)} r={3} fill="#ff8c00" />
+            <text x={sx(crossX) + 4} y={sy(0) - 4} fontSize={8} fill="#ff8c00">{crossX.toFixed(3)}</text>
+          </>
+        )}
+        {crossX === null && (
+          <text x={W / 2} y={sy(0) - 6} fontSize={8} fill="#555" textAnchor="middle">no activation</text>
+        )}
+      </svg>
+      <div style={{ fontSize: '0.6rem', color: '#444', fontFamily: 'monospace' }}>
+        f(x) = {formulaParts.join(' ')}
+      </div>
+    </div>
+  );
+}
+
+
 interface SidebarProps {
   templates: ConfigTemplate[];
   selectedTemplate: string;
@@ -204,7 +366,10 @@ export function Sidebar({
   const hasMasks = masks.length > 0;
 
   // Collect all regions with daemon wiring for the combo
-  const configKey = JSON.stringify(Array.isArray(anyConfig.regions) ? anyConfig.regions : legacyWiring);
+  const configKey = JSON.stringify([
+    Array.isArray(anyConfig.regions) ? anyConfig.regions : legacyWiring,
+    Array.isArray(anyConfig.connections) ? anyConfig.connections : [],
+  ]);
   const daemonRegions = useMemo((): Array<{ id: string; daemon: Record<string, unknown> }> => {
     const result: Array<{ id: string; daemon: Record<string, unknown> }> = [];
     if (Array.isArray(anyConfig.regions)) {
@@ -215,9 +380,108 @@ export function Sidebar({
     } else if (legacyWiring?.deamon) {
       result.push({ id: 'tissue', daemon: legacyWiring.deamon as Record<string, unknown> });
     }
+    // Also look in top-level connections[]
+    if (Array.isArray(anyConfig.connections)) {
+      for (const conn of anyConfig.connections as Array<Record<string, unknown>>) {
+        if (conn.deamon) {
+          const id = (conn.on as string) || 'connection';
+          result.push({ id, daemon: conn.deamon as Record<string, unknown> });
+        }
+      }
+    }
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configKey]);
+
+  // ── Panel order + collapse state (persisted) ───────────────────────────────
+  const [panelOrder, setPanelOrder] = useState<PanelId[]>(() => {
+    try { const s = localStorage.getItem('nf_panel_order'); if (s) return JSON.parse(s); } catch {}
+    return DEFAULT_PANEL_ORDER;
+  });
+  const [collapsed, setCollapsed] = useState<Set<PanelId>>(() => {
+    try { const s = localStorage.getItem('nf_panel_collapsed'); if (s) return new Set(JSON.parse(s)); } catch {}
+    return new Set<PanelId>();
+  });
+  const toggleCollapsed = (id: PanelId) => setCollapsed(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    try { localStorage.setItem('nf_panel_collapsed', JSON.stringify([...next])); } catch {}
+    return next;
+  });
+
+  // ── Drag-to-reorder state ──────────────────────────────────────────────────
+  const [draggingId, setDraggingId] = useState<PanelId | null>(null);
+  const [dragOverId, setDragOverId] = useState<PanelId | null>(null);
+  const dragStartY = useRef<number>(0);
+  const didDrag = useRef(false);
+
+  const startDrag = (id: PanelId, e: React.MouseEvent) => {
+    e.preventDefault();
+    didDrag.current = false;
+    dragStartY.current = e.clientY;
+    setDraggingId(id);
+
+    const onMove = (mv: MouseEvent) => {
+      if (Math.abs(mv.clientY - dragStartY.current) > 4) didDrag.current = true;
+      // Hit-test panels by position
+      const panels = document.querySelectorAll<HTMLElement>('[data-panel-id]');
+      let overPanelId: PanelId | null = null;
+      panels.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        if (mv.clientY >= rect.top && mv.clientY <= rect.bottom) {
+          overPanelId = el.dataset.panelId as PanelId;
+        }
+      });
+      setDragOverId(overPanelId);
+    };
+    const onUp = () => {
+      setDraggingId(null);
+      setDragOverId(prev => {
+        if (prev && prev !== id) {
+          setPanelOrder(order => {
+            const next = [...order];
+            const from = next.indexOf(id);
+            const to = next.indexOf(prev);
+            if (from !== -1 && to !== -1) {
+              next.splice(from, 1);
+              next.splice(to, 0, id);
+              try { localStorage.setItem('nf_panel_order', JSON.stringify(next)); } catch {}
+            }
+            return next;
+          });
+        }
+        return null;
+      });
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  // ── Output function region selection ──────────────────────────────────────
+  const fnRegions = useMemo(() => {
+    const regions = Array.isArray(anyConfig.regions) ? (anyConfig.regions as Record<string, unknown>[]) : [];
+    return regions.filter(r => {
+      const t = r.tension as Record<string, unknown> | undefined;
+      return t?.function && typeof t.function === 'object';
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configKey]);
+
+  const [selectedFnId, setSelectedFnId] = useState<string>(() => (fnRegions[0]?.id as string) ?? '');
+  useEffect(() => {
+    if (fnRegions.length > 0 && !fnRegions.find(r => r.id === selectedFnId)) {
+      setSelectedFnId(fnRegions[0].id as string);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(fnRegions.map(r => r.id))]);
+
+  const selectedFnRegion = fnRegions.find(r => r.id === selectedFnId) ?? fnRegions[0] ?? null;
+  const activeFn = selectedFnRegion
+    ? (((selectedFnRegion.tension as Record<string, unknown>).function) as Record<string, number>)
+    : null;
+  const activeFnSoft = selectedFnRegion?.activation === 'soft';
 
   const [selectedDaemonId, setSelectedDaemonId] = useState<string>('');
 
@@ -460,110 +724,101 @@ export function Sidebar({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {/* JSON Config Editor */}
-        <JsonConfigEditor config={config} onChange={onConfigChange} metadata={metadata} />
+        {(() => {
+          const selectStyle: React.CSSProperties = {
+            fontSize: '0.65rem', background: '#0d0d14', color: '#aaa',
+            border: '1px solid #2a2a3e', borderRadius: '3px', padding: '1px 4px',
+            cursor: 'pointer', outline: 'none',
+          };
 
-        {/* Daemon Preview */}
-        {(daemonRegions.length > 0 || (hasMasks && previewGrid)) && previewGrid && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-              <label
-                style={{
-                  fontSize: "0.75rem",
-                  textTransform: "uppercase",
-                  color: "#888",
-                  letterSpacing: "0.1em",
-                  flexShrink: 0,
-                }}
-              >
-                Daemon Preview
-              </label>
-              {daemonRegions.length > 1 && (
-                <select
-                  value={selectedDaemonId}
-                  onChange={e => setSelectedDaemonId(e.target.value)}
-                  style={{
-                    fontSize: "0.65rem",
-                    background: "#0d0d14",
-                    color: "#aaa",
-                    border: "1px solid #2a2a3e",
-                    borderRadius: "3px",
-                    padding: "1px 4px",
-                    cursor: "pointer",
-                    outline: "none",
-                  }}
-                >
-                  {daemonRegions.map(r => (
-                    <option key={r.id} value={r.id}>{r.id}</option>
-                  ))}
-                </select>
-              )}
-              {daemonRegions.length === 1 && (
-                <span style={{ fontSize: "0.65rem", color: "#555", fontFamily: "monospace" }}>
-                  {selectedDaemonId}
-                </span>
-              )}
-              {activeMaskStats && (
-                <span
-                  style={{
-                    fontSize: "0.65rem",
-                    color: "#555",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  <span style={{ color: "#4ade80" }}>{(activeMaskStats as Record<string, unknown>).exc_dendrites as number}</span>
-                  {" + "}
-                  <span style={{ color: "#8b00ff" }}>{(activeMaskStats as Record<string, unknown>).inh_dendrites as number}</span>
-                  {" = "}
-                  <span style={{ color: "#e0e0ff" }}>{(activeMaskStats as Record<string, unknown>).total_dendrites as number}</span>
-                  {" dendrites"}
-                </span>
-              )}
-            </div>
-            <MaskPreview grid={previewGrid} dendrites={activeDendrites} />
-          </div>
-        )}
+          const hasDaemon = (daemonRegions.length > 0 || (hasMasks && !!previewGrid)) && !!previewGrid;
 
-        {/* Synapse stats */}
-        {activeMaskStats && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <label
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: "#888",
-                letterSpacing: "0.1em",
-                marginBottom: "2px",
-              }}
-            >
-              Synapses
-            </label>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "4px 12px",
-                fontSize: "0.7rem",
-                color: "#666",
-                fontFamily: "monospace",
-                padding: "6px 8px",
-                background: "#0d0d14",
-                borderRadius: "4px",
-                border: "1px solid #1a1a2e",
-              }}
-            >
-              {(() => {
+          const panelContent: Record<PanelId, { visible: boolean; label: string; headerExtra?: React.ReactNode; body: React.ReactNode }> = {
+            config: {
+              visible: true,
+              label: 'Config',
+              body: <JsonConfigEditor config={config} onChange={onConfigChange} metadata={metadata} />,
+            },
+            daemon: {
+              visible: hasDaemon,
+              label: 'Daemon Preview',
+              headerExtra: (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {daemonRegions.length > 1 && (
+                    <select value={selectedDaemonId} onChange={e => setSelectedDaemonId(e.target.value)} style={selectStyle}>
+                      {daemonRegions.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                    </select>
+                  )}
+                  {daemonRegions.length === 1 && (
+                    <span style={{ fontSize: '0.65rem', color: '#555', fontFamily: 'monospace' }}>{selectedDaemonId}</span>
+                  )}
+                  {activeMaskStats && (
+                    <span style={{ fontSize: '0.65rem', color: '#555', fontFamily: 'monospace' }}>
+                      <span style={{ color: '#4ade80' }}>{(activeMaskStats as Record<string, unknown>).exc_dendrites as number}</span>
+                      {' + '}
+                      <span style={{ color: '#8b00ff' }}>{(activeMaskStats as Record<string, unknown>).inh_dendrites as number}</span>
+                      {' dendrites'}
+                    </span>
+                  )}
+                </span>
+              ),
+              body: <MaskPreview grid={previewGrid!} dendrites={activeDendrites} />,
+            },
+            synapses: {
+              visible: !!activeMaskStats,
+              label: 'Synapses',
+              body: (() => {
                 const s = activeMaskStats as Record<string, unknown>;
-                return (<>
-                  <span>Exc: <strong style={{ color: "#4ade80" }}>{s.excitatory_synapses as number}</strong></span>
-                  <span>Inh: <strong style={{ color: "#8b00ff" }}>{s.inhibitory_synapses as number}</strong></span>
-                  <span>Ratio: <strong style={{ color: "#888" }}>{s.ratio_exc_inh as number}</strong></span>
-                  <span>R.exc: <strong style={{ color: "#4ade80" }}>{s.excitation_radius as number}</strong>{" "}R.inh: <strong style={{ color: "#8b00ff" }}>{s.inhibition_radius as number}</strong></span>
-                </>);
-              })()}
-            </div>
-          </div>
-        )}
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: '0.7rem', color: '#666', fontFamily: 'monospace', padding: '6px 8px', background: '#0d0d14', borderRadius: '4px', border: '1px solid #1a1a2e' }}>
+                    <span>Exc: <strong style={{ color: '#4ade80' }}>{s.excitatory_synapses as number}</strong></span>
+                    <span>Inh: <strong style={{ color: '#8b00ff' }}>{s.inhibitory_synapses as number}</strong></span>
+                    <span>Ratio: <strong style={{ color: '#888' }}>{s.ratio_exc_inh as number}</strong></span>
+                    <span>R.exc: <strong style={{ color: '#4ade80' }}>{s.excitation_radius as number}</strong>{' '}R.inh: <strong style={{ color: '#8b00ff' }}>{s.inhibition_radius as number}</strong></span>
+                  </div>
+                );
+              })(),
+            },
+            output_fn: {
+              visible: !!activeFn,
+              label: 'Output Function',
+              headerExtra: (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {fnRegions.length > 1 && (
+                    <select value={selectedFnId} onChange={e => setSelectedFnId(e.target.value)} style={selectStyle}>
+                      {fnRegions.map(r => <option key={r.id as string} value={r.id as string}>{r.id as string}</option>)}
+                    </select>
+                  )}
+                  {fnRegions.length === 1 && (
+                    <span style={{ fontSize: '0.65rem', color: '#555', fontFamily: 'monospace' }}>{selectedFnId}</span>
+                  )}
+                  {activeFnSoft && <span style={{ fontSize: '0.6rem', color: '#4ade80', fontFamily: 'monospace' }}>soft</span>}
+                </span>
+              ),
+              body: activeFn ? <TensionFunctionViz fn={activeFn} softMode={activeFnSoft} /> : null,
+            },
+          };
+
+          return panelOrder.map(id => {
+            const p = panelContent[id];
+            if (!p.visible) return null;
+            return (
+              <PanelSection
+                key={id}
+                id={id}
+                label={p.label}
+                collapsed={collapsed.has(id)}
+                onToggle={() => toggleCollapsed(id)}
+                headerExtra={p.headerExtra}
+                isDragging={draggingId === id}
+                isDragOver={dragOverId === id && draggingId !== id}
+                onDragHandleMouseDown={e => startDrag(id, e)}
+              >
+                {p.body}
+              </PanelSection>
+            );
+          });
+        })()}
 
         {/* Current char indicator — tiny, text only */}
         {stats?.current_char && experimentActive && (
