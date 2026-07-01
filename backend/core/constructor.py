@@ -82,11 +82,12 @@ class Constructor:
         mascara_relativa: list[tuple[int, int]],
         regla_pesos: list[list[float]],
         peso_dendrita: float = 1.0,
+        border: str = "connected",
     ) -> None:
         """Connect neurons from a row with their neighbors according to a relative mask.
 
-        Uses toroidal (wrap-around) topology: offsets that fall outside the
-        grid wrap to the opposite edge via modular arithmetic.
+        border="connected" (default): toroidal wrap-around via modular arithmetic.
+        border="cut": out-of-bounds offsets are dropped; border neurons get fewer synapses.
 
         Args:
             brain: The network containing the neurons.
@@ -97,18 +98,25 @@ class Constructor:
             regla_pesos: List of dendrites, each is a list of synapse weights.
                          Each weight list corresponds to a pattern to recognize.
             peso_dendrita: Weight for each created dendrite.
+            border: "connected" (toroidal) or "cut" (truncated at edges).
         """
+        cut = border == "cut"
         for x in range(width):
             neurona_destino = brain.get_neurona(self.key_by_coord(x, fila_destino))
 
             for pesos_sinapsis in regla_pesos:
-                sinapsis_list: list[Sinapsis] = []
+                # In cut mode, skip the entire dendrite if any synapse falls outside.
+                if cut and any(
+                    not (0 <= x + dx < width and 0 <= fila_destino + dy < height)
+                    for dx, dy in mascara_relativa
+                ):
+                    continue
 
+                sinapsis_list: list[Sinapsis] = []
                 for i, (dx, dy) in enumerate(mascara_relativa):
                     nx = (x + dx) % width
                     ny = (fila_destino + dy) % height
                     neurona_fuente = brain.get_neurona(self.key_by_coord(nx, ny))
-
                     peso_sinapsis = pesos_sinapsis[i] if i < len(pesos_sinapsis) else 0.0
                     sinapsis_list.append(
                         Sinapsis(neurona_entrante=neurona_fuente, peso=peso_sinapsis)
@@ -124,6 +132,7 @@ class Constructor:
         fila_destino: int,
         width: int,
         height: int,
+        border: str = "connected",
     ) -> None:
         """Configure a row's dendrites according to a Wolfram rule.
 
@@ -136,6 +145,7 @@ class Constructor:
             fila_destino: Row to configure.
             width: Grid width.
             height: Grid height.
+            border: "connected" (toroidal) or "cut" (truncated at edges).
         """
         patrones_activos: list[list[float]] = []
         for patron in range(8):
@@ -156,6 +166,7 @@ class Constructor:
             mascara_relativa=mascara,
             regla_pesos=patrones_activos,
             peso_dendrita=1.0,
+            border=border,
         )
 
     def aplicar_mascara_2d(
@@ -167,6 +178,7 @@ class Constructor:
         *,
         random_weights: bool = True,
         centroid_jitter: int = 0,
+        border: str = "connected",
     ) -> None:
         """Apply a connection mask to every neuron in the 2D grid.
 
@@ -183,7 +195,10 @@ class Constructor:
             random_weights: If True, synapses without explicit pesos_sinapsis
                 get random weights in [0.2, 1.0]. If False, they get 1.0.
                 Dendrites with pesos_sinapsis always use those exact values.
+            border: "connected" (toroidal wrap-around, default) or "cut"
+                (out-of-bounds offsets are dropped; border neurons get fewer synapses).
         """
+        cut = border == "cut"
         for y in range(height):
             for x in range(width):
                 neurona_destino = brain.get_neurona(self.key_by_coord(x, y))
@@ -194,6 +209,13 @@ class Constructor:
                     peso_dendrita: float = def_dendrita["peso_dendrita"]  # type: ignore[assignment]
                     offsets: list[tuple[int, int]] = def_dendrita["offsets"]  # type: ignore[assignment]
                     pesos_explicitos: list[float] | None = def_dendrita.get("pesos_sinapsis")  # type: ignore[assignment]
+
+                    # In cut mode, skip the entire dendrite if any synapse falls outside.
+                    if cut and any(
+                        not (0 <= x + dx + jdx < width and 0 <= y + dy + jdy < height)
+                        for dx, dy in offsets
+                    ):
+                        continue
 
                     sinapsis_list: list[Sinapsis] = []
                     noise_amp = def_dendrita.get("random_noise")  # None for presets

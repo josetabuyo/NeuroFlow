@@ -235,3 +235,104 @@ class TestOrchestratorSoftUpdate:
         new_cfg["orchestrator"] = []
         exp.update_config(new_cfg)
         assert exp._orchestrator == []
+
+
+# ── Orchestrator: string connection lookup ────────────────────────────────────
+
+def _nerve_config() -> dict:
+    """Minimal config with a nerve connection for string-lookup tests."""
+    return {
+        "regions": [
+            {"id": "tissue", "grid": {"width": 8, "height": 8},
+             "wiring": {"deamon": {"mask": "simple"}, "process_mode": "min_vs_max"}},
+            {"id": "src", "grid": {"width": 1, "height": 1},
+             "source": {"type": "draw"}},
+            {"id": "dst", "grid": {"width": 1, "height": 1},
+             "process_mode": "min_vs_max",
+             "wiring": {"deamon": {"mask": "simple"}}},
+        ],
+        "connections": [
+            {
+                "on": "tissue",
+                "nerve": {
+                    "insertion": {"x": 4, "y": 4},
+                    "radius": 3,
+                    "from": {"region": "src", "density": 0.5, "weight": -0.1},
+                    "to":   {"region": "dst", "density": 0.5, "weight": 0.8},
+                },
+            },
+        ],
+    }
+
+
+class TestOrchestratorStringLookup:
+    """connections['region_id'] resolves to the nerve connection involving that region."""
+
+    def test_lookup_by_to_region(self) -> None:
+        """connections['dst']['nerve']['to']['weight'] = X updates tissue→dst weight."""
+        random.seed(1)
+        exp = Experiment()
+        cfg = _nerve_config()
+        cfg["orchestrator"] = [
+            {"at": {"tick": 0, "set": "connections['dst']['nerve']['to']['weight'] = 0.3"}},
+        ]
+        exp.setup(cfg)
+        exp.step()
+        weights = _dendrite_weights(exp, "tissue", "dst")
+        assert all(abs(w - 0.3) < 1e-4 for w in weights), f"expected 0.3, got {weights}"
+
+    def test_lookup_by_from_region(self) -> None:
+        """connections['src']['nerve']['from']['weight'] = X updates src→tissue weight."""
+        random.seed(1)
+        exp = Experiment()
+        cfg = _nerve_config()
+        cfg["orchestrator"] = [
+            {"at": {"tick": 0, "set": "connections['src']['nerve']['from']['weight'] = -0.5"}},
+        ]
+        exp.setup(cfg)
+        exp.step()
+        weights = _dendrite_weights(exp, "src", "tissue")
+        assert all(abs(w - (-0.5)) < 1e-4 for w in weights), f"expected -0.5, got {weights}"
+
+    def test_lookup_by_explicit_id(self) -> None:
+        """connections['my_nerve']['nerve']['to']['weight'] = X uses explicit id field."""
+        random.seed(1)
+        exp = Experiment()
+        cfg = _nerve_config()
+        cfg["connections"][0]["id"] = "my_nerve"
+        cfg["orchestrator"] = [
+            {"at": {"tick": 0, "set": "connections['my_nerve']['nerve']['to']['weight'] = 0.6"}},
+        ]
+        exp.setup(cfg)
+        exp.step()
+        weights = _dendrite_weights(exp, "tissue", "dst")
+        assert all(abs(w - 0.6) < 1e-4 for w in weights), f"expected 0.6, got {weights}"
+
+    def test_lookup_gradient_by_region_name(self) -> None:
+        """String lookup works in gradient (from/to) entries too."""
+        random.seed(1)
+        exp = Experiment()
+        cfg = _nerve_config()
+        cfg["orchestrator"] = [
+            {"from": {"tick": 0,   "set": "connections['dst']['nerve']['to']['weight'] = 0.0"},
+             "to":   {"tick": 100, "set": "connections['dst']['nerve']['to']['weight'] = 1.0"}},
+        ]
+        exp.setup(cfg)
+        for _ in range(51):
+            exp.step()
+        weights = _dendrite_weights(exp, "tissue", "dst")
+        assert all(abs(w - 0.5) < 1e-4 for w in weights), f"expected 0.5 at midpoint, got {weights}"
+
+    def test_unknown_key_logs_warning(self, caplog) -> None:
+        """Unknown string key logs a warning and doesn't crash."""
+        import logging
+        random.seed(1)
+        exp = Experiment()
+        cfg = _nerve_config()
+        cfg["orchestrator"] = [
+            {"at": {"tick": 0, "set": "connections['nonexistent']['nerve']['to']['weight'] = 1"}},
+        ]
+        exp.setup(cfg)
+        with caplog.at_level(logging.WARNING):
+            exp.step()
+        assert any("nonexistent" in r.message for r in caplog.records)

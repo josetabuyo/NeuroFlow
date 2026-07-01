@@ -71,6 +71,7 @@ class RegionState:
     tension_fns: list[tuple[str, float]] = field(default_factory=list)
     soft_activation: bool = False
     neuron_labels: list[list[str]] | None = None
+    border: str = "connected"
 
     handler_method: str | None = None
 
@@ -362,12 +363,18 @@ def _apply_mask_to_neuron_grid(
     neurons: list[list["Neurona"]],
     mask: list[dict],
     random_weights: bool,
+    border: str = "connected",
 ) -> None:
-    """Apply a wiring mask spatially to a 2D grid of neurons (toroidal wrap-around)."""
+    """Apply a wiring mask spatially to a 2D grid of neurons.
+
+    border="connected" (default): toroidal wrap-around.
+    border="cut": out-of-bounds offsets are dropped; border neurons get fewer synapses.
+    """
     height = len(neurons)
     width = len(neurons[0]) if neurons else 0
     if not width or not height:
         return
+    cut = border == "cut"
     for y in range(height):
         for x in range(width):
             dest = neurons[y][x]
@@ -376,6 +383,14 @@ def _apply_mask_to_neuron_grid(
                 offsets: list[tuple[int, int]] = dend_def["offsets"]
                 pesos_s: list[float] | None = dend_def.get("pesos_sinapsis")
                 noise_amp = dend_def.get("random_noise")
+
+                # In cut mode, skip the entire dendrite if any synapse falls outside.
+                if cut and any(
+                    not (0 <= x + dx < width and 0 <= y + dy < height)
+                    for dx, dy in offsets
+                ):
+                    continue
+
                 sinapsis_list: list[Sinapsis] = []
                 for i, (dx, dy) in enumerate(offsets):
                     nx = (x + dx) % width
@@ -653,6 +668,7 @@ class Experiment(Experimento):
             grid = rc.get("grid", {})
             w = int(grid.get("width", 1))
             h = int(grid.get("height", 1))
+            border = grid.get("border", "connected")
             source = rc.get("source")
             wiring_cfg = rc.get("wiring") or {}
             rs = RegionState(
@@ -671,6 +687,7 @@ class Experiment(Experimento):
                 soft_activation=rc.get("activation") == "soft",
                 neuron_labels=rc.get("neuron_labels"),
                 handler_method=rc.get("handler_method"),
+                border=border,
             )
             self._regions.append(rs)
             self._regions_by_id[rs.id] = rs
@@ -720,6 +737,7 @@ class Experiment(Experimento):
                 Constructor().aplicar_mascara_2d(
                     self.brain, rs.width, rs.height, mask,
                     random_weights=random_weights, centroid_jitter=centroid_jitter,
+                    border=rs.border,
                 )
             else:
                 neuron_list = list(self.regiones[rs.id].neuronas.values())
@@ -727,7 +745,7 @@ class Experiment(Experimento):
                     [neuron_list[y * rs.width + x] for x in range(rs.width)]
                     for y in range(rs.height)
                 ]
-                _apply_mask_to_neuron_grid(grid2d, mask, random_weights)
+                _apply_mask_to_neuron_grid(grid2d, mask, random_weights, border=rs.border)
 
         # ── Cross-region connections ──
         for conn in connections:
@@ -757,6 +775,7 @@ class Experiment(Experimento):
         grid = tissue_cfg["grid"]
         self.width = int(grid.get("width", 50))
         self.height = int(grid.get("height", 50))
+        border = grid.get("border", "connected")
         self.process_mode = tissue_cfg["wiring"].get("process_mode", "min_vs_max")
 
         mask_id = tissue_cfg["wiring"]["mask"]
@@ -769,6 +788,7 @@ class Experiment(Experimento):
         constructor.aplicar_mascara_2d(
             self.brain, self.width, self.height, mask,
             random_weights=get_random_weights(mask_id),
+            border=border,
         )
 
         n = self.width * self.height
@@ -778,6 +798,7 @@ class Experiment(Experimento):
             wiring_cfg=tissue_cfg["wiring"],
             process_mode=self.process_mode,
             tension_fns=_tension_fns_of(tissue_cfg),
+            border=border,
         )]
         self._regions_by_id = {self._regions[0].id: self._regions[0]}
         self._connections = []
@@ -1099,21 +1120,49 @@ class Experiment(Experimento):
                     self._apply_orch_segs(segs, val)
 
     def _apply_orch_segs(self, segs: list, value: Any) -> None:
-        if not segs or len(segs) < 2 or not isinstance(segs[1], int):
+        if not segs or len(segs) < 2:
             return
-        root, idx = segs[0], segs[1]
+        root, key = segs[0], segs[1]
         path = segs[2:]
         if root == "connections":
-            # Use self._config["connections"] for user-visible indices (daemon entries included)
             cfg_conns = self._config.get("connections", [])
-            if idx >= len(cfg_conns):
-                logger.warning("Orchestrator: connections[%d] out of range (%d entries)", idx, len(cfg_conns))
-                return
-            self._apply_orch_conn(cfg_conns[idx], path, value)
+            if isinstance(key, int):
+                if key >= len(cfg_conns):
+                    logger.warning("Orchestrator: connections[%d] out of range (%d entries)", key, len(cfg_conns))
+                    return
+                conn = cfg_conns[key]
+            else:
+                conn = self._find_conn_by_key(cfg_conns, key)
+                if conn is None:
+                    logger.warning("Orchestrator: no connection matching '%s'", key)
+                    return
+            self._apply_orch_conn(conn, path, value)
         elif root == "regions":
-            self._apply_orch_reg(idx, path, value)
+            if not isinstance(key, int):
+                logger.warning("Orchestrator: regions key must be an integer index, got '%s'", key)
+                return
+            self._apply_orch_reg(key, path, value)
         else:
             logger.warning("Orchestrator: unknown root '%s'", root)
+
+    @staticmethod
+    def _find_conn_by_key(cfg_conns: list[dict], key: str) -> dict | None:
+        """Look up a connection by string key.
+
+        Priority:
+        1. Explicit ``"id"`` field on the connection.
+        2. For nerve connections: ``nerve.from.region`` or ``nerve.to.region``.
+        """
+        for conn in cfg_conns:
+            if conn.get("id") == key:
+                return conn
+        for conn in cfg_conns:
+            nerve = conn.get("nerve", {})
+            if (nerve.get("from", {}) or {}).get("region") == key:
+                return conn
+            if (nerve.get("to", {}) or {}).get("region") == key:
+                return conn
+        return None
 
     def _apply_orch_conn(self, conn: dict, path: list, value: Any) -> None:
         """Apply orchestrator change to a connection config dict and the runtime state."""

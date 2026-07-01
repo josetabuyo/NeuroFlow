@@ -328,6 +328,84 @@ class TestToroidalTopology:
         )
 
 
+class TestCutBorderTopology:
+    """border="cut": border neurons get fewer synapses than interior neurons."""
+
+    def test_corner_has_fewer_dendrites_than_center(self) -> None:
+        """In cut mode, corner (0,0) gets only dendrites fully within grid bounds."""
+        random.seed(42)
+        constructor = Constructor()
+        brain, _ = constructor.crear_grilla(
+            width=15, height=15, filas_entrada=[], filas_salida=[], umbral=0.0
+        )
+        mask = get_mask("simple")
+        constructor.aplicar_mascara_2d(brain, 15, 15, mask, border="cut")
+
+        n_center = brain.get_neurona("x7y7")
+        n_corner = brain.get_neurona("x0y0")
+
+        assert len(n_corner.dendritas) < len(n_center.dendritas), (
+            f"corner ({len(n_corner.dendritas)}) should have fewer dendrites "
+            f"than center ({len(n_center.dendritas)}) in cut mode"
+        )
+
+    def test_no_wrap_in_cut_mode(self) -> None:
+        """With border=cut, left-edge neuron in Wolfram rule_110 does NOT fire the rightmost cell."""
+        exp = Experiment()
+        cfg = _nested_config(width=5, height=3, mask="rule_110")
+        cfg["grid"]["border"] = "cut"
+        exp.setup(cfg)
+
+        for i in range(exp.brain_tensor.n_real):
+            exp.brain_tensor.set_valor(i, 0.0)
+        exp.brain_tensor.set_valor(2 * 5 + 0, 1.0)  # x0y2
+
+        exp.brain_tensor.procesar()
+
+        frame = exp.brain_tensor.get_grid(5, 3)
+        row1 = [int(round(v)) for v in frame[1]]
+        assert row1[4] == 0, (
+            f"Rightmost cell must NOT fire in cut mode (no wrap-around); got row1={row1}"
+        )
+
+    def test_interior_neuron_unaffected(self) -> None:
+        """Interior neurons have the same connectivity in both border modes."""
+        random.seed(0)
+        constructor = Constructor()
+        brain_c, _ = constructor.crear_grilla(
+            width=15, height=15, filas_entrada=[], filas_salida=[], umbral=0.0
+        )
+        mask = get_mask("simple")
+        constructor.aplicar_mascara_2d(brain_c, 15, 15, mask, border="connected")
+
+        random.seed(0)
+        constructor2 = Constructor()
+        brain_k, _ = constructor2.crear_grilla(
+            width=15, height=15, filas_entrada=[], filas_salida=[], umbral=0.0
+        )
+        constructor2.aplicar_mascara_2d(brain_k, 15, 15, mask, border="cut")
+
+        c = brain_c.get_neurona("x7y7")
+        k = brain_k.get_neurona("x7y7")
+        assert len(c.dendritas) == len(k.dendritas)
+        for dc, dk in zip(c.dendritas, k.dendritas):
+            assert len(dc.sinapsis) == len(dk.sinapsis)
+
+    def test_connected_default_unchanged(self) -> None:
+        """border="connected" (default) keeps toroidal behavior — existing tests still valid."""
+        random.seed(42)
+        constructor = Constructor()
+        brain, _ = constructor.crear_grilla(
+            width=15, height=15, filas_entrada=[], filas_salida=[], umbral=0.0
+        )
+        mask = get_mask("simple")
+        constructor.aplicar_mascara_2d(brain, 15, 15, mask, border="connected")
+
+        n_center = brain.get_neurona("x7y7")
+        n_corner = brain.get_neurona("x0y0")
+        assert len(n_corner.dendritas) == len(n_center.dendritas)
+
+
 class TestDaemonMetrics:
     """Tests for daemon metrics."""
 
