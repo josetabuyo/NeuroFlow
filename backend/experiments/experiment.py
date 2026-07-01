@@ -22,6 +22,7 @@ import logging
 import random
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -36,7 +37,7 @@ from core.sinapsis import Sinapsis
 from core.dendrita import Dendrita
 from core.masks import get_mask, get_mask_type, get_random_weights, compile_deamon_wiring
 from core.nerve import place_nerve_circles, circle_cells_with_weights, NerveCircle
-from core.ascii_renderer import render_char, apply_white_noise, apply_shift_noise
+from core.ascii_renderer import render_char, apply_white_noise, apply_shift_noise, load_image_grid
 from .base import Experimento
 
 logger = logging.getLogger(__name__)
@@ -1051,6 +1052,8 @@ class Experiment(Experimento):
                 rs.draw_base = torch.zeros(rs.n, device=self.brain_tensor.valores.device)
 
         self._rebuild_lr_per_syn()
+        # Apply tick-0 injects so the initial display (before first step) shows the pattern
+        self._apply_orch_injects()
 
     def _rebuild_lr_per_syn(self) -> None:
         """Build [NR, max_syn] effective learning rate per synapse.
@@ -1292,6 +1295,64 @@ class Experiment(Experimento):
                 obj = obj.setdefault(str(seg), {})
             obj[leaf] = value
 
+    def _apply_orch_injects(self) -> None:
+        """Apply inject entries active at the current generation.
+
+        Supports one-shot and sustained forms via at.tick_end:
+          {"at": {"tick": 0}, "inject": {...}}
+          {"at": {"tick": 0, "tick_end": 20}, "inject": {...}}
+        """
+        if not self._orchestrator:
+            return
+        g = self.generation
+        for entry in self._orchestrator:
+            if "inject" not in entry or "at" not in entry:
+                continue
+            at = entry["at"]
+            t0 = at.get("tick")
+            t1 = at.get("tick_end", t0)
+            if t0 is not None and t0 <= g <= t1:
+                self._apply_orch_inject(entry["inject"])
+
+    def _apply_orch_inject(self, spec: dict) -> None:
+        """Write an activation template directly into a region's valores tensor."""
+        bt = self.brain_tensor
+        if bt is None:
+            return
+        region_key = spec.get("region")
+        if isinstance(region_key, str):
+            rs = self._regions_by_id.get(region_key)
+        elif isinstance(region_key, int) and region_key < len(self._regions):
+            rs = self._regions[region_key]
+        else:
+            rs = None
+        if rs is None:
+            logger.warning("Orchestrator inject: region '%s' not found", region_key)
+            return
+        template = spec.get("template", "noise")
+        n = rs.end - rs.start
+        if template == "noise":
+            flat = torch.rand(n)
+        elif template == "image":
+            src_path = spec.get("src", "")
+            if not src_path:
+                logger.warning("Orchestrator inject: 'image' template requires 'src'")
+                return
+            # Resolve relative paths against backend/configs/ (where JSON configs live)
+            resolved = Path(src_path)
+            if not resolved.is_absolute():
+                resolved = Path(__file__).parent.parent / "configs" / src_path
+            try:
+                grid = load_image_grid(str(resolved), rs.width, rs.height)
+                flat = torch.from_numpy(grid.flatten()).float()
+            except Exception as exc:
+                logger.warning("Orchestrator inject: failed to load '%s': %s", resolved, exc)
+                return
+        else:
+            logger.warning("Orchestrator inject: unknown template '%s'", template)
+            return
+        bt.valores[rs.start : rs.start + len(flat)] = flat.to(bt.device)
+
     def _orch_set_dendrite_weight(self, src: "RegionState", dst: "RegionState", weight: float) -> None:
         bt = self.brain_tensor
         if bt is None:
@@ -1335,7 +1396,24 @@ class Experiment(Experimento):
                         })
                     except (TypeError, ValueError):
                         pass
-            if "at" in entry:
+            if "inject" in entry and "at" in entry:
+                at = entry["at"]
+                t0 = at.get("tick")
+                t1 = at.get("tick_end", t0)
+                if t0 is not None and t0 <= g <= t1:
+                    inj = entry["inject"]
+                    payload: dict[str, Any] = {
+                        "index": i,
+                        "kind": "inject",
+                        "region": inj.get("region"),
+                        "template": inj.get("template", "noise"),
+                        "tick": t0,
+                    }
+                    if t1 != t0:
+                        payload["tick_end"] = t1
+                        payload["progress"] = round((g - t0) / max(1, t1 - t0), 4)
+                    active.append(payload)
+            elif "at" in entry:
                 at_tick = entry["at"].get("tick")
                 if at_tick is not None and at_tick == g:
                     active.append({
@@ -1547,6 +1625,8 @@ class Experiment(Experimento):
                 self.brain_tensor.tensiones[label_region.start:label_region.end] = (
                     label_tension.to(self.brain_tensor.device)
                 )
+
+        self._apply_orch_injects()
 
         for rs in self._regions:
             if rs.source_type == "error_diff":

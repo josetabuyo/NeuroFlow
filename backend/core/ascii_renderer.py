@@ -234,3 +234,15 @@ def apply_shift_noise(
     else:
         result[:, 1:] = frame[:, : w - 1]
     return result
+
+
+def load_image_grid(src: str, width: int, height: int) -> np.ndarray:
+    """Load an image and resize it to a (height, width) float32 activation grid.
+
+    Converts to grayscale, resizes to (width, height) with BOX resampling,
+    and normalizes pixel brightness to [0, 1]. Returns shape (height, width)
+    matching the row-major flatten convention used by inject_ascii.
+    """
+    img = Image.open(src).convert("L")
+    img = img.resize((width, height), Image.Resampling.BOX)
+    return np.array(img, dtype=np.float32) / 255.0

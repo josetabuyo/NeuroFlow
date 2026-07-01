@@ -205,13 +205,16 @@ export interface PerfMetrics {
 
 export interface OrchestratorEvent {
   index: number;
-  kind: "gradient" | "at";
+  kind: "gradient" | "at" | "inject";
   tick_from?: number;
   tick_to?: number;
   tick?: number;
-  expr: string;
+  tick_end?: number;
+  expr?: string;
   value?: number;
   progress?: number;
+  region?: string;
+  template?: string;
 }
 
 export interface FrameMessage {

@@ -160,8 +160,8 @@ export function Controls({
           }}
         >
           {orchestratorState.map((ev) => {
-            const label = ev.expr.split("=")[0].trim();
             if (ev.kind === "gradient") {
+              const label = (ev.expr ?? "").split("=")[0].trim();
               const pct = Math.round((ev.progress ?? 0) * 100);
               return (
                 <span key={ev.index} title={ev.expr} style={{ color: "#888" }}>
@@ -174,6 +174,15 @@ export function Controls({
                 </span>
               );
             }
+            if (ev.kind === "inject") {
+              return (
+                <span key={ev.index} title={`inject ${ev.template} → ${ev.region}`} style={{ color: "#22d3ee" }}>
+                  <span style={{ color: "#22d3ee" }}>⚡</span>
+                  {" "}{ev.region}:{ev.template}
+                </span>
+              );
+            }
+            const label = (ev.expr ?? "").split("=")[0].trim();
             return (
               <span key={ev.index} title={ev.expr} style={{ color: "#4ade80" }}>
                 <span style={{ color: "#4ade80" }}>✓</span>
