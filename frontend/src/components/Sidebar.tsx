@@ -762,12 +762,13 @@ export function Sidebar({
                   )}
                 </span>
               ),
-              body: <MaskPreview grid={previewGrid!} dendrites={activeDendrites} />,
+              body: previewGrid ? <MaskPreview grid={previewGrid} dendrites={activeDendrites} /> : null,
             },
             synapses: {
               visible: !!activeMaskStats,
               label: 'Synapses',
               body: (() => {
+                if (!activeMaskStats) return null;
                 const s = activeMaskStats as Record<string, unknown>;
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: '0.7rem', color: '#666', fontFamily: 'monospace', padding: '6px 8px', background: '#0d0d14', borderRadius: '4px', border: '1px solid #1a1a2e' }}>
