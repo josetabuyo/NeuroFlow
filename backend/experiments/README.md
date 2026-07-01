@@ -179,6 +179,64 @@ When showing T, noci_T stays silent (T is correct) → no interference.
 
 ---
 
+### `orchestrator` — eventos de control por tick
+
+Lista de entradas que disparan acciones en ticks específicos. Se evalúa cada step **antes** del procesamiento neural (excepto `inject`, que corre después).
+
+#### Gradiente escalar — `from / to`
+
+Interpola un valor entre dos ticks y lo asigna a una ruta de config:
+
+```json
+{
+  "from": {"tick": 0,   "set": "connections[0]['full']['weight'] = 0.0"},
+  "to":   {"tick": 100, "set": "connections[0]['full']['weight'] = 1.0"}
+}
+```
+
+#### One-shot — `at`
+
+Asigna un valor exactamente en un tick:
+
+```json
+{"at": {"tick": 50, "set": "connections['output']['full']['weight'] = 0.9"}}
+```
+
+Las rutas soportadas en `set`:
+
+| Ruta | Efecto |
+|------|--------|
+| `connections[N]['full']['weight']` | Peso de conexión full por índice |
+| `connections['id']['full']['weight']` | Peso de conexión full por nombre |
+| `connections['id']['nerve']['from']['weight']` | Peso de un lado nerve |
+| `regions[N]['text']` | Texto de región ascii por índice |
+
+#### Inject — `at` + `inject`
+
+Escribe valores de activación directamente en `brain_tensor.valores` de una región, **después** de `procesar()`. Visible en pantalla en ese mismo tick, y sirve como estado inicial para el tick siguiente.
+
+```json
+{"at": {"tick": 0}, "inject": {"region": "tissue", "template": "noise"}}
+```
+
+Con rango sostenido usando `tick_end` — repite el patrón cada tick del intervalo:
+
+```json
+{"at": {"tick": 0, "tick_end": 20}, "inject": {"region": "tissue", "template": "image", "src": "init_dots.jpg"}}
+```
+
+Los injects con `tick: 0` también se aplican al final del setup, antes del primer step, por lo que el estado inicial (step 0) ya refleja el patrón.
+
+**Campos de `inject`:**
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `region` | string | ID de la región destino |
+| `template` | string | `"noise"` — uniforme random `[0,1]`; `"image"` — JPG mapeado a activaciones |
+| `src` | string | Path al JPG (solo para `"image"`). Relativo a `backend/configs/`. |
+
+---
+
 ### Connection fields
 
 | Field | Description |
