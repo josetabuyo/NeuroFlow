@@ -12,10 +12,13 @@
         },
         "tension": {
           "function": {
-            "x_pow_3": 1.0
+            "b": 0,
+            "x": 2,
+            "x_pow_3": 20,
+            "x_pow_2": 3
           }
         },
-        "process_mode": "avg_vs_avg"
+        "process_mode": "group_avg"
       },
       {
         "id": "input",
@@ -34,9 +37,10 @@
       {
         "on": "tissue",
         "deamon": {
-          "mask": "deamon_e3_g2_i12_de1_di1",
-          "excitatory": { "weight": 0.9 },
-          "inhibitory": { "weight": -1 },
+          "shape": "crown",
+          "centroid": { "shift": [0, 1], "random": false },
+          "excitatory": { "weight": 0.35, "offset": 1, "noise": 0.77, "weights": [1, 1, 1] },
+          "inhibitory": { "weight": -0.92, "offset": 6, "noise": 0.77, "sectors": 12, "weights": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
           "learning": { "rate": 0.01 }
         }
       },
