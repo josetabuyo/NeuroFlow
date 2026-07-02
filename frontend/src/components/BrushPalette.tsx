@@ -1,18 +1,14 @@
-/** Toolbar — floating vertical toolbar with tool selection + brush controls. */
+/** Draw palette — brush size controls and mode toggle, expanded from the draw button. */
 
 import { generateCircleBrush, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE } from "../brushes";
 
 interface BrushPaletteProps {
   brushSize: number;
   brushMode: "activate" | "deactivate";
-  inspectMode: boolean;
-  tensionMode: boolean;
-  canInspect: boolean;
+  dimmed?: boolean;
   onIncrease: () => void;
   onDecrease: () => void;
   onToggleMode: () => void;
-  onToggleInspect: () => void;
-  onToggleTension: () => void;
   drawNoise?: number;
   onDrawNoiseChange?: (v: number) => void;
 }
@@ -53,52 +49,25 @@ function renderBrushPreview(size: number): React.ReactNode {
   );
 }
 
-const toolBtnStyle = (
-  active: boolean,
-  color: string,
-): React.CSSProperties => ({
-  width: 36,
-  height: 30,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: active ? color : "#1a1a2e",
-  color: active ? "#0a0a0f" : "#666",
-  border: active ? `2px solid ${color}` : "1px solid #2a2a3e",
-  borderRadius: 6,
-  cursor: "pointer",
-  fontSize: 15,
-  fontWeight: 700,
-  padding: 0,
-  transition: "all 0.15s",
-});
-
 export function BrushPalette({
   brushSize,
   brushMode,
-  inspectMode,
-  tensionMode,
-  canInspect,
+  dimmed = false,
   onIncrease,
   onDecrease,
   onToggleMode,
-  onToggleInspect,
-  onToggleTension,
   drawNoise,
   onDrawNoiseChange,
 }: BrushPaletteProps) {
   const isActivate = brushMode === "activate";
   const pixelCount = generateCircleBrush(brushSize).length;
-  const canIncrease = !inspectMode && brushSize < MAX_BRUSH_SIZE;
-  const canDecrease = !inspectMode && brushSize > MIN_BRUSH_SIZE;
+  const canIncrease = !dimmed && brushSize < MAX_BRUSH_SIZE;
+  const canDecrease = !dimmed && brushSize > MIN_BRUSH_SIZE;
+
   return (
     <div
       data-testid="brush-palette"
       style={{
-        position: "absolute",
-        right: 8,
-        top: "50%",
-        transform: "translateY(-50%)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -107,44 +76,11 @@ export function BrushPalette({
         border: "1px solid #2a2a3e",
         borderRadius: 8,
         padding: 6,
-        zIndex: 10,
+        opacity: dimmed ? 0.3 : 1,
+        pointerEvents: dimmed ? "none" : "auto",
+        transition: "opacity 0.15s",
       }}
     >
-      <button
-        onClick={onToggleTension}
-        title={tensionMode ? "Hide tensions" : "View surface tensions"}
-        aria-label="View tensions"
-        style={{
-          ...toolBtnStyle(tensionMode, "#ff6b35"),
-          width: "100%",
-          cursor: "pointer",
-        }}
-      >
-        ≋
-      </button>
-
-      <button
-        onClick={onToggleInspect}
-        disabled={!canInspect && !inspectMode}
-        title="Inspect connections"
-        aria-label={inspectMode ? "Brush tool" : "Inspect tool"}
-        style={{
-          ...toolBtnStyle(inspectMode, "#ffff00"),
-          width: "100%",
-          cursor: canInspect || inspectMode ? "pointer" : "not-allowed",
-        }}
-      >
-        ⊙
-      </button>
-
-      <div
-        style={{
-          width: "100%",
-          height: 1,
-          background: "#2a2a3e",
-        }}
-      />
-
       <div
         data-testid="brush-controls"
         style={{
@@ -152,9 +88,6 @@ export function BrushPalette({
           flexDirection: "column",
           alignItems: "center",
           gap: 4,
-          opacity: inspectMode ? 0.3 : 1,
-          pointerEvents: inspectMode ? "none" : "auto",
-          transition: "opacity 0.15s",
         }}
       >
         <button
@@ -267,8 +200,6 @@ export function BrushPalette({
               flexDirection: "column",
               alignItems: "center",
               gap: 3,
-              opacity: inspectMode ? 0.3 : 1,
-              pointerEvents: inspectMode ? "none" : "auto",
             }}
           >
             <span style={{ fontSize: 9, color: "#8888aa", userSelect: "none" }}>noise</span>

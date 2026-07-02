@@ -89,6 +89,7 @@ export function Scene({
   const [oneToOne, setOneToOne] = useState(false);
   const [boxes, setBoxes] = useState<Boxes>({});
   const [layoutKey, setLayoutKey] = useState(0);
+  const [drawOpen, setDrawOpen] = useState(false);
 
   // Info panel position (draggable, independent of boxes state)
   const [infoPanelPos, setInfoPanelPos] = useState<{ x: number; y: number } | null>(null);
@@ -377,17 +378,76 @@ export function Scene({
       </svg>
 
       {/* ── Scene toolbar ── */}
-      <div style={{ position: "absolute", top: 8, left: 8, display: "flex", gap: 6, zIndex: 30 }}>
-        <button onClick={toggleOneToOne} title="Toggle 1:1 scale" style={{
-          padding: "3px 9px", background: oneToOne ? "#4cc9f0" : "#14142a",
-          border: `1px solid ${oneToOne ? "#4cc9f0" : "#2a2a3e"}`, borderRadius: 4,
-          color: oneToOne ? "#0a0a0a" : "#555", fontSize: "0.62rem", fontFamily: "monospace",
-          fontWeight: 600, cursor: "pointer", letterSpacing: "0.05em", transition: "all 0.15s",
-        }}>1:1</button>
-        <button onClick={resetLayout} title="Reset layout" style={{
-          padding: "3px 8px", background: "#14142a", border: "1px solid #2a2a3e",
-          borderRadius: 4, color: "#444", fontSize: "0.75rem", cursor: "pointer", transition: "all 0.15s",
-        }}>↺</button>
+      <div style={{ position: "absolute", top: 8, left: 8, display: "flex", flexDirection: "column", gap: 4, zIndex: 30 }}>
+        {/* Single row: all 5 tool buttons equal-sized */}
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={toggleOneToOne} title="Toggle 1:1 scale" style={{
+            width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+            background: oneToOne ? "#4cc9f0" : "#1a1a2e",
+            color: oneToOne ? "#0a0a0f" : "#555",
+            border: oneToOne ? "2px solid #4cc9f0" : "1px solid #2a2a3e",
+            borderRadius: 6, cursor: "pointer", fontSize: "0.6rem", fontFamily: "monospace",
+            fontWeight: 700, padding: 0, letterSpacing: "0.05em", transition: "all 0.15s",
+          }}>1:1</button>
+          <button onClick={resetLayout} title="Reset layout" style={{
+            width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+            background: "#1a1a2e", color: "#555",
+            border: "1px solid #2a2a3e",
+            borderRadius: 6, cursor: "pointer", fontSize: 15, fontWeight: 700, padding: 0, transition: "all 0.15s",
+          }}>↺</button>
+          <button
+            onClick={onToggleTension}
+            title={tensionMode ? "Hide tensions" : "View surface tensions"}
+            aria-label="View tensions"
+            style={{
+              width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+              background: tensionMode ? "#ff6b35" : "#1a1a2e",
+              color: tensionMode ? "#0a0a0f" : "#666",
+              border: tensionMode ? "2px solid #ff6b35" : "1px solid #2a2a3e",
+              borderRadius: 6, cursor: "pointer", fontSize: 15, fontWeight: 700, padding: 0, transition: "all 0.15s",
+            }}
+          >≋</button>
+          <button
+            onClick={onToggleInspect}
+            disabled={!canInspect && !inspectMode}
+            title="Inspect connections"
+            aria-label={inspectMode ? "Brush tool" : "Inspect tool"}
+            style={{
+              width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+              background: inspectMode ? "#ffff00" : "#1a1a2e",
+              color: inspectMode ? "#0a0a0f" : "#666",
+              border: inspectMode ? "2px solid #ffff00" : "1px solid #2a2a3e",
+              borderRadius: 6, cursor: canInspect || inspectMode ? "pointer" : "not-allowed",
+              fontSize: 15, fontWeight: 700, padding: 0, transition: "all 0.15s",
+            }}
+          >⊙</button>
+          <button
+            onClick={() => setDrawOpen(o => !o)}
+            title={drawOpen ? "Close draw palette" : "Open draw palette"}
+            aria-label="Draw tool"
+            style={{
+              width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+              background: drawOpen ? "#4cc9f0" : "#1a1a2e",
+              color: drawOpen ? "#0a0a0f" : "#666",
+              border: drawOpen ? "2px solid #4cc9f0" : "1px solid #2a2a3e",
+              borderRadius: 6, cursor: "pointer", fontSize: 15, fontWeight: 700, padding: 0, transition: "all 0.15s",
+            }}
+          >✏</button>
+        </div>
+
+        {/* Draw palette: expands below when draw is active */}
+        {drawOpen && (
+          <BrushPalette
+            brushSize={brushSize}
+            brushMode={brushMode}
+            dimmed={inspectMode}
+            onIncrease={onIncrease}
+            onDecrease={onDecrease}
+            onToggleMode={onToggleMode}
+            drawNoise={drawNoise}
+            onDrawNoiseChange={onDrawNoiseChange}
+          />
+        )}
       </div>
 
       {/* ── Region boxes ── */}
@@ -596,23 +656,6 @@ export function Scene({
         </div>
       )}
 
-      {/* ── BrushPalette ── */}
-      <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", zIndex: 30 }}>
-        <BrushPalette
-          brushSize={brushSize}
-          brushMode={brushMode}
-          inspectMode={inspectMode}
-          tensionMode={tensionMode ?? false}
-          canInspect={canInspect}
-          onIncrease={onIncrease}
-          onDecrease={onDecrease}
-          onToggleMode={onToggleMode}
-          onToggleInspect={onToggleInspect}
-          onToggleTension={onToggleTension}
-          drawNoise={drawNoise}
-          onDrawNoiseChange={onDrawNoiseChange}
-        />
-      </div>
 
       {/* ── Initializing overlay ── */}
       {isInitializing && (
