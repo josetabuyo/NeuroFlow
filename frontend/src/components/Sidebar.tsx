@@ -1,7 +1,7 @@
 /** Sidebar — template selector, JSON config editor, previews, and start button. */
 
 import React, { useEffect, useRef, useMemo, useState, useCallback } from "react";
-import type { ConfigTemplate, DendriteInfo, ExperimentConfig, ExperimentState, ExperimentStats, Metadata } from "../types";
+import type { Experiment, DendriteInfo, ExperimentConfig, ExperimentState, ExperimentStats, Metadata } from "../types";
 import { JsonConfigEditor } from "./JsonConfigEditor";
 
 function weightToColor(weight: number | null): string {
@@ -305,13 +305,13 @@ function TensionFunctionViz({ fn, softMode }: { fn: Record<string, number>; soft
 
 
 interface SidebarProps {
-  templates: ConfigTemplate[];
-  selectedTemplate: string;
+  experiments: Experiment[];
+  selectedExperimentId: number | null;
   config: ExperimentConfig;
   metadata?: Metadata;
   state: ExperimentState;
   stats: ExperimentStats | null;
-  onSelectTemplate: (id: string) => void;
+  onSelectExperiment: (id: number) => void;
   onConfigChange: (config: ExperimentConfig) => void;
   onStart: () => void;
   onRefresh?: () => void;
@@ -324,18 +324,21 @@ interface SidebarProps {
   canGoNext?: boolean;
   runPosition?: number;
   runTotal?: number;
-  onLoadDefault?: () => void;
-  onLoadSession?: () => void;
+  onRevert?: () => void;
+  onCreateExperiment?: () => void;
+  onRenameExperiment?: (id: number, name: string) => void;
+  onDeleteExperiment?: (id: number) => void;
+  onReorderExperiment?: (id: number, direction: "up" | "down") => void;
 }
 
 export function Sidebar({
-  templates,
-  selectedTemplate,
+  experiments,
+  selectedExperimentId,
   config,
   metadata,
   state,
   stats,
-  onSelectTemplate,
+  onSelectExperiment,
   onConfigChange,
   onStart,
   onRefresh,
@@ -348,9 +351,35 @@ export function Sidebar({
   canGoNext = false,
   runPosition = 0,
   runTotal = 0,
-  onLoadDefault,
-  onLoadSession,
+  onRevert,
+  onCreateExperiment,
+  onRenameExperiment,
+  onDeleteExperiment,
+  onReorderExperiment,
 }: SidebarProps) {
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const selectedExperiment = experiments.find((e) => e.id === selectedExperimentId) ?? null;
+
+  const startRenaming = useCallback(() => {
+    if (!selectedExperiment) return;
+    setRenameDraft(selectedExperiment.name);
+    setRenaming(true);
+  }, [selectedExperiment]);
+
+  const commitRename = useCallback(() => {
+    setRenaming(false);
+    if (selectedExperimentId != null && renameDraft.trim()) {
+      onRenameExperiment?.(selectedExperimentId, renameDraft.trim());
+    }
+  }, [selectedExperimentId, renameDraft, onRenameExperiment]);
+
+  const handleDelete = useCallback(() => {
+    if (selectedExperimentId == null) return;
+    if (confirm(`Delete experiment "${selectedExperiment?.name}"? This also deletes its run history.`)) {
+      onDeleteExperiment?.(selectedExperimentId);
+    }
+  }, [selectedExperimentId, selectedExperiment, onDeleteExperiment]);
   const isInitializing = state === "initializing";
 
   const masks = metadata?.masks ?? [];
@@ -583,7 +612,7 @@ export function Sidebar({
         {isInitializing ? "Initializing..." : !connected ? "Connecting..." : experimentActive ? "Refresh Experiment" : "Start Experiment"}
       </button>
 
-      {/* Template selector */}
+      {/* Experiment selector */}
       <div>
         <h3
           style={{
@@ -594,28 +623,78 @@ export function Sidebar({
             letterSpacing: "0.1em",
           }}
         >
-          Config Templates
+          Experiments
         </h3>
-        <select
-          value={selectedTemplate}
-          onChange={(e) => onSelectTemplate(e.target.value)}
-          style={{
-            width: "100%",
-            padding: "8px 12px",
-            background: "#0d0d14",
-            border: "1px solid #2a2a3e",
-            borderRadius: "6px",
-            color: "#e0e0ff",
-            fontSize: "0.85rem",
-            cursor: "pointer",
-          }}
-        >
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+        {renaming ? (
+          <input
+            autoFocus
+            value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") setRenaming(false);
+            }}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              background: "#0d0d14",
+              border: "1px solid #4cc9f0",
+              borderRadius: "6px",
+              color: "#e0e0ff",
+              fontSize: "0.85rem",
+            }}
+          />
+        ) : (
+          <select
+            value={selectedExperimentId ?? ""}
+            onChange={(e) => onSelectExperiment(Number(e.target.value))}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              background: "#0d0d14",
+              border: "1px solid #2a2a3e",
+              borderRadius: "6px",
+              color: "#e0e0ff",
+              fontSize: "0.85rem",
+              cursor: "pointer",
+            }}
+          >
+            {experiments.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </select>
+        )}
+        {/* Experiment ABM controls */}
+        <div style={{ marginTop: "6px", display: "flex", gap: "6px" }}>
+          <button onClick={onCreateExperiment} title="Create a new experiment" style={sidebarButtonStyle}>
+            + New
+          </button>
+          <button onClick={startRenaming} disabled={!selectedExperiment} title="Rename experiment" style={sidebarButtonStyle}>
+            Rename
+          </button>
+          <button onClick={handleDelete} disabled={!selectedExperiment} title="Delete experiment" style={sidebarButtonStyle}>
+            Delete
+          </button>
+          <button
+            onClick={() => selectedExperimentId != null && onReorderExperiment?.(selectedExperimentId, "up")}
+            disabled={!selectedExperiment}
+            title="Move up"
+            style={{ ...sidebarButtonStyle, flex: "0 0 auto", padding: "5px 8px" }}
+          >
+            &#9650;
+          </button>
+          <button
+            onClick={() => selectedExperimentId != null && onReorderExperiment?.(selectedExperimentId, "down")}
+            disabled={!selectedExperiment}
+            title="Move down"
+            style={{ ...sidebarButtonStyle, flex: "0 0 auto", padding: "5px 8px" }}
+          >
+            &#9660;
+          </button>
+        </div>
         {/* Run history navigation */}
         {runTotal > 0 && (
           <div style={{ display: "flex", gap: "4px", alignItems: "center", marginTop: "8px" }}>
@@ -667,36 +746,11 @@ export function Sidebar({
             </button>
           </div>
         )}
-        {/* Load Default / Load Session buttons */}
+        {/* Revert to last saved config */}
         <div style={{ marginTop: "6px", display: "flex", gap: "6px" }}>
           <button
-            onClick={onLoadDefault}
-            title="Load the template's default config from file"
-            style={{
-              flex: 1,
-              padding: "5px 10px",
-              background: "#1e1e3a",
-              border: "1px solid #4a4a7a",
-              borderRadius: "4px",
-              color: "#a0a0cc",
-              fontSize: "0.75rem",
-              cursor: "pointer",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#4cc9f0";
-              (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a";
-              (e.currentTarget as HTMLButtonElement).style.color = "#a0a0cc";
-            }}
-          >
-            Load Default
-          </button>
-          <button
-            onClick={onLoadSession}
-            title="Load last session config from local file"
+            onClick={onRevert}
+            title="Discard unsaved edits and reload the experiment's saved config"
             style={{
               flex: 1,
               padding: "5px 10px",
@@ -717,9 +771,8 @@ export function Sidebar({
               (e.currentTarget as HTMLButtonElement).style.color = "#a0a0cc";
             }}
           >
-            Load Session
+            Revert
           </button>
-          <SessionFileButtons templateId={selectedTemplate} />
         </div>
       </div>
 
@@ -852,57 +905,17 @@ export function Sidebar({
   );
 }
 
-function SessionFileButtons({ templateId }: { templateId: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const copyPath = async () => {
-    try {
-      const res = await fetch(`/api/session/file-path/${templateId}`);
-      const { path } = await res.json();
-      await navigator.clipboard.writeText(path);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {/* ignore */}
-  };
-
-  const revealInFinder = () =>
-    fetch(`/api/session/reveal/${templateId}`, { method: "POST" }).catch(() => {});
-
-  const btnStyle: React.CSSProperties = {
-    padding: "5px 7px",
-    background: "#1e1e3a",
-    border: "1px solid #4a4a7a",
-    borderRadius: "4px",
-    color: "#a0a0cc",
-    fontSize: "0.85rem",
-    cursor: "pointer",
-    transition: "all 0.15s",
-    lineHeight: 1,
-  };
-
-  return (
-    <div style={{ display: "flex", gap: "4px" }}>
-      <button
-        onClick={copyPath}
-        title="Copy session file path"
-        style={{ ...btnStyle, color: copied ? "#06d6a0" : "#a0a0cc" }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#4cc9f0"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a"; }}
-      >
-        {copied ? "✓" : "⎘"}
-      </button>
-      <button
-        onClick={revealInFinder}
-        title="Reveal session file in Finder"
-        style={btnStyle}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#ffd166"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a"; }}
-      >
-        📂
-      </button>
-    </div>
-  );
-}
+const sidebarButtonStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "5px 10px",
+  background: "#1e1e3a",
+  border: "1px solid #4a4a7a",
+  borderRadius: "4px",
+  color: "#a0a0cc",
+  fontSize: "0.75rem",
+  cursor: "pointer",
+  transition: "all 0.15s",
+};
 
 function HelpPanel() {
   const [open, setOpen] = useState(false);

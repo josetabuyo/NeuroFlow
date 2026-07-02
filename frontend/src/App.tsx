@@ -6,7 +6,7 @@ import { Controls } from "./components/Controls";
 import { Scene } from "./components/Scene";
 import { useExperiment } from "./hooks/useExperiment";
 import { generateCircleBrush } from "./brushes";
-import type { ConfigTemplate, ExperimentConfig, Metadata } from "./types";
+import type { Experiment, ExperimentDetail, ExperimentConfig, Metadata } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -64,9 +64,9 @@ const SIDEBAR_MIN = 280;
 const SIDEBAR_MAX = 700;
 
 function App() {
-  const [templates, setTemplates] = useState<ConfigTemplate[]>([]);
+  const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [metadata, setMetadata] = useState<Metadata | undefined>(undefined);
-  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [selectedExperimentId, setSelectedExperimentId] = useState<number | null>(null);
   const [config, setConfig] = useState<ExperimentConfig>(DEFAULT_CONFIG);
   const [stepsPerTick, setStepsPerTick] = useState(1);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
@@ -79,33 +79,25 @@ function App() {
   const canGoPrev = runIndex > 0;
   const canGoNext = runIndex >= 0 && runIndex < runHistory.length - 1;
 
-  const selectedTemplateRef = useRef(selectedTemplate);
-  selectedTemplateRef.current = selectedTemplate;
+  const selectedExperimentIdRef = useRef(selectedExperimentId);
+  selectedExperimentIdRef.current = selectedExperimentId;
 
-  const loadHistory = useCallback((templateId: string, sessionConfig?: ExperimentConfig, fallbackConfig?: ExperimentConfig) => {
-    fetch(`${API_URL}/api/templates/${templateId}/config/history?preset=_default`)
+  const loadHistory = useCallback((experimentId: number, currentConfig?: ExperimentConfig) => {
+    fetch(`${API_URL}/api/experiments/${experimentId}/runs`)
       .then((r) => r.json())
       .then((data: { history: { config: ExperimentConfig }[] }) => {
-        if (selectedTemplateRef.current !== templateId) return;
+        if (selectedExperimentIdRef.current !== experimentId) return;
         const configs = data.history.map((h) => h.config);
         setRunHistory(configs);
-        if (sessionConfig) {
-          setConfig(sessionConfig);
-          setRunIndex(configs.length > 0 ? configs.length - 1 : -1);
-        } else if (configs.length > 0) {
-          setRunIndex(configs.length - 1);
-          setConfig(configs[configs.length - 1]);
-        } else {
-          setRunIndex(-1);
-          if (fallbackConfig) setConfig(fallbackConfig);
-        }
+        setRunIndex(configs.length > 0 ? configs.length - 1 : -1);
+        if (currentConfig) setConfig(currentConfig);
       })
       .catch(() => {});
   }, []);
 
   const saveExecution = useCallback(
-    (templateId: string, cfg: ExperimentConfig) => {
-      fetch(`${API_URL}/api/templates/${templateId}/config?preset=_default`, {
+    (experimentId: number, cfg: ExperimentConfig) => {
+      fetch(`${API_URL}/api/experiments/${experimentId}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(cfg),
@@ -210,29 +202,27 @@ function App() {
     }
   }, [normalizedConfig]);
 
-  // Fetch templates + metadata on mount
+  // Fetch experiments + metadata on mount
   useEffect(() => {
     Promise.all([
-      fetch(`${API_URL}/api/templates`).then((r) => r.json()),
+      fetch(`${API_URL}/api/experiments`).then((r) => r.json()),
       fetch(`${API_URL}/api/metadata`).then((r) => r.json()),
     ])
-      .then(([tplData, metaData]: [ConfigTemplate[], Metadata]) => {
-        setTemplates(tplData);
+      .then(([expData, metaData]: [Experiment[], Metadata]) => {
+        setExperiments(expData);
         setMetadata(metaData);
-        if (tplData.length > 0) {
-          const savedId = localStorage.getItem("neuroflow_last_template");
-          const initialTpl = tplData.find((t) => t.id === savedId) ?? tplData[0];
-          const firstId = initialTpl.id;
-          setSelectedTemplate(firstId);
-          setConfig(initialTpl.config);
+        if (expData.length > 0) {
+          const savedId = Number(localStorage.getItem("neuroflow_last_experiment_id"));
+          const initial = expData.find((e) => e.id === savedId) ?? expData[0];
+          setSelectedExperimentId(initial.id);
 
-          fetch(`${API_URL}/api/session/last/${firstId}`)
+          fetch(`${API_URL}/api/experiments/${initial.id}`)
             .then((r) => r.json())
-            .then((data: { config: ExperimentConfig | null }) => {
-              if (selectedTemplateRef.current !== firstId) return;
-              loadHistory(firstId, data.config ?? undefined, initialTpl.config);
+            .then((detail: ExperimentDetail) => {
+              if (selectedExperimentIdRef.current !== initial.id) return;
+              loadHistory(initial.id, detail.config);
             })
-            .catch(() => loadHistory(firstId, undefined, initialTpl.config));
+            .catch(() => {});
         }
       })
       .catch(() => {});
@@ -271,27 +261,26 @@ function App() {
     });
   }, []);
 
-  const saveLastSession = useCallback((templateId: string, cfg: ExperimentConfig) => {
-    if (!templateId) return;
-    fetch(`${API_URL}/api/session/last/${templateId}`, {
-      method: "POST",
+  const saveExperimentConfig = useCallback((experimentId: number, cfg: ExperimentConfig) => {
+    fetch(`${API_URL}/api/experiments/${experimentId}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cfg),
+      body: JSON.stringify({ config: cfg }),
     }).catch(() => {});
   }, []);
 
-  // Persist last config for this template to local session file (debounced)
+  // Persist current config for this experiment to the DB (debounced autosave)
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const flashlightRef = useRef<{ cells: { x: number; y: number }[]; regionId?: string } | null>(null);
   useEffect(() => {
-    if (!selectedTemplate) return;
+    if (selectedExperimentId == null) return;
     clearTimeout(sessionTimerRef.current);
     sessionTimerRef.current = setTimeout(
-      () => saveLastSession(selectedTemplate, config),
+      () => saveExperimentConfig(selectedExperimentId, config),
       500,
     );
     return () => clearTimeout(sessionTimerRef.current);
-  }, [config, selectedTemplate, saveLastSession]);
+  }, [config, selectedExperimentId, saveExperimentConfig]);
 
   // Soft config sync: update running experiment when certain nested fields change
   const prevConfigRef = useRef(config);
@@ -312,56 +301,125 @@ function App() {
     return () => clearTimeout(liveTimerRef.current);
   }, [config, updateConfig, experimentActive, hasGrid]);
 
-  const handleSelectTemplate = useCallback(
-    (id: string) => {
-      setSelectedTemplate(id);
-      localStorage.setItem("neuroflow_last_template", id);
-      const tpl = templates.find((t) => t.id === id);
-      fetch(`${API_URL}/api/session/last/${id}`)
+  const handleSelectExperiment = useCallback(
+    (id: number) => {
+      setSelectedExperimentId(id);
+      localStorage.setItem("neuroflow_last_experiment_id", String(id));
+      fetch(`${API_URL}/api/experiments/${id}`)
         .then((r) => r.json())
-        .then((data: { config: ExperimentConfig | null }) => {
-          if (selectedTemplateRef.current !== id) return;
-          loadHistory(id, data.config ?? undefined, tpl?.config);
+        .then((detail: ExperimentDetail) => {
+          if (selectedExperimentIdRef.current !== id) return;
+          loadHistory(id, detail.config);
         })
-        .catch(() => loadHistory(id, undefined, tpl?.config));
+        .catch(() => {});
     },
-    [templates, loadHistory],
+    [loadHistory],
   );
 
-  const handleLoadSession = useCallback(() => {
-    if (!selectedTemplate) return;
-    fetch(`${API_URL}/api/session/last/${selectedTemplate}`)
+  const handleRevert = useCallback(() => {
+    if (selectedExperimentId == null) return;
+    fetch(`${API_URL}/api/experiments/${selectedExperimentId}`)
       .then((r) => r.json())
-      .then((data: { config: ExperimentConfig | null }) => {
-        if (data.config) {
-          setConfig(data.config);
-        } else {
-          console.warn("[NeuroFlow] Load Session: no config found in session file for template", selectedTemplate);
-          alert(`session_${selectedTemplate}.json no tiene un config válido.\n\nEl archivo debe contener directamente el config:\n{ "regions": [...] }\n\nRevisa que el JSON sea válido.`);
-        }
-      })
+      .then((detail: ExperimentDetail) => setConfig(detail.config))
       .catch(() => {});
-  }, [selectedTemplate]);
+  }, [selectedExperimentId]);
 
-  const handleLoadDefault = useCallback(() => {
-    fetch(`${API_URL}/api/templates/refresh`, { method: "POST" })
+  const handleCreateExperiment = useCallback(() => {
+    fetch(`${API_URL}/api/experiments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Untitled", config: DEFAULT_CONFIG }),
+    })
       .then((r) => r.json())
-      .then((tpls: ConfigTemplate[]) => {
-        const tpl = tpls.find((t) => t.id === selectedTemplate);
-        if (tpl) setConfig(tpl.config);
+      .then((detail: ExperimentDetail) => {
+        setExperiments((prev) => [...prev, detail]);
+        setSelectedExperimentId(detail.id);
+        localStorage.setItem("neuroflow_last_experiment_id", String(detail.id));
+        setConfig(detail.config);
+        setRunHistory([]);
+        setRunIndex(-1);
       })
       .catch(() => {});
-  }, [selectedTemplate]);
+  }, []);
+
+  const handleRenameExperiment = useCallback((id: number, name: string) => {
+    fetch(`${API_URL}/api/experiments/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    })
+      .then((r) => r.json())
+      .then((detail: ExperimentDetail) => {
+        setExperiments((prev) => prev.map((e) => (e.id === id ? detail : e)));
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleDeleteExperiment = useCallback(
+    (id: number) => {
+      fetch(`${API_URL}/api/experiments/${id}`, { method: "DELETE" })
+        .then(() => {
+          setExperiments((prev) => {
+            const remaining = prev.filter((e) => e.id !== id);
+            if (selectedExperimentIdRef.current === id) {
+              const next = remaining[0];
+              if (next) {
+                handleSelectExperiment(next.id);
+              } else {
+                setSelectedExperimentId(null);
+                setRunHistory([]);
+                setRunIndex(-1);
+              }
+            }
+            return remaining;
+          });
+        })
+        .catch(() => {});
+    },
+    [handleSelectExperiment],
+  );
+
+  const handleReorderExperiment = useCallback((id: number, direction: "up" | "down") => {
+    setExperiments((prev) => {
+      const sorted = [...prev].sort((a, b) => a.position - b.position);
+      const idx = sorted.findIndex((e) => e.id === id);
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (idx === -1 || swapIdx < 0 || swapIdx >= sorted.length) return prev;
+
+      const a = sorted[idx];
+      const b = sorted[swapIdx];
+      fetch(`${API_URL}/api/experiments/${a.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position: b.position }),
+      }).catch(() => {});
+      fetch(`${API_URL}/api/experiments/${b.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position: a.position }),
+      }).catch(() => {});
+
+      return prev
+        .map((e) => {
+          if (e.id === a.id) return { ...e, position: b.position };
+          if (e.id === b.id) return { ...e, position: a.position };
+          return e;
+        })
+        .sort((x, y) => x.position - y.position);
+    });
+  }, []);
 
   const handleStart = useCallback(() => {
+    if (selectedExperimentId == null) return;
     start(config);
-    saveExecution(selectedTemplate, config);
-  }, [start, config, saveExecution, selectedTemplate]);
+    saveExecution(selectedExperimentId, config);
+  }, [start, config, saveExecution, selectedExperimentId]);
 
   const handleRefresh = useCallback(() => {
+    if (selectedExperimentId == null) return;
     reconnect(config);
-    saveExecution(selectedTemplate, config);
-  }, [reconnect, config, saveExecution, selectedTemplate]);
+    saveExecution(selectedExperimentId, config);
+  }, [reconnect, config, saveExecution, selectedExperimentId]);
 
   const computeBrushCells = useCallback(
     (x: number, y: number, regionId?: string): { x: number; y: number }[] => {
@@ -477,13 +535,13 @@ function App() {
       }}
     >
       <Sidebar
-        templates={templates}
-        selectedTemplate={selectedTemplate}
+        experiments={experiments}
+        selectedExperimentId={selectedExperimentId}
         config={config}
         metadata={metadata}
         state={state}
         stats={stats}
-        onSelectTemplate={handleSelectTemplate}
+        onSelectExperiment={handleSelectExperiment}
         onConfigChange={setConfig}
         onStart={handleStart}
         onRefresh={handleRefresh}
@@ -496,8 +554,11 @@ function App() {
         canGoNext={canGoNext}
         runPosition={runIndex >= 0 ? runIndex + 1 : 0}
         runTotal={runHistory.length}
-        onLoadDefault={handleLoadDefault}
-        onLoadSession={handleLoadSession}
+        onRevert={handleRevert}
+        onCreateExperiment={handleCreateExperiment}
+        onRenameExperiment={handleRenameExperiment}
+        onDeleteExperiment={handleDeleteExperiment}
+        onReorderExperiment={handleReorderExperiment}
       />
 
       {/* Resize handle */}
@@ -615,7 +676,7 @@ function App() {
                   </p>
                   <p>
                     {connected
-                      ? "Select a template and start"
+                      ? "Select an experiment and start"
                       : "Connecting to server..."}
                   </p>
                 </>

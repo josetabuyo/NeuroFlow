@@ -183,10 +183,15 @@ export interface ExperimentConfig {
   };
 }
 
-export interface ConfigTemplate {
-  id: string;
+export interface Experiment {
+  id: number;
   name: string;
-  description: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExperimentDetail extends Experiment {
   config: ExperimentConfig;
 }
 

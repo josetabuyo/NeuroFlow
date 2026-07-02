@@ -2,59 +2,21 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from core.masks import get_mask_info, preview_deamon_wiring
 from core.ascii_renderer import get_available_fonts
-from db import save_config, get_latest, get_history
+from db import (
+    create_experiment,
+    delete_experiment,
+    get_experiment,
+    get_runs,
+    list_experiments,
+    save_run,
+    update_experiment,
+)
 
 router = APIRouter(prefix="/api")
-
-# ── Config template loader ──
-
-CONFIGS_DIR = Path(__file__).parent.parent / "configs"
-DATA_DIR = Path(__file__).parent.parent / "data"
-
-
-def _session_file(template_id: str) -> Path:
-    return DATA_DIR / f"session_{template_id}.json"
-
-
-def _read_session_config(template_id: str) -> dict | None:
-    try:
-        return json.loads(_session_file(template_id).read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
-
-
-def _write_session_config(template_id: str, config: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    _session_file(template_id).write_text(json.dumps(config, indent=2))
-
-
-def _load_templates() -> list[dict]:
-    """Load all JSON config templates from the configs/ directory."""
-    templates: list[dict] = []
-    if not CONFIGS_DIR.is_dir():
-        return templates
-    for fp in sorted(CONFIGS_DIR.glob("*.json")):
-        try:
-            data = json.loads(fp.read_text())
-            templates.append({
-                "id": fp.stem,
-                "name": data.get("name", fp.stem),
-                "description": data.get("description", ""),
-                "config": data.get("config", {}),
-            })
-        except (json.JSONDecodeError, KeyError):
-            continue
-    return templates
-
-
-TEMPLATES: list[dict] = _load_templates()
 
 
 # ── Endpoints ──
@@ -63,29 +25,6 @@ TEMPLATES: list[dict] = _load_templates()
 async def health() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "ok", "version": "0.2.0"}
-
-
-@router.get("/templates")
-async def list_templates() -> list[dict]:
-    """List all available config templates."""
-    return TEMPLATES
-
-
-@router.post("/templates/refresh")
-async def refresh_templates() -> list[dict]:
-    """Re-read all JSON files from configs/ and update the in-memory TEMPLATES list."""
-    global TEMPLATES
-    TEMPLATES = _load_templates()
-    return TEMPLATES
-
-
-@router.get("/templates/{template_id}")
-async def get_template(template_id: str) -> dict:
-    """Get a specific config template."""
-    for t in TEMPLATES:
-        if t["id"] == template_id:
-            return t
-    return {"error": f"Template '{template_id}' not found"}
 
 
 @router.get("/metadata")
@@ -107,16 +46,6 @@ async def get_metadata() -> dict:
     }
 
 
-@router.post("/templates/{template_id}/config")
-async def save_template_config(
-    template_id: str, request: Request, preset: str = "_default",
-) -> dict:
-    """Persist a config snapshot for a template+preset."""
-    config = await request.json()
-    sid = save_config(template_id, preset, config)
-    return {"id": sid}
-
-
 @router.post("/preview-wiring")
 async def preview_wiring(request: Request) -> dict:
     """Compute preview_grid and mask_stats for an inline deamon wiring definition."""
@@ -124,47 +53,65 @@ async def preview_wiring(request: Request) -> dict:
     return preview_deamon_wiring(wiring)
 
 
-@router.get("/templates/{template_id}/config/latest")
-def get_latest_config(template_id: str, preset: str = "_default") -> dict:
-    """Return the most recently saved config for a template+preset."""
-    config = get_latest(template_id, preset)
-    return {"config": config}
+# ── Experiments (ABM) ──
+
+@router.get("/experiments")
+async def api_list_experiments() -> list[dict]:
+    """List all experiments (lightweight — no config payload)."""
+    return list_experiments()
 
 
-@router.get("/templates/{template_id}/config/history")
-def get_config_history(template_id: str, preset: str = "_default") -> dict:
-    """All executed configs for a template+preset, oldest first."""
-    return {"history": get_history(template_id, preset)}
+@router.post("/experiments")
+async def api_create_experiment(request: Request) -> dict:
+    """Create a new experiment."""
+    body = await request.json()
+    name = body.get("name") or "Untitled"
+    config = body.get("config", {})
+    return create_experiment(name, config)
 
 
-@router.get("/session/last/{template_id}")
-def get_last_session(template_id: str) -> dict:
-    """Return last-used config for this template from its session file."""
-    return {"config": _read_session_config(template_id)}
+@router.get("/experiments/{experiment_id}")
+async def api_get_experiment(experiment_id: int) -> dict:
+    """Get a single experiment, including its current config."""
+    experiment = get_experiment(experiment_id)
+    if experiment is None:
+        raise HTTPException(status_code=404, detail=f"Experiment {experiment_id} not found")
+    return experiment
 
 
-@router.post("/session/last/{template_id}")
-async def save_last_session(template_id: str, request: Request) -> dict:
-    """Persist current config for this template into its session file."""
+@router.patch("/experiments/{experiment_id}")
+async def api_update_experiment(experiment_id: int, request: Request) -> dict:
+    """Update an experiment's name, config, and/or position."""
+    body = await request.json()
+    experiment = update_experiment(
+        experiment_id,
+        name=body.get("name"),
+        config=body.get("config"),
+        position=body.get("position"),
+    )
+    if experiment is None:
+        raise HTTPException(status_code=404, detail=f"Experiment {experiment_id} not found")
+    return experiment
+
+
+@router.delete("/experiments/{experiment_id}")
+async def api_delete_experiment(experiment_id: int) -> dict:
+    """Delete an experiment and its run history."""
+    deleted = delete_experiment(experiment_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Experiment {experiment_id} not found")
+    return {"ok": True}
+
+
+@router.get("/experiments/{experiment_id}/runs")
+async def api_get_runs(experiment_id: int) -> dict:
+    """All executed configs for this experiment, oldest first."""
+    return {"history": get_runs(experiment_id)}
+
+
+@router.post("/experiments/{experiment_id}/runs")
+async def api_save_run(experiment_id: int, request: Request) -> dict:
+    """Persist a run snapshot for this experiment."""
     config = await request.json()
-    _write_session_config(template_id, config)
-    return {"ok": True}
-
-
-@router.get("/session/file-path/{template_id}")
-def get_session_file_path(template_id: str) -> dict:
-    """Return the absolute path of the session file for this template."""
-    return {"path": str(_session_file(template_id).resolve())}
-
-
-@router.post("/session/reveal/{template_id}")
-def reveal_session_file(template_id: str) -> dict:
-    """Open Finder with the session file for this template selected (macOS)."""
-    import subprocess
-    fp = _session_file(template_id)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    # Reveal file if it exists, otherwise just open the data folder
-    target = str(fp.resolve()) if fp.exists() else str(DATA_DIR.resolve())
-    args = ["open", "-R", target] if fp.exists() else ["open", target]
-    subprocess.Popen(args)
-    return {"ok": True}
+    run_id = save_run(experiment_id, config)
+    return {"id": run_id}
