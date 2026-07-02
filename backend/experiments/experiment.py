@@ -1331,6 +1331,7 @@ class Experiment(Experimento):
             return
         template = spec.get("template", "noise")
         n = rs.end - rs.start
+        flat_mask: torch.Tensor | None = None
         if template == "noise":
             flat = torch.rand(n)
         elif template == "image":
@@ -1343,15 +1344,22 @@ class Experiment(Experimento):
             if not resolved.is_absolute():
                 resolved = Path(__file__).parent.parent / "configs" / src_path
             try:
-                grid = load_image_grid(str(resolved), rs.width, rs.height)
+                grid, mask = load_image_grid(str(resolved), rs.width, rs.height)
                 flat = torch.from_numpy(grid.flatten()).float()
+                if mask is not None:
+                    flat_mask = torch.from_numpy(mask.flatten())
             except Exception as exc:
                 logger.warning("Orchestrator inject: failed to load '%s': %s", resolved, exc)
                 return
         else:
             logger.warning("Orchestrator inject: unknown template '%s'", template)
             return
-        bt.valores[rs.start : rs.start + len(flat)] = flat.to(bt.device)
+        dev = bt.device
+        if flat_mask is None:
+            bt.valores[rs.start : rs.start + len(flat)] = flat.to(dev)
+        else:
+            idx = rs.start + torch.where(flat_mask)[0]
+            bt.valores[idx] = flat[flat_mask].to(dev)
 
     def _orch_set_dendrite_weight(self, src: "RegionState", dst: "RegionState", weight: float) -> None:
         bt = self.brain_tensor

@@ -236,13 +236,28 @@ def apply_shift_noise(
     return result
 
 
-def load_image_grid(src: str, width: int, height: int) -> np.ndarray:
+def load_image_grid(
+    src: str, width: int, height: int
+) -> tuple[np.ndarray, np.ndarray | None]:
     """Load an image and resize it to a (height, width) float32 activation grid.
 
-    Converts to grayscale, resizes to (width, height) with BOX resampling,
-    and normalizes pixel brightness to [0, 1]. Returns shape (height, width)
-    matching the row-major flatten convention used by inject_ascii.
+    Returns (grid, mask):
+      - grid: float32 (height, width) with brightness normalized to [0, 1].
+      - mask: bool (height, width) — True where the pixel should be written.
+              None if the image has no alpha channel (all pixels active).
+
+    PNG images with an alpha channel encode three states:
+      alpha=0   → transparent → neuron not affected (mask=False)
+      alpha>0, value=1.0 → white → activate neuron
+      alpha>0, value=0.0 → black → silence neuron
     """
-    img = Image.open(src).convert("L")
-    img = img.resize((width, height), Image.Resampling.BOX)
-    return np.array(img, dtype=np.float32) / 255.0
+    raw = Image.open(src)
+    if raw.mode in ("RGBA", "LA") or (raw.mode == "P" and "transparency" in raw.info):
+        rgba = raw.convert("RGBA")
+        rgba = rgba.resize((width, height), Image.Resampling.BOX)
+        arr = np.array(rgba, dtype=np.float32)
+        grid = arr[:, :, :3].mean(axis=2) / 255.0  # luminance from RGB
+        mask = arr[:, :, 3] > 0                     # alpha>0 → write
+        return grid, mask
+    img = raw.convert("L").resize((width, height), Image.Resampling.BOX)
+    return np.array(img, dtype=np.float32) / 255.0, None

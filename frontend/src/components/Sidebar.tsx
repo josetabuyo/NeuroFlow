@@ -1015,7 +1015,7 @@ function HelpContent() {
       <Row name='{"at":{"tick":0,"tick_end":20},"inject":{...}}' type="hard" desc="inject sustained — repeats the pattern every tick in [tick, tick_end]" />
       <Row name="inject.region" type="hard" desc="region id to write into" />
       <Row name='inject.template: "noise"' type="hard" desc="uniform random [0,1] activations" />
-      <Row name='inject.template: "image"' type="hard" desc='JPG mapped to activations. inject.src — path relative to backend/configs/' />
+      <Row name='inject.template: "image"' type="hard" desc='PNG/JPG mapped to activations. inject.src — path relative to backend/configs/. PNG with alpha: white=activate, black=silence, transparent=leave unchanged.' />
     </div>
   );
 }

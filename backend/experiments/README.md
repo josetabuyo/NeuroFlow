@@ -222,7 +222,7 @@ Escribe valores de activación directamente en `brain_tensor.valores` de una reg
 Con rango sostenido usando `tick_end` — repite el patrón cada tick del intervalo:
 
 ```json
-{"at": {"tick": 0, "tick_end": 20}, "inject": {"region": "tissue", "template": "image", "src": "init_dots.jpg"}}
+{"at": {"tick": 0, "tick_end": 20}, "inject": {"region": "tissue", "template": "image", "src": "init_dots.png"}}
 ```
 
 Los injects con `tick: 0` también se aplican al final del setup, antes del primer step, por lo que el estado inicial (step 0) ya refleja el patrón.
@@ -232,8 +232,18 @@ Los injects con `tick: 0` también se aplican al final del setup, antes del prim
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `region` | string | ID de la región destino |
-| `template` | string | `"noise"` — uniforme random `[0,1]`; `"image"` — JPG mapeado a activaciones |
-| `src` | string | Path al JPG (solo para `"image"`). Relativo a `backend/configs/`. |
+| `template` | string | `"noise"` — uniforme random `[0,1]`; `"image"` — PNG/JPG mapeado a activaciones |
+| `src` | string | Path a la imagen (solo para `"image"`). Relativo a `backend/configs/`. |
+
+**Semántica de píxel para PNG con canal alpha:**
+
+| Píxel | Efecto |
+|-------|--------|
+| Blanco opaco (`alpha > 0`, valor `1.0`) | Activa la neurona |
+| Negro opaco (`alpha > 0`, valor `0.0`) | Silencia la neurona |
+| Transparente (`alpha = 0`) | No toca la neurona — deja el valor existente |
+
+Los JPG sin canal alpha siguen comportándose como antes (sobreescriben toda la región). Un PNG con alpha permite máscaras de 3 estados: activar, silenciar, y dejar libre.
 
 ---
 
