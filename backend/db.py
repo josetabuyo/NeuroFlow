@@ -45,9 +45,7 @@ def init_db() -> None:
     """)
     conn.commit()
 
-    row_count = conn.execute("SELECT COUNT(*) FROM experiments").fetchone()[0]
-    if row_count == 0:
-        _migrate_legacy_data(conn)
+    _migrate_legacy_data(conn)
 
     conn.close()
 
@@ -55,14 +53,33 @@ def init_db() -> None:
 def _migrate_legacy_data(conn: sqlite3.Connection) -> None:
     """One-time migration from configs/*.json + config_snapshots + session_*.json.
 
-    Runs only when the `experiments` table is empty (idempotent across restarts).
-    On success, deletes the legacy files it migrated from. On failure, rolls back
-    the transaction and leaves legacy files untouched.
+    Only ever populates data when `experiments` is empty — it never touches a
+    table that already has rows, so it can never overwrite or duplicate live
+    experiment data. On success it drops the legacy config_snapshots table and
+    deletes the legacy files it migrated from, so a later restart (even one
+    where the user has since deleted every experiment on purpose) can't
+    resurrect already-migrated data — there's nothing left to resurrect it from.
+
+    If code shipped before this fix already migrated once (experiments has
+    rows) but left config_snapshots lying around, this drops that stale table
+    on its own without touching `experiments`, closing the same hole for
+    installs that migrated under the old logic.
     """
     has_legacy_table = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='config_snapshots'"
     ).fetchone()
     config_files = sorted(CONFIGS_DIR.glob("*.json")) if CONFIGS_DIR.is_dir() else []
+    experiments_count = conn.execute("SELECT COUNT(*) FROM experiments").fetchone()[0]
+
+    if experiments_count > 0:
+        # Already migrated (possibly by older code that never dropped config_snapshots).
+        # Never touch existing experiments — just clear the dangling legacy table so
+        # it can't resurrect anything on a future restart.
+        if has_legacy_table:
+            conn.execute("DROP TABLE config_snapshots")
+            conn.commit()
+            logger.info("dropped stale legacy config_snapshots table (already migrated)")
+        return
 
     if not has_legacy_table and not config_files:
         return  # fresh install, nothing to migrate
@@ -136,6 +153,11 @@ def _migrate_legacy_data(conn: sqlite3.Connection) -> None:
                 "UPDATE experiments SET config = ? WHERE id = ?",
                 (json.dumps(session_config), exp_id),
             )
+
+        if has_legacy_table:
+            # Fully absorbed into experiment_runs above — drop it so this migration
+            # can never re-run and resurrect it, even if `experiments` is later emptied.
+            conn.execute("DROP TABLE config_snapshots")
 
         conn.commit()
     except Exception:

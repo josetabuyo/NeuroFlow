@@ -221,3 +221,89 @@ def test_migration_noop_on_fresh_install(tmp_path, monkeypatch):
     _use_tmp_db(tmp_path, monkeypatch)
     db.init_db()
     assert db.list_experiments() == []
+
+
+def test_migration_cleans_up_dangling_legacy_table_without_duplicating_existing_experiments(tmp_path, monkeypatch):
+    """Simulates an install migrated by pre-fix code: experiments already populated,
+    but config_snapshots was never dropped. Must clean up without re-migrating."""
+    _use_tmp_db(tmp_path, monkeypatch)
+    db.init_db()
+    existing = db.create_experiment("Already Migrated", {"regions": ["current"]})
+
+    conn = sqlite3.connect(str(tmp_path / "data" / "neuroflow.db"))
+    conn.execute("""
+        CREATE TABLE config_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            experiment TEXT NOT NULL,
+            preset_id TEXT NOT NULL DEFAULT '_default',
+            config TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute(
+        "INSERT INTO config_snapshots (experiment, config) VALUES (?, ?)",
+        ("stale_leftover", json.dumps({"regions": ["should_not_reappear"]})),
+    )
+    conn.commit()
+    conn.close()
+
+    db.init_db()  # must NOT re-migrate/duplicate — experiments already has rows
+
+    experiments = db.list_experiments()
+    assert len(experiments) == 1
+    assert experiments[0]["id"] == existing["id"]
+    assert db.get_experiment(existing["id"])["config"] == {"regions": ["current"]}
+
+    conn = sqlite3.connect(str(tmp_path / "data" / "neuroflow.db"))
+    remaining = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='config_snapshots'"
+    ).fetchone()
+    conn.close()
+    assert remaining is None
+
+
+def test_migration_drops_legacy_table_so_it_never_resurrects_deleted_experiments(tmp_path, monkeypatch):
+    _use_tmp_db(tmp_path, monkeypatch)
+    configs_dir = tmp_path / "configs"
+    configs_dir.mkdir(parents=True)
+    (configs_dir / "legacy.json").write_text(json.dumps({
+        "name": "Legacy", "config": {"regions": ["v1"]},
+    }))
+
+    (tmp_path / "data").mkdir(parents=True)
+    conn = sqlite3.connect(str(tmp_path / "data" / "neuroflow.db"))
+    conn.execute("""
+        CREATE TABLE config_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            experiment TEXT NOT NULL,
+            preset_id TEXT NOT NULL DEFAULT '_default',
+            config TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute(
+        "INSERT INTO config_snapshots (experiment, config) VALUES (?, ?)",
+        ("legacy", json.dumps({"regions": ["run1"]})),
+    )
+    conn.commit()
+    conn.close()
+
+    db.init_db()
+    assert len(db.list_experiments()) == 1
+
+    # config_snapshots must be gone — it's the only thing that could resurrect data
+    conn = sqlite3.connect(str(tmp_path / "data" / "neuroflow.db"))
+    remaining = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='config_snapshots'"
+    ).fetchone()
+    conn.close()
+    assert remaining is None
+
+    # User deletes every experiment on purpose...
+    for exp in db.list_experiments():
+        db.delete_experiment(exp["id"])
+    assert db.list_experiments() == []
+
+    # ...and a backend restart must NOT bring anything back.
+    db.init_db()
+    assert db.list_experiments() == []
