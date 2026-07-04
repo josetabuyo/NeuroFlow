@@ -176,6 +176,7 @@ function App() {
     inspectedCell,
     inspectedRegionId,
     inspectInfo,
+    inspectHistory,
     brushSize,
     brushMode,
     normalizedConfig,
@@ -624,6 +625,7 @@ function App() {
               inspectedCell={inspectedCell}
               inspectedRegionId={inspectedRegionId}
               inspectInfo={inspectInfo}
+              inspectHistory={inspectHistory}
               inputWeightGrid={inputWeightGrid}
               sourceWeightGrids={sourceWeightGrids}
               regionOverlays={regionOverlays}

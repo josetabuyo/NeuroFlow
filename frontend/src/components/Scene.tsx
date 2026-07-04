@@ -4,7 +4,9 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { LayerBox, HEADER_H, type BoxLayout } from "./LayerBox";
 import { PixelCanvas } from "./PixelCanvas";
 import { BrushPalette } from "./BrushPalette";
+import { InspectChart, INSPECT_CHART_WIDTH } from "./InspectChart";
 import type { RegionOverlay } from "../types";
+import type { InspectSample } from "../hooks/useExperiment";
 
 function colorSwatch(bg: string, border?: string): React.CSSProperties {
   return {
@@ -23,7 +25,8 @@ const TARGET_PX = 360;
 const GAP       = 44;
 const MARGIN    = 28;
 const UNIT_PX   = 8;
-const INFO_W    = 180;
+const INFO_W    = INSPECT_CHART_WIDTH + 24;
+const EMPTY_INSPECT_HISTORY: InspectSample[] = [];
 
 function autoPixelSize(gw: number, gh: number): number {
   const MAX_PS = 48;
@@ -49,6 +52,7 @@ interface SceneProps {
     total_dendritas: number;
     total_sinapsis: number;
   } | null;
+  inspectHistory?: InspectSample[];
   inputWeightGrid?: number[][] | null;
   sourceWeightGrids?: Record<string, { grid: (number | null)[][], width: number, height: number, density: number }>;
   regionOverlays?: Record<string, RegionOverlay>;
@@ -87,6 +91,7 @@ export function Scene({
   inspectedCell,
   inspectedRegionId,
   inspectInfo,
+  inspectHistory = EMPTY_INSPECT_HISTORY,
   inputWeightGrid,
   sourceWeightGrids,
   tensionMode,
@@ -351,8 +356,24 @@ export function Scene({
     setOneToOne(false);
   }, []);
 
-  // ── SVG helper: box center ──────────────────────────────────────────
-  const boxCenter = (b: BoxLayout) => ({ x: b.x + b.w / 2, y: b.y + HEADER_H + b.h / 2 });
+  // ── SVG helper: box corners ─────────────────────────────────────────
+  // Corners of a box (including its header), used to anchor connector lines
+  // at the edge closest to the observed neuron instead of the box center.
+  const boxCorners = (b: BoxLayout) => {
+    const top = b.y;
+    const bottom = b.y + HEADER_H + b.h;
+    const left = b.x;
+    const right = b.x + b.w;
+    return [
+      { x: left, y: top }, { x: right, y: top },
+      { x: right, y: bottom }, { x: left, y: bottom },
+    ];
+  };
+
+  const nearestCorner = (corners: { x: number; y: number }[], p: { x: number; y: number }) =>
+    corners.reduce((best, c) =>
+      (c.x - p.x) ** 2 + (c.y - p.y) ** 2 < (best.x - p.x) ** 2 + (best.y - p.y) ** 2 ? c : best
+    );
 
   // Cell position in scene coords
   const cellPos = (regionId: string, cx: number, cy: number) => {
@@ -366,28 +387,12 @@ export function Scene({
 
   const tCell = (inspectedCell && inspectedRegionId) ? cellPos(inspectedRegionId, inspectedCell.x, inspectedCell.y) : null;
 
-  // ── Nerve circle center in region-inspect popup scene coords ────────
-  // Used as the origin of the dashed connector line (center→center).
-  const nerveLineStart = (() => {
-    if (!nerveCircles || nerveCircles.length === 0) return null;
-    const pb = boxes[regionInspectKey];
-    if (!pb) return null;
-    const regionGrid = regions[regionId];
-    const tw = regionGrid?.[0]?.length ?? 1;
-    const th = regionGrid?.length ?? 1;
-    const c = nerveCircles[0];
-    return {
-      x: pb.x + (c.cx + 0.5) * (pb.w / tw),
-      y: pb.y + HEADER_H + (c.cy + 0.5) * (pb.h / th),
-    };
-  })();
-
   return (
     <div
       ref={containerRef}
       style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}
     >
-      {/* ── Pannable/zoomable world ── */}
+      {/* ── Pannable/zoomable world (background pan-catcher, kept below the HUD) ── */}
       <div
         onPointerDown={handleBackgroundPointerDown}
         onPointerMove={handleBackgroundPointerMove}
@@ -399,60 +404,7 @@ export function Scene({
           transformOrigin: "0 0",
           cursor: isPanning ? "grabbing" : "grab",
         }}
-      >
-      {/* ── SVG connector layer ── */}
-      <svg
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 15 }}
-      >
-        {/* region inspect popup → inspected neuron (center-to-center via nerve circle if available) */}
-        {boxes[regionInspectKey] && hasAnyWeights && tCell && (() => {
-          const start = nerveLineStart ?? boxCenter(boxes[regionInspectKey]);
-          return (
-            <line
-              x1={start.x} y1={start.y}
-              x2={tCell.x} y2={tCell.y}
-              stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
-            />
-          );
-        })()}
-
-        {/* input inspect popup → inspected neuron */}
-        {inputInspectKey && boxes[inputInspectKey] && tCell && (
-          <line
-            x1={boxCenter(boxes[inputInspectKey]).x} y1={boxCenter(boxes[inputInspectKey]).y}
-            x2={tCell.x} y2={tCell.y}
-            stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
-          />
-        )}
-
-        {/* inspect:output → inspected neuron */}
-        {boxes["inspect:output"] && tCell && (
-          <line
-            x1={boxCenter(boxes["inspect:output"]).x} y1={boxCenter(boxes["inspect:output"]).y}
-            x2={tCell.x} y2={tCell.y}
-            stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
-          />
-        )}
-
-        {/* inspect:nociceptor → inspected neuron */}
-        {boxes["inspect:nociceptor"] && tCell && (
-          <line
-            x1={boxCenter(boxes["inspect:nociceptor"]).x} y1={boxCenter(boxes["inspect:nociceptor"]).y}
-            x2={tCell.x} y2={tCell.y}
-            stroke="#f43f5e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
-          />
-        )}
-
-        {/* info panel → inspected cell */}
-        {infoPanelPos && tCell && (
-          <line
-            x1={infoPanelPos.x + INFO_W / 2} y1={infoPanelPos.y + 16}
-            x2={tCell.x} y2={tCell.y}
-            stroke="#ffff00" strokeWidth={1.5} strokeDasharray="4 4" opacity={0.6}
-          />
-        )}
-      </svg>
-      </div>
+      />
 
       {/* ── Scene toolbar + HUD ── */}
       <div style={{ position: "absolute", top: 8, left: 8, display: "flex", gap: 8, zIndex: 30 }}>
@@ -801,8 +753,85 @@ export function Scene({
           <div style={{ borderTop: "1px solid #1a1a2e", paddingTop: 3, color: "#555", fontSize: "0.6rem" }}>
             {inspectInfo.total_dendritas}d / {inspectInfo.total_sinapsis}s
           </div>
+          <div style={{ marginTop: 2 }}>
+            <InspectChart history={inspectHistory} />
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, fontSize: "0.58rem", color: "#666" }}>
+              <span><span style={colorSwatch("#e8e8f0")} />act</span>
+              <span><span style={colorSwatch("#ff8c00")} />tension +</span>
+              <span><span style={colorSwatch("#8b5cf6")} />tension -</span>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* ── SVG connector layer: drawn last so arrows sit in front of the boxes ── */}
+      <svg
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 50, overflow: "visible" }}
+      >
+        {/* observed neuron → region inspect popup (nearest corner) */}
+        {boxes[regionInspectKey] && hasAnyWeights && tCell && (() => {
+          const end = nearestCorner(boxCorners(boxes[regionInspectKey]), tCell);
+          return (
+            <line
+              x1={tCell.x} y1={tCell.y}
+              x2={end.x} y2={end.y}
+              stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
+            />
+          );
+        })()}
+
+        {/* observed neuron → input inspect popup (nearest corner) */}
+        {inputInspectKey && boxes[inputInspectKey] && tCell && (() => {
+          const end = nearestCorner(boxCorners(boxes[inputInspectKey]), tCell);
+          return (
+            <line
+              x1={tCell.x} y1={tCell.y}
+              x2={end.x} y2={end.y}
+              stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
+            />
+          );
+        })()}
+
+        {/* observed neuron → inspect:output popup (nearest corner) */}
+        {boxes["inspect:output"] && tCell && (() => {
+          const end = nearestCorner(boxCorners(boxes["inspect:output"]), tCell);
+          return (
+            <line
+              x1={tCell.x} y1={tCell.y}
+              x2={end.x} y2={end.y}
+              stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
+            />
+          );
+        })()}
+
+        {/* observed neuron → inspect:nociceptor popup (nearest corner) */}
+        {boxes["inspect:nociceptor"] && tCell && (() => {
+          const end = nearestCorner(boxCorners(boxes["inspect:nociceptor"]), tCell);
+          return (
+            <line
+              x1={tCell.x} y1={tCell.y}
+              x2={end.x} y2={end.y}
+              stroke="#f43f5e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5}
+            />
+          );
+        })()}
+
+        {/* observed neuron → info panel (nearest corner) */}
+        {infoPanelPos && tCell && (() => {
+          const corners = [
+            { x: infoPanelPos.x, y: infoPanelPos.y },
+            { x: infoPanelPos.x + INFO_W, y: infoPanelPos.y },
+          ];
+          const end = nearestCorner(corners, tCell);
+          return (
+            <line
+              x1={tCell.x} y1={tCell.y}
+              x2={end.x} y2={end.y}
+              stroke="#ffff00" strokeWidth={1.5} strokeDasharray="4 4" opacity={0.6}
+            />
+          );
+        })()}
+      </svg>
       </div>
 
       {/* ── Initializing overlay ── */}

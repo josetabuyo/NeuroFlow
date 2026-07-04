@@ -13,6 +13,33 @@ import type {
 } from "../types";
 import { nextBrushSize, prevBrushSize } from "../brushes";
 
+/** Max samples kept for the live inspect chart — one point per tick, oldest drop off.
+ * Must be >= InspectChart's display width (280px) so the chart never runs out of data. */
+const INSPECT_HISTORY_MAX = 300;
+
+export interface InspectSample {
+  tick: number;
+  activation: number;
+  tension: number;
+}
+
+/** Appends a tick sample to the inspect history ring buffer, dropping the oldest
+ * once over `max`. A sample landing on the same tick as the last one (e.g. a paint
+ * action while paused re-triggers a frame at the same generation) replaces it
+ * in place rather than appending, so the chart reflects the latest value instead
+ * of going stale. */
+export function appendInspectSample(
+  prev: InspectSample[],
+  sample: InspectSample,
+  max: number = INSPECT_HISTORY_MAX,
+): InspectSample[] {
+  if (prev.length > 0 && prev[prev.length - 1].tick === sample.tick) {
+    return [...prev.slice(0, -1), sample];
+  }
+  const next = [...prev, sample];
+  return next.length > max ? next.slice(-max) : next;
+}
+
 function getWsUrl(): string {
   if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -51,6 +78,7 @@ interface UseExperimentReturn {
     total_dendritas: number;
     total_sinapsis: number;
   } | null;
+  inspectHistory: InspectSample[];
   brushSize: number;
   brushMode: "activate" | "deactivate";
   normalizedConfig: CanonicalExperimentConfig | null;
@@ -111,6 +139,11 @@ export function useExperiment(): UseExperimentReturn {
     total_dendritas: number;
     total_sinapsis: number;
   } | null>(null);
+  const [inspectHistory, setInspectHistory] = useState<InspectSample[]>([]);
+  // Tracks {x, y, regionId} of the currently-inspected neuron so the per-frame
+  // handler can look up its activation/tension without a stale closure.
+  const inspectTargetRef = useRef<{ x: number; y: number; regionId: string } | null>(null);
+  const generationRef = useRef(0);
   const [perf, setPerf] = useState<PerfMetrics | null>(null);
   const [tensionGrid, setTensionGrid] = useState<number[][] | null>(null);
   const [tensionMode, setTensionMode] = useState(false);
@@ -155,6 +188,7 @@ export function useExperiment(): UseExperimentReturn {
         case "frame":
           setGrid(msg.grid);
           setGeneration(msg.generation);
+          generationRef.current = msg.generation;
           setStats(msg.stats);
           setPerf(msg.perf ?? null);
           setTensionGrid(msg.tension_grid ?? null);
@@ -166,10 +200,30 @@ export function useExperiment(): UseExperimentReturn {
           setLabels(msg.labels ?? {});
           if (msg.neuron_label_map) setNeuronLabelMap(msg.neuron_label_map);
           setOrchestratorState(msg.orchestrator ?? []);
+
+          // Sample activation/tension for the inspected neuron every tick — regions
+          // and tension_regions are broadcast unthrottled, unlike the heavier `inspect`
+          // weight-grid payload (throttled to every 3rd frame while playing).
+          {
+            const target = inspectTargetRef.current;
+            if (target) {
+              const act = msg.regions?.[target.regionId]?.[target.y]?.[target.x];
+              const ten = msg.tension_regions?.[target.regionId]?.[target.y]?.[target.x];
+              if (act !== undefined) {
+                setInspectHistory(prev =>
+                  appendInspectSample(prev, { tick: msg.generation, activation: act, tension: ten ?? 0 })
+                );
+              }
+            }
+          }
+
           if (msg.inspect) {
             setConnectionMap(msg.inspect.weight_grid);
             setInspectedCell({ x: msg.inspect.x, y: msg.inspect.y });
             setInspectedRegionId(msg.inspect.region_id ?? null);
+            // inspectTargetRef is set solely by "connections" (the initial inspect click) —
+            // this throttled payload must never re-arm it, or an in-flight frame built before
+            // an "uninspect" lands could resurrect sampling for a target the user already left.
             setInspectInfo({
               activation: msg.inspect.activation,
               tension: msg.inspect.tension,
@@ -185,10 +239,20 @@ export function useExperiment(): UseExperimentReturn {
             setNerveCircles((msg.inspect.nerve_circles as Array<{ cx: number; cy: number; radius: number }> | null) ?? null);
           }
           break;
-        case "connections":
+        case "connections": {
           setConnectionMap(msg.weight_grid);
           setInspectedCell({ x: msg.x, y: msg.y });
           setInspectedRegionId(msg.region_id ?? null);
+          // A new "connections" message always means a freshly inspected neuron
+          // (click or drag-to-inspect) — start the live chart over from this tick.
+          const regionId = msg.region_id;
+          if (regionId) {
+            inspectTargetRef.current = { x: msg.x, y: msg.y, regionId };
+            setInspectHistory([{ tick: generationRef.current, activation: msg.activation, tension: msg.tension }]);
+          } else {
+            inspectTargetRef.current = null;
+            setInspectHistory([]);
+          }
           setInspectInfo({
             activation: msg.activation,
             tension: msg.tension,
@@ -205,6 +269,7 @@ export function useExperiment(): UseExperimentReturn {
           setRegionOverlays(_parseRegionOverlays(msg));
           setNerveCircles((msg.nerve_circles as Array<{ cx: number; cy: number; radius: number }> | null) ?? null);
           break;
+        }
         case "status":
           setState(msg.state);
           break;
@@ -242,6 +307,12 @@ export function useExperiment(): UseExperimentReturn {
     (config: ExperimentConfig) => {
       setExperimentActive(true);
       setState("initializing");
+      setConnectionMap(null);
+      setInspectedCell(null);
+      setInspectedRegionId(null);
+      setInspectInfo(null);
+      setInspectHistory([]);
+      inspectTargetRef.current = null;
       send({ action: "start", config });
     },
     [send]
@@ -250,6 +321,12 @@ export function useExperiment(): UseExperimentReturn {
   const reconnect = useCallback(
     (config: ExperimentConfig) => {
       setState("initializing");
+      setConnectionMap(null);
+      setInspectedCell(null);
+      setInspectedRegionId(null);
+      setInspectInfo(null);
+      setInspectHistory([]);
+      inspectTargetRef.current = null;
       send({ action: "reconnect", config });
     },
     [send]
@@ -284,6 +361,8 @@ export function useExperiment(): UseExperimentReturn {
     setInspectedCell(null);
     setInspectedRegionId(null);
     setInspectInfo(null);
+    setInspectHistory([]);
+    inspectTargetRef.current = null;
     setRegionOverlays({});
     setNerveCircles(null);
     setState("initializing");
@@ -323,6 +402,8 @@ export function useExperiment(): UseExperimentReturn {
         setInspectedCell(null);
         setInspectedRegionId(null);
         setInspectInfo(null);
+        setInspectHistory([]);
+        inspectTargetRef.current = null;
         setInputWeightGrid(null);
         setInputWeightDims(null);
         setSourceWeightGrids({});
@@ -365,6 +446,7 @@ export function useExperiment(): UseExperimentReturn {
     inspectedCell,
     inspectedRegionId,
     inspectInfo,
+    inspectHistory,
     brushSize,
     brushMode,
     normalizedConfig,
