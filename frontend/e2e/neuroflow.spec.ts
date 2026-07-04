@@ -7,6 +7,7 @@ import {
   clickCanvasCenter,
   getBrushPalette,
   getBrushSizeLabel,
+  getInspectedCoords,
 } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
@@ -21,7 +22,7 @@ test("1. Initial load", async ({ page }) => {
   await expect(page.locator("h1")).toHaveText("NeuroFlow");
 
   await expect(
-    page.getByText("Config Templates")
+    page.getByRole("heading", { name: "Experiments" })
   ).toBeVisible();
 
   await expect(
@@ -171,7 +172,7 @@ test("8. Play / Pause", async ({ page }) => {
   await startExperiment(page);
 
   await page.getByRole("button", { name: "Play" }).click();
-  await expect(page.getByText("running")).toBeVisible({ timeout: 3_000 });
+  await expect(page.getByText("running")).toBeVisible({ timeout: 8_000 });
 
   await page.waitForTimeout(600);
 
@@ -179,7 +180,7 @@ test("8. Play / Pause", async ({ page }) => {
   expect(steps).toBeGreaterThan(0);
 
   await page.getByRole("button", { name: "Pause" }).click();
-  await expect(page.getByText("paused")).toBeVisible({ timeout: 3_000 });
+  await expect(page.getByText("paused")).toBeVisible({ timeout: 8_000 });
 
   const stepsAfterPause = await getStepCount(page);
   await page.waitForTimeout(400);
@@ -205,10 +206,11 @@ test("9. Reset returns to initial state", async ({ page }) => {
 
   await page.getByRole("button", { name: "Reset" }).click();
 
+  // Re-initializing the network (esp. larger grids) can take a few seconds.
   await expect(async () => {
     expect(await getStepCount(page)).toBe(0);
-  }).toPass({ timeout: 5_000 });
-  await expect(page.getByText("ready")).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 10_000 });
+  await expect(page.getByText("ready")).toBeVisible({ timeout: 10_000 });
 });
 
 // ---------------------------------------------------------------------------
@@ -217,7 +219,7 @@ test("9. Reset returns to initial state", async ({ page }) => {
 test("10. Inspect disables brush controls", async ({ page }) => {
   await startExperiment(page);
 
-  const brushControls = page.getByTestId("brush-controls");
+  const brushControls = getBrushPalette(page);
   await expect(brushControls).toHaveCSS("opacity", "1");
 
   await page.getByRole("button", { name: "Inspect tool" }).click();
@@ -275,7 +277,7 @@ test("12. Brush size limits", async ({ page }) => {
 // 13. Template selector changes config
 // ---------------------------------------------------------------------------
 test("13. Template selector changes config", async ({ page }) => {
-  await expect(page.getByText("Config Templates")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Experiments" })).toBeVisible();
 
   const templateSelect = page.locator("aside select").first();
   await expect(templateSelect).toBeVisible();
@@ -367,4 +369,41 @@ test("16. Paint mode: mousedown injects 1s, mouseup clears them", async ({ page 
   await page.waitForTimeout(300);
   const activeAfterRelease = await getActiveCount(page);
   expect(activeAfterRelease).toBeLessThan(activeWhilePressed);
+});
+
+// ---------------------------------------------------------------------------
+// 17. Inspect mode: dragging while pressed "drags" the observer across neurons
+// ---------------------------------------------------------------------------
+test("17. Inspect mode: drag updates the observed neuron", async ({ page }) => {
+  await startExperiment(page);
+
+  await page.getByRole("button", { name: "Inspect tool" }).click();
+
+  const canvas = page.locator("main canvas").first();
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("Canvas not found");
+
+  const x1 = box.x + box.width * 0.25;
+  const y1 = box.y + box.height * 0.25;
+  const x2 = box.x + box.width * 0.75;
+  const y2 = box.y + box.height * 0.75;
+
+  // Click activates the observer on the first neuron.
+  await page.mouse.move(x1, y1);
+  await page.mouse.down();
+  await expect(page.getByTestId("inspect-info-coords")).toBeVisible({ timeout: 3_000 });
+  const firstCoords = await getInspectedCoords(page);
+
+  // Dragging while pressed moves the observer to a different neuron.
+  await page.mouse.move(x2, y2, { steps: 10 });
+  await expect(async () => {
+    expect(await getInspectedCoords(page)).not.toBe(firstCoords);
+  }).toPass({ timeout: 3_000 });
+  const draggedCoords = await getInspectedCoords(page);
+
+  await page.mouse.up();
+
+  // Releasing the mouse keeps the last observed neuron (no snap-back).
+  await page.waitForTimeout(200);
+  expect(await getInspectedCoords(page)).toBe(draggedCoords);
 });

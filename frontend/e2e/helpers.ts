@@ -12,6 +12,10 @@ export async function startExperiment(page: Page): Promise<void> {
   await expect(
     page.getByRole("button", { name: "Step" })
   ).toBeEnabled({ timeout: 10_000 });
+  // Draw/brush controls live behind the collapsible "Draw tool" panel — open it
+  // so brush-palette tests don't have to know about this UI detail.
+  await page.getByRole("button", { name: "Draw tool" }).click();
+  await expect(page.getByTestId("brush-palette")).toBeVisible({ timeout: 5_000 });
 }
 
 /**
@@ -51,4 +55,9 @@ export function getBrushPalette(page: Page) {
 /** Get the brush size label text (e.g. "1×1"). */
 export async function getBrushSizeLabel(page: Page): Promise<string> {
   return (await page.getByTestId("brush-size-label").textContent()) ?? "";
+}
+
+/** Get the currently inspected region + cell (e.g. "tissue (10, 10)") from the info panel. */
+export async function getInspectedCoords(page: Page): Promise<string> {
+  return (await page.getByTestId("inspect-info-coords").textContent()) ?? "";
 }

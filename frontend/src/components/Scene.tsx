@@ -421,33 +421,37 @@ export function Scene({
               fontSize: 15, fontWeight: 700, padding: 0, transition: "all 0.15s",
             }}
           >⊙</button>
-          <button
-            onClick={() => setDrawOpen(o => !o)}
-            title={drawOpen ? "Close draw palette" : "Open draw palette"}
-            aria-label="Draw tool"
-            style={{
-              width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
-              background: drawOpen ? "#4cc9f0" : "#1a1a2e",
-              color: drawOpen ? "#0a0a0f" : "#666",
-              border: drawOpen ? "2px solid #4cc9f0" : "1px solid #2a2a3e",
-              borderRadius: 6, cursor: "pointer", fontSize: 15, fontWeight: 700, padding: 0, transition: "all 0.15s",
-            }}
-          >✏</button>
-        </div>
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setDrawOpen(o => !o)}
+              title={drawOpen ? "Close draw palette" : "Open draw palette"}
+              aria-label="Draw tool"
+              style={{
+                width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+                background: drawOpen ? "#4cc9f0" : "#1a1a2e",
+                color: drawOpen ? "#0a0a0f" : "#666",
+                border: drawOpen ? "2px solid #4cc9f0" : "1px solid #2a2a3e",
+                borderRadius: 6, cursor: "pointer", fontSize: 15, fontWeight: 700, padding: 0, transition: "all 0.15s",
+              }}
+            >✏</button>
 
-        {/* Draw palette: expands below when draw is active */}
-        {drawOpen && (
-          <BrushPalette
-            brushSize={brushSize}
-            brushMode={brushMode}
-            dimmed={inspectMode}
-            onIncrease={onIncrease}
-            onDecrease={onDecrease}
-            onToggleMode={onToggleMode}
-            drawNoise={drawNoise}
-            onDrawNoiseChange={onDrawNoiseChange}
-          />
-        )}
+            {/* Draw palette: expands directly below the draw button, same width as the button */}
+            {drawOpen && (
+              <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0 }}>
+                <BrushPalette
+                  brushSize={brushSize}
+                  brushMode={brushMode}
+                  dimmed={inspectMode}
+                  onIncrease={onIncrease}
+                  onDecrease={onDecrease}
+                  onToggleMode={onToggleMode}
+                  drawNoise={drawNoise}
+                  onDrawNoiseChange={onDrawNoiseChange}
+                />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── Region boxes ── */}
@@ -635,7 +639,7 @@ export function Scene({
               </div>
             ) : null;
           })()}
-          <div style={{ color: "#ffff00", fontWeight: 600, fontSize: "0.72rem", marginBottom: 1 }}>
+          <div data-testid="inspect-info-coords" style={{ color: "#ffff00", fontWeight: 600, fontSize: "0.72rem", marginBottom: 1 }}>
             {inspectedRegionId} ({inspectedCell.x}, {inspectedCell.y})
           </div>
           <div>

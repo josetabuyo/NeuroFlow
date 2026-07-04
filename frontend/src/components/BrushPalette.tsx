@@ -68,6 +68,8 @@ export function BrushPalette({
     <div
       data-testid="brush-palette"
       style={{
+        boxSizing: "border-box",
+        width: 32,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -75,7 +77,7 @@ export function BrushPalette({
         background: "#0d0d14cc",
         border: "1px solid #2a2a3e",
         borderRadius: 8,
-        padding: 6,
+        padding: 3,
         opacity: dimmed ? 0.3 : 1,
         pointerEvents: dimmed ? "none" : "auto",
         transition: "opacity 0.15s",
@@ -84,6 +86,7 @@ export function BrushPalette({
       <div
         data-testid="brush-controls"
         style={{
+          width: "100%",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -96,8 +99,8 @@ export function BrushPalette({
           title="Increase size"
           aria-label="Increase brush"
           style={{
-            width: 36,
-            height: 24,
+            width: "100%",
+            height: 22,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -106,7 +109,7 @@ export function BrushPalette({
             borderRadius: 6,
             cursor: canIncrease ? "pointer" : "default",
             color: canIncrease ? "#e0e0ff" : "#444",
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: 700,
             padding: 0,
           }}
@@ -117,14 +120,15 @@ export function BrushPalette({
         <div
           title={`Brush ${brushSize}×${brushSize} (${pixelCount} px)`}
           style={{
-            width: 36,
-            height: 36,
+            width: "100%",
+            aspectRatio: "1 / 1",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             background: "#1a1a2e",
             border: "2px solid #4cc9f0",
             borderRadius: 6,
+            overflow: "hidden",
           }}
         >
           {renderBrushPreview(brushSize)}
@@ -149,8 +153,8 @@ export function BrushPalette({
           title="Decrease size"
           aria-label="Decrease brush"
           style={{
-            width: 36,
-            height: 24,
+            width: "100%",
+            height: 22,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -159,7 +163,7 @@ export function BrushPalette({
             borderRadius: 6,
             cursor: canDecrease ? "pointer" : "default",
             color: canDecrease ? "#e0e0ff" : "#444",
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: 700,
             padding: 0,
           }}
@@ -171,8 +175,8 @@ export function BrushPalette({
           onClick={onToggleMode}
           title={isActivate ? "Activate (ON)" : "Deactivate (OFF)"}
           style={{
-            width: 36,
-            height: 24,
+            width: "100%",
+            height: 22,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -181,7 +185,7 @@ export function BrushPalette({
             border: "none",
             borderRadius: 6,
             cursor: "pointer",
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: 700,
             padding: 0,
             marginTop: 2,

@@ -480,7 +480,12 @@ function App() {
 
   const handleCellDrag = useCallback(
     (x: number, y: number, regionId?: string) => {
-      if (inspectMode) return;
+      if (inspectMode) {
+        // Drag the observer across neurons — PixelCanvas already dedupes
+        // consecutive calls to the same cell, so this fires once per cell entered.
+        inspect(x, y, regionId);
+        return;
+      }
       if (brushMode === "activate") {
         // Flashlight: clear previous position, illuminate new position only
         if (flashlightRef.current) {
@@ -493,7 +498,7 @@ function App() {
         applyBrush(x, y, regionId);
       }
     },
-    [inspectMode, brushMode, computeBrushCells, paint, applyBrush]
+    [inspectMode, inspect, brushMode, computeBrushCells, paint, applyBrush]
   );
 
   const handlePlay = useCallback(
