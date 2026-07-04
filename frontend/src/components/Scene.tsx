@@ -4,7 +4,21 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { LayerBox, HEADER_H, type BoxLayout } from "./LayerBox";
 import { PixelCanvas } from "./PixelCanvas";
 import { BrushPalette } from "./BrushPalette";
-import type { RegionOverlay } from "../types";
+import { formatNumber } from "./Controls";
+import type { RegionOverlay, PerfMetrics, ExperimentState } from "../types";
+
+function colorSwatch(bg: string, border?: string): React.CSSProperties {
+  return {
+    display: "inline-block",
+    width: "10px",
+    height: "10px",
+    background: bg,
+    border: border || "none",
+    borderRadius: "2px",
+    marginRight: "4px",
+    verticalAlign: "middle",
+  };
+}
 
 const TARGET_PX = 360;
 const GAP       = 44;
@@ -61,6 +75,8 @@ interface SceneProps {
   onDrawNoiseChange?: (v: number) => void;
 
   isInitializing?: boolean;
+  perf?: PerfMetrics | null;
+  experimentState?: ExperimentState;
 }
 
 export function Scene({
@@ -84,7 +100,10 @@ export function Scene({
   onIncrease, onDecrease, onToggleMode, onToggleInspect, onToggleTension,
   drawNoise, onDrawNoiseChange,
   isInitializing,
+  perf,
+  experimentState,
 }: SceneProps) {
+  const hasConnectionMap = connectionMap != null;
   const containerRef = useRef<HTMLDivElement>(null);
   const [oneToOne, setOneToOne] = useState(false);
   const [boxes, setBoxes] = useState<Boxes>({});
@@ -440,8 +459,9 @@ export function Scene({
       </svg>
       </div>
 
-      {/* ── Scene toolbar ── */}
-      <div style={{ position: "absolute", top: 8, left: 8, display: "flex", flexDirection: "column", gap: 4, zIndex: 30 }}>
+      {/* ── Scene toolbar + HUD ── */}
+      <div style={{ position: "absolute", top: 8, left: 8, display: "flex", gap: 8, zIndex: 30 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {/* Single row: all 5 tool buttons equal-sized */}
         <div style={{ display: "flex", gap: 4 }}>
           <button onClick={toggleOneToOne} title="Toggle 1:1 scale" style={{
@@ -526,6 +546,87 @@ export function Scene({
             )}
           </div>
         </div>
+      </div>
+
+      {/* speed / state HUD + color legend */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "monospace", fontSize: "0.7rem" }}>
+          {perf && (
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: 6,
+                background: "#0d1f0d",
+                border: "1px solid #1a3a1a",
+              }}
+            >
+              <span style={{ color: "#666" }}>{perf.elapsed_ms}ms</span>
+              {" / "}
+              <strong style={{ color: "#4ade80" }}>
+                {formatNumber(perf.steps_per_second)} steps/s
+              </strong>
+            </span>
+          )}
+          {experimentState && (
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: 6,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background:
+                  experimentState === "running" ? "#1a3a1a"
+                  : experimentState === "initializing" ? "#1a1a3a"
+                  : experimentState === "complete" ? "#3a1a1a"
+                  : "#1a1a2e",
+                color:
+                  experimentState === "running" ? "#4ade80"
+                  : experimentState === "initializing" ? "#4cc9f0"
+                  : experimentState === "complete" ? "#f72585"
+                  : "#666",
+              }}
+            >
+              {isInitializing && <span className="neuro-spinner-sm" />}
+              {experimentState}
+            </span>
+          )}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            fontSize: "0.65rem",
+            color: "#888",
+            background: "#1a1a2e",
+            border: "1px solid #2a2a3e",
+            borderRadius: 6,
+            padding: "4px 8px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {hasConnectionMap ? (
+            <>
+              <span><span style={colorSwatch("#00ff00")} />Excitatory (+1)</span>
+              <span><span style={colorSwatch("#000000", "1px solid #333")} />Neutral (0)</span>
+              <span><span style={colorSwatch("#8b00ff")} />Inhibitory (-1)</span>
+              <span><span style={colorSwatch("#111111", "1px solid #333")} />No connection</span>
+            </>
+          ) : tensionMode ? (
+            <>
+              <span><span style={colorSwatch("#ff8c00")} />Excitation (+1)</span>
+              <span><span style={colorSwatch("#0a0a0a", "1px solid #333")} />Neutral (0)</span>
+              <span><span style={colorSwatch("#5000ff")} />Inhibition (-1)</span>
+            </>
+          ) : (
+            <>
+              <span><span style={colorSwatch("#ffffff")} />Active</span>
+              <span><span style={colorSwatch("#0a0a0a", "1px solid #333")} />Inactive</span>
+            </>
+          )}
+        </div>
+      </div>
       </div>
 
       {/* ── Pannable/zoomable world (continued) ── */}

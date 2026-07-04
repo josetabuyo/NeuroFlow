@@ -513,18 +513,6 @@ function App() {
 
   const connected = state !== "disconnected";
   const isInitializing = state === "initializing";
-  const hasConnectionMap = connectionMap != null;
-
-  const colorSwatch = (bg: string, border?: string): React.CSSProperties => ({
-    display: "inline-block",
-    width: "10px",
-    height: "10px",
-    background: bg,
-    border: border || "none",
-    borderRadius: "2px",
-    marginRight: "4px",
-    verticalAlign: "middle",
-  });
 
 
   return (
@@ -600,7 +588,6 @@ function App() {
           <Controls
             state={state}
             stats={stats}
-            perf={perf}
             generation={generation}
             stepsPerTick={stepsPerTick}
             orchestratorState={orchestratorState}
@@ -655,6 +642,8 @@ function App() {
               drawNoise={drawNoise}
               onDrawNoiseChange={handleDrawNoiseChange}
               isInitializing={isInitializing}
+              perf={perf}
+              experimentState={state}
             />
           ) : (
             <div
@@ -687,65 +676,6 @@ function App() {
                 </>
               )}
             </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            flexShrink: 0,
-            display: "flex",
-            gap: "16px",
-            fontSize: "0.7rem",
-            color: "#444",
-            justifyContent: "center",
-            paddingBottom: "4px",
-          }}
-        >
-          {hasConnectionMap ? (
-            <>
-              <span>
-                <span style={colorSwatch("#00ff00")} />
-                Excitatory (+1)
-              </span>
-              <span>
-                <span style={colorSwatch("#000000", "1px solid #333")} />
-                Neutral (0)
-              </span>
-              <span>
-                <span style={colorSwatch("#8b00ff")} />
-                Inhibitory (-1)
-              </span>
-              <span>
-                <span style={colorSwatch("#111111", "1px solid #333")} />
-                No connection
-              </span>
-            </>
-          ) : tensionMode ? (
-            <>
-              <span>
-                <span style={colorSwatch("#ff8c00")} />
-                Excitation (+1)
-              </span>
-              <span>
-                <span style={colorSwatch("#0a0a0a", "1px solid #333")} />
-                Neutral (0)
-              </span>
-              <span>
-                <span style={colorSwatch("#5000ff")} />
-                Inhibition (-1)
-              </span>
-            </>
-          ) : (
-            <>
-              <span>
-                <span style={colorSwatch("#ffffff")} />
-                Active
-              </span>
-              <span>
-                <span style={colorSwatch("#0a0a0a", "1px solid #333")} />
-                Inactive
-              </span>
-            </>
           )}
         </div>
       </main>
