@@ -4,8 +4,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { LayerBox, HEADER_H, type BoxLayout } from "./LayerBox";
 import { PixelCanvas } from "./PixelCanvas";
 import { BrushPalette } from "./BrushPalette";
-import { formatNumber } from "./Controls";
-import type { RegionOverlay, PerfMetrics, ExperimentState } from "../types";
+import type { RegionOverlay } from "../types";
 
 function colorSwatch(bg: string, border?: string): React.CSSProperties {
   return {
@@ -75,8 +74,6 @@ interface SceneProps {
   onDrawNoiseChange?: (v: number) => void;
 
   isInitializing?: boolean;
-  perf?: PerfMetrics | null;
-  experimentState?: ExperimentState;
 }
 
 export function Scene({
@@ -100,8 +97,6 @@ export function Scene({
   onIncrease, onDecrease, onToggleMode, onToggleInspect, onToggleTension,
   drawNoise, onDrawNoiseChange,
   isInitializing,
-  perf,
-  experimentState,
 }: SceneProps) {
   const hasConnectionMap = connectionMap != null;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -548,51 +543,8 @@ export function Scene({
         </div>
       </div>
 
-      {/* speed / state HUD + color legend */}
+      {/* color legend */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "monospace", fontSize: "0.7rem" }}>
-          {perf && (
-            <span
-              style={{
-                padding: "2px 8px",
-                borderRadius: 6,
-                background: "#0d1f0d",
-                border: "1px solid #1a3a1a",
-              }}
-            >
-              <span style={{ color: "#666" }}>{perf.elapsed_ms}ms</span>
-              {" / "}
-              <strong style={{ color: "#4ade80" }}>
-                {formatNumber(perf.steps_per_second)} steps/s
-              </strong>
-            </span>
-          )}
-          {experimentState && (
-            <span
-              style={{
-                padding: "2px 8px",
-                borderRadius: 6,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                background:
-                  experimentState === "running" ? "#1a3a1a"
-                  : experimentState === "initializing" ? "#1a1a3a"
-                  : experimentState === "complete" ? "#3a1a1a"
-                  : "#1a1a2e",
-                color:
-                  experimentState === "running" ? "#4ade80"
-                  : experimentState === "initializing" ? "#4cc9f0"
-                  : experimentState === "complete" ? "#f72585"
-                  : "#666",
-              }}
-            >
-              {isInitializing && <span className="neuro-spinner-sm" />}
-              {experimentState}
-            </span>
-          )}
-        </div>
-
         <div
           style={{
             display: "flex",

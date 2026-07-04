@@ -588,6 +588,7 @@ function App() {
           <Controls
             state={state}
             stats={stats}
+            perf={perf}
             generation={generation}
             stepsPerTick={stepsPerTick}
             orchestratorState={orchestratorState}
@@ -642,8 +643,6 @@ function App() {
               drawNoise={drawNoise}
               onDrawNoiseChange={handleDrawNoiseChange}
               isInitializing={isInitializing}
-              perf={perf}
-              experimentState={state}
             />
           ) : (
             <div

@@ -1,10 +1,11 @@
 /** Controls — Play/Pause/Step/Reset + stats display + steps per tick. */
 
-import type { ExperimentState, ExperimentStats, OrchestratorEvent } from "../types";
+import type { ExperimentState, ExperimentStats, OrchestratorEvent, PerfMetrics } from "../types";
 
 interface ControlsProps {
   state: ExperimentState;
   stats: ExperimentStats | null;
+  perf: PerfMetrics | null;
   generation: number;
   stepsPerTick: number;
   orchestratorState?: OrchestratorEvent[];
@@ -39,6 +40,7 @@ export function formatNumber(n: number): string {
 export function Controls({
   state,
   stats,
+  perf,
   generation,
   stepsPerTick,
   orchestratorState = [],
@@ -236,6 +238,47 @@ export function Controls({
               </option>
             ))}
           </select>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontFamily: "monospace", fontSize: "0.8rem", marginLeft: "8px" }}>
+          {perf && (
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: "4px",
+                background: "#0d1f0d",
+                border: "1px solid #1a3a1a",
+              }}
+            >
+              <span style={{ color: "#666" }}>{perf.elapsed_ms}ms</span>
+              {" / "}
+              <strong style={{ color: "#4ade80" }}>
+                {formatNumber(perf.steps_per_second)} steps/s
+              </strong>
+            </span>
+          )}
+          <span
+            style={{
+              padding: "2px 8px",
+              borderRadius: "4px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background:
+                state === "running" ? "#1a3a1a"
+                : state === "initializing" ? "#1a1a3a"
+                : state === "complete" ? "#3a1a1a"
+                : "#1a1a2e",
+              color:
+                state === "running" ? "#4ade80"
+                : state === "initializing" ? "#4cc9f0"
+                : state === "complete" ? "#f72585"
+                : "#666",
+            }}
+          >
+            {isInitializing && <span className="neuro-spinner-sm" />}
+            {state}
+          </span>
         </div>
       </div>
     </div>
