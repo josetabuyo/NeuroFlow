@@ -385,15 +385,11 @@ def _apply_mask_to_neuron_grid(
                 pesos_s: list[float] | None = dend_def.get("pesos_sinapsis")
                 noise_amp = dend_def.get("random_noise")
 
-                # In cut mode, skip the entire dendrite if any synapse falls outside.
-                if cut and any(
-                    not (0 <= x + dx < width and 0 <= y + dy < height)
-                    for dx, dy in offsets
-                ):
-                    continue
-
                 sinapsis_list: list[Sinapsis] = []
                 for i, (dx, dy) in enumerate(offsets):
+                    # In cut mode, drop only the synapses that fall outside the region.
+                    if cut and not (0 <= x + dx < width and 0 <= y + dy < height):
+                        continue
                     nx = (x + dx) % width
                     ny = (y + dy) % height
                     src = neurons[ny][nx]

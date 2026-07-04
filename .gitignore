@@ -38,6 +38,7 @@ Thumbs.db
 
 # Playwright MCP
 .playwright-mcp/
+.playwright-cli/
 
 # SQLite data
 backend/data/

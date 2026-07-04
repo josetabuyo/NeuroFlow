@@ -105,15 +105,13 @@ class Constructor:
             neurona_destino = brain.get_neurona(self.key_by_coord(x, fila_destino))
 
             for pesos_sinapsis in regla_pesos:
-                # In cut mode, skip the entire dendrite if any synapse falls outside.
-                if cut and any(
-                    not (0 <= x + dx < width and 0 <= fila_destino + dy < height)
-                    for dx, dy in mascara_relativa
-                ):
-                    continue
-
                 sinapsis_list: list[Sinapsis] = []
                 for i, (dx, dy) in enumerate(mascara_relativa):
+                    # In cut mode, drop only the synapses that fall outside the region.
+                    if cut and not (
+                        0 <= x + dx < width and 0 <= fila_destino + dy < height
+                    ):
+                        continue
                     nx = (x + dx) % width
                     ny = (fila_destino + dy) % height
                     neurona_fuente = brain.get_neurona(self.key_by_coord(nx, ny))
@@ -122,8 +120,9 @@ class Constructor:
                         Sinapsis(neurona_entrante=neurona_fuente, peso=peso_sinapsis)
                     )
 
-                dendrita = Dendrita(sinapsis=sinapsis_list, peso=peso_dendrita)
-                neurona_destino.dendritas.append(dendrita)
+                if sinapsis_list:
+                    dendrita = Dendrita(sinapsis=sinapsis_list, peso=peso_dendrita)
+                    neurona_destino.dendritas.append(dendrita)
 
     def aplicar_regla_wolfram(
         self,
@@ -210,16 +209,14 @@ class Constructor:
                     offsets: list[tuple[int, int]] = def_dendrita["offsets"]  # type: ignore[assignment]
                     pesos_explicitos: list[float] | None = def_dendrita.get("pesos_sinapsis")  # type: ignore[assignment]
 
-                    # In cut mode, skip the entire dendrite if any synapse falls outside.
-                    if cut and any(
-                        not (0 <= x + dx + jdx < width and 0 <= y + dy + jdy < height)
-                        for dx, dy in offsets
-                    ):
-                        continue
-
                     sinapsis_list: list[Sinapsis] = []
                     noise_amp = def_dendrita.get("random_noise")  # None for presets
                     for i, (dx, dy) in enumerate(offsets):
+                        # In cut mode, drop only the synapses that fall outside the region.
+                        if cut and not (
+                            0 <= x + dx + jdx < width and 0 <= y + dy + jdy < height
+                        ):
+                            continue
                         nx = (x + dx + jdx) % width
                         ny = (y + dy + jdy) % height
                         neurona_fuente = brain.get_neurona(

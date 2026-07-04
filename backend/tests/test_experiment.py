@@ -350,23 +350,37 @@ class TestCutBorderTopology:
         )
 
     def test_no_wrap_in_cut_mode(self) -> None:
-        """With border=cut, left-edge neuron in Wolfram rule_110 does NOT fire the rightmost cell."""
+        """With border=cut, edge neurons keep truncated dendrites, never a wrapped synapse."""
         exp = Experiment()
         cfg = _nested_config(width=5, height=3, mask="rule_110")
         cfg["grid"]["border"] = "cut"
         exp.setup(cfg)
 
-        for i in range(exp.brain_tensor.n_real):
-            exp.brain_tensor.set_valor(i, 0.0)
-        exp.brain_tensor.set_valor(2 * 5 + 0, 1.0)  # x0y2
+        # Left-edge neuron (x0) would need a synapse from x=-1, which does not
+        # exist. In cut mode that synapse must be dropped, never wrapped to x4.
+        left_edge = exp.brain.get_neurona("x0y1")
+        for dendrita in left_edge.dendritas:
+            fuentes = {s.neurona_entrante.id for s in dendrita.sinapsis}
+            assert "x4y2" not in fuentes, (
+                f"Left-edge dendrite must not wrap to the rightmost column; got {fuentes}"
+            )
+            assert len(dendrita.sinapsis) <= 2, (
+                f"Left-edge dendrite should be truncated to at most 2 synapses "
+                f"(center+right, left dropped); got {len(dendrita.sinapsis)}"
+            )
 
-        exp.brain_tensor.procesar()
-
-        frame = exp.brain_tensor.get_grid(5, 3)
-        row1 = [int(round(v)) for v in frame[1]]
-        assert row1[4] == 0, (
-            f"Rightmost cell must NOT fire in cut mode (no wrap-around); got row1={row1}"
-        )
+        # Right-edge neuron (x4) would need a synapse from x=5, which does not
+        # exist. In cut mode that synapse must be dropped, never wrapped to x0.
+        right_edge = exp.brain.get_neurona("x4y1")
+        for dendrita in right_edge.dendritas:
+            fuentes = {s.neurona_entrante.id for s in dendrita.sinapsis}
+            assert "x0y2" not in fuentes, (
+                f"Right-edge dendrite must not wrap to the leftmost column; got {fuentes}"
+            )
+            assert len(dendrita.sinapsis) <= 2, (
+                f"Right-edge dendrite should be truncated to at most 2 synapses "
+                f"(left+center, right dropped); got {len(dendrita.sinapsis)}"
+            )
 
     def test_interior_neuron_unaffected(self) -> None:
         """Interior neurons have the same connectivity in both border modes."""
