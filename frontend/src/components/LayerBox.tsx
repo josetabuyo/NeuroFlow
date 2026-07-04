@@ -20,10 +20,15 @@ interface LayerBoxProps {
   highlighted?: boolean;
   /** Current zoom scale of the enclosing pannable/zoomable world (1 = no zoom). */
   scale?: number;
+  /** When true, collapses the box to a small square and skips rendering children. */
+  minimized?: boolean;
+  /** Shown as a header icon when provided; toggles `minimized`. */
+  onToggleMinimize?: () => void;
 }
 
 export const HEADER_H = 26;
 const HANDLE = 10;
+const MINI_SIZE = 34;
 
 export function LayerBox({
   id,
@@ -34,6 +39,8 @@ export function LayerBox({
   minSize = 60,
   highlighted = false,
   scale = 1,
+  minimized = false,
+  onToggleMinimize,
 }: LayerBoxProps) {
   const { x, y, w, h } = layout;
 
@@ -109,9 +116,28 @@ export function LayerBox({
 
   const accent = highlighted ? "#7c3aed" : "#2a2a3e";
   const glow   = highlighted ? "0 0 14px rgba(124,58,237,0.35)" : "none";
+  const boxWidth = minimized ? MINI_SIZE : w;
+
+  const minimizeButton = onToggleMinimize && (
+    <button
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={onToggleMinimize}
+      title={minimized ? `Restaurar ${label}` : `Minimizar ${label}`}
+      aria-label={minimized ? "Restore region" : "Minimize region"}
+      style={{
+        width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center",
+        background: "#1a1a2e", color: highlighted ? "#a78bfa" : "#666",
+        border: `1px solid ${accent}`, borderRadius: 4, cursor: "pointer",
+        fontSize: "0.55rem", fontWeight: 700, lineHeight: 1, padding: 0,
+        flexShrink: 0, marginLeft: "auto", transition: "all 0.15s",
+      }}
+    >
+      {minimized ? "▢" : "–"}
+    </button>
+  );
 
   return (
-    <div style={{ position: "absolute", left: x, top: y, width: w, userSelect: "none" }}>
+    <div style={{ position: "absolute", left: x, top: y, width: boxWidth, userSelect: "none" }}>
 
       {/* ── Header ── */}
       <div
@@ -121,51 +147,62 @@ export function LayerBox({
         style={{
           height: HEADER_H,
           background: "#14142a",
-          borderRadius: "6px 6px 0 0",
+          borderRadius: minimized ? 6 : "6px 6px 0 0",
           border: `1px solid ${accent}`,
-          borderBottom: "none",
+          borderBottom: minimized ? `1px solid ${accent}` : "none",
           display: "flex",
           alignItems: "center",
-          padding: "0 10px",
+          padding: minimized ? "0 6px" : "0 6px 0 10px",
           gap: "7px",
           cursor: "grab",
           transition: "border-color 0.2s",
         }}
       >
-        <span style={{ color: highlighted ? "#a78bfa" : "#2e2e52", fontSize: "0.8rem", lineHeight: 1 }}>⠿</span>
-        <span style={{ fontSize: "0.62rem", color: highlighted ? "#a78bfa" : "#555", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-          {label}
-        </span>
+        {!minimized && (
+          <>
+            <span style={{ color: highlighted ? "#a78bfa" : "#2e2e52", fontSize: "0.8rem", lineHeight: 1 }}>⠿</span>
+            <span style={{ fontSize: "0.62rem", color: highlighted ? "#a78bfa" : "#555", letterSpacing: "0.1em", textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {label}
+            </span>
+          </>
+        )}
+        {minimizeButton}
       </div>
 
       {/* ── Content ── */}
-      <div
-        style={{
-          width: "100%",
-          height: h,
-          border: `1px solid ${accent}`,
-          borderRadius: "0 0 6px 6px",
-          overflow: "hidden",
-          background: "#0d0d14",
-          position: "relative",
-          transition: "border-color 0.2s, box-shadow 0.2s",
-          boxShadow: glow,
-        }}
-      >
-        {children}
-      </div>
+      {!minimized && (
+        <div
+          style={{
+            width: "100%",
+            height: h,
+            border: `1px solid ${accent}`,
+            borderRadius: "0 0 6px 6px",
+            overflow: "hidden",
+            background: "#0d0d14",
+            position: "relative",
+            transition: "border-color 0.2s, box-shadow 0.2s",
+            boxShadow: glow,
+          }}
+        >
+          {children}
+        </div>
+      )}
 
       {/* ── Resize handles ── */}
-      {/* corners */}
-      {handle("se", { right: 0,  bottom: 0,        width: HANDLE*2, height: HANDLE*2 })}
-      {handle("sw", { left: 0,   bottom: 0,        width: HANDLE*2, height: HANDLE*2 })}
-      {handle("ne", { right: 0,  top: HEADER_H,    width: HANDLE*2, height: HANDLE*2 })}
-      {handle("nw", { left: 0,   top: HEADER_H,    width: HANDLE*2, height: HANDLE*2 })}
-      {/* edges */}
-      {handle("e",  { right: 0,  top: HEADER_H + HANDLE*2, bottom: HANDLE*2, width: HANDLE })}
-      {handle("w",  { left: 0,   top: HEADER_H + HANDLE*2, bottom: HANDLE*2, width: HANDLE })}
-      {handle("s",  { left: HANDLE*2, right: HANDLE*2,    bottom: 0,         height: HANDLE })}
-      {handle("n",  { left: HANDLE*2, right: HANDLE*2,    top: HEADER_H,     height: HANDLE })}
+      {!minimized && (
+        <>
+          {/* corners */}
+          {handle("se", { right: 0,  bottom: 0,        width: HANDLE*2, height: HANDLE*2 })}
+          {handle("sw", { left: 0,   bottom: 0,        width: HANDLE*2, height: HANDLE*2 })}
+          {handle("ne", { right: 0,  top: HEADER_H,    width: HANDLE*2, height: HANDLE*2 })}
+          {handle("nw", { left: 0,   top: HEADER_H,    width: HANDLE*2, height: HANDLE*2 })}
+          {/* edges */}
+          {handle("e",  { right: 0,  top: HEADER_H + HANDLE*2, bottom: HANDLE*2, width: HANDLE })}
+          {handle("w",  { left: 0,   top: HEADER_H + HANDLE*2, bottom: HANDLE*2, width: HANDLE })}
+          {handle("s",  { left: HANDLE*2, right: HANDLE*2,    bottom: 0,         height: HANDLE })}
+          {handle("n",  { left: HANDLE*2, right: HANDLE*2,    top: HEADER_H,     height: HANDLE })}
+        </>
+      )}
     </div>
   );
 }

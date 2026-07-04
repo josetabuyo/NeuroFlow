@@ -15,6 +15,7 @@ and **Consequences**.
 | [0003](0003-websocket-not-polling.md) | WebSocket, not HTTP polling | Accepted |
 | [0004](0004-react-over-svelte-vue.md) | React over Svelte/Vue | Accepted |
 | [0005](0005-pytorch-for-computation.md) | PyTorch for neural computation | Accepted |
+| [0006](0006-region-minimize-decouples-render-from-simulation.md) | Region minimize decouples render from simulation | Accepted |
 
 ## Adding a new ADR
 

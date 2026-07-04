@@ -110,6 +110,17 @@ export function Scene({
   const [layoutKey, setLayoutKey] = useState(0);
   const [drawOpen, setDrawOpen] = useState(false);
 
+  // Regions collapsed to a small square — skips mounting their PixelCanvas,
+  // so the (potentially expensive) grid draw is not paid while minimized.
+  const [minimizedIds, setMinimizedIds] = useState<Set<string>>(new Set());
+  const toggleMinimize = useCallback((id: string) => {
+    setMinimizedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
   // Pan/zoom viewport over the scene ("el paño")
   const MIN_SCALE = 0.2;
   const MAX_SCALE = 4;
@@ -555,8 +566,14 @@ export function Scene({
         const gw = grid[0]?.length ?? 1;
         const labelGrid = labels[id];
 
+        const isMinimized = minimizedIds.has(id);
+
         return (
-          <LayerBox key={id} id={id} label={id} layout={box} onUpdate={updateBox} scale={view.scale}>
+          <LayerBox
+            key={id} id={id} label={id} layout={box} onUpdate={updateBox} scale={view.scale}
+            minimized={isMinimized}
+            onToggleMinimize={() => toggleMinimize(id)}
+          >
             <PixelCanvas
               grid={grid}
               tensionGrid={tensionRegions[id]}

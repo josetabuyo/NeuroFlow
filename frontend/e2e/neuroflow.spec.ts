@@ -407,3 +407,34 @@ test("17. Inspect mode: drag updates the observed neuron", async ({ page }) => {
   await page.waitForTimeout(200);
   expect(await getInspectedCoords(page)).toBe(draggedCoords);
 });
+
+// ---------------------------------------------------------------------------
+// 18. Minimize region: collapses render, simulation keeps running
+// ---------------------------------------------------------------------------
+test("18. Minimize region collapses the canvas and restore brings it back", async ({ page }) => {
+  await startExperiment(page);
+
+  const canvas = page.locator("main canvas").first();
+  await expect(canvas).toBeVisible();
+
+  await page.getByRole("button", { name: "Minimize region" }).click();
+
+  // The canvas unmounts entirely — no pixel grid drawing happens while minimized.
+  await expect(canvas).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Restore region" })).toBeVisible();
+
+  // The backend keeps simulating while the region is collapsed: Play still
+  // advances steps with no canvas mounted to render into.
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect(page.getByText("running")).toBeVisible({ timeout: 8_000 });
+  await page.waitForTimeout(600);
+  const stepsWhileMinimized = await getStepCount(page);
+  expect(stepsWhileMinimized).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Pause" }).click();
+  await expect(page.getByText("paused")).toBeVisible({ timeout: 8_000 });
+
+  // Restoring brings the canvas back with the up-to-date grid.
+  await page.getByRole("button", { name: "Restore region" }).click();
+  await expect(canvas).toBeVisible();
+  await expect(page.getByRole("button", { name: "Minimize region" })).toBeVisible();
+});
