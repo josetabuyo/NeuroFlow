@@ -272,7 +272,6 @@ function App() {
 
   // Persist current config for this experiment to the DB (debounced autosave)
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const flashlightRef = useRef<{ cells: { x: number; y: number }[]; regionId?: string } | null>(null);
   useEffect(() => {
     if (selectedExperimentId == null) return;
     clearTimeout(sessionTimerRef.current);
@@ -442,27 +441,6 @@ function App() {
     [brushSize, config, regions]
   );
 
-  const applyBrush = useCallback(
-    (x: number, y: number, regionId?: string) => {
-      if (inspectMode) return;
-      const value = brushMode === "activate" ? 1.0 : 0.0;
-      const cells = computeBrushCells(x, y, regionId);
-      paint(cells, value, regionId);
-    },
-    [inspectMode, brushMode, computeBrushCells, paint]
-  );
-
-  const handleDragEnd = useCallback(
-    (_centers: { x: number; y: number }[], _regionId?: string) => {
-      if (inspectMode) return;
-      if (flashlightRef.current) {
-        paint(flashlightRef.current.cells, 0.0, flashlightRef.current.regionId);
-        flashlightRef.current = null;
-      }
-    },
-    [inspectMode, paint]
-  );
-
   const handleCellClick = useCallback(
     (x: number, y: number, regionId?: string) => {
       if (inspectMode) {
@@ -471,13 +449,30 @@ function App() {
         const cells = computeBrushCells(x, y, regionId);
         const value = brushMode === "activate" ? 1.0 : 0.0;
         paint(cells, value, regionId);
-        if (brushMode === "activate") {
-          flashlightRef.current = { cells, regionId };
-        }
       }
     },
     [inspectMode, inspect, computeBrushCells, brushMode, paint]
   );
+
+  // Coalesces paints from rapid drag movement into at most one `paint` per
+  // rendered frame — the backend re-serializes full brain state on every
+  // paint, so one message per mousemove event was the source of the freeze.
+  const dragFrameRef = useRef<{
+    cellsByKey: Map<string, { x: number; y: number }>;
+    regionId?: string;
+    scheduled: boolean;
+  } | null>(null);
+
+  const flushDragFrame = useCallback(() => {
+    const frame = dragFrameRef.current;
+    if (!frame) return;
+    frame.scheduled = false;
+    if (frame.cellsByKey.size === 0) return;
+    const cells = Array.from(frame.cellsByKey.values());
+    frame.cellsByKey.clear();
+    const value = brushMode === "activate" ? 1.0 : 0.0;
+    paint(cells, value, frame.regionId);
+  }, [brushMode, paint]);
 
   const handleCellDrag = useCallback(
     (x: number, y: number, regionId?: string) => {
@@ -487,19 +482,19 @@ function App() {
         inspect(x, y, regionId);
         return;
       }
-      if (brushMode === "activate") {
-        // Flashlight: clear previous position, illuminate new position only
-        if (flashlightRef.current) {
-          paint(flashlightRef.current.cells, 0.0, flashlightRef.current.regionId);
-        }
-        const cells = computeBrushCells(x, y, regionId);
-        paint(cells, 1.0, regionId);
-        flashlightRef.current = { cells, regionId };
-      } else {
-        applyBrush(x, y, regionId);
+      const cells = computeBrushCells(x, y, regionId);
+      if (!dragFrameRef.current) {
+        dragFrameRef.current = { cellsByKey: new Map(), regionId, scheduled: false };
+      }
+      const frame = dragFrameRef.current;
+      frame.regionId = regionId;
+      for (const cell of cells) frame.cellsByKey.set(`${cell.x},${cell.y}`, cell);
+      if (!frame.scheduled) {
+        frame.scheduled = true;
+        requestAnimationFrame(flushDragFrame);
       }
     },
-    [inspectMode, inspect, brushMode, computeBrushCells, paint, applyBrush]
+    [inspectMode, inspect, computeBrushCells, flushDragFrame]
   );
 
   const handlePlay = useCallback(
@@ -632,7 +627,6 @@ function App() {
               nerveCircles={nerveCircles}
               onCellClick={handleCellClick}
               onCellDrag={handleCellDrag}
-              onCellDragEnd={handleDragEnd}
               brushSize={brushSize}
               brushMode={brushMode}
               inspectMode={inspectMode}
