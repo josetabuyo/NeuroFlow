@@ -91,6 +91,55 @@ export function Scene({
   const [layoutKey, setLayoutKey] = useState(0);
   const [drawOpen, setDrawOpen] = useState(false);
 
+  // Pan/zoom viewport over the scene ("el paño")
+  const MIN_SCALE = 0.2;
+  const MAX_SCALE = 4;
+  const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
+  const panRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+
+  const resetView = useCallback(() => setView({ x: 0, y: 0, scale: 1 }), []);
+
+  // Native (non-passive) wheel listener — React's onWheel is passive, so
+  // preventDefault() there fails and the page would scroll instead of zooming.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      setView(prev => {
+        const factor = Math.exp(-e.deltaY * 0.001);
+        const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, prev.scale * factor));
+        const worldX = (mx - prev.x) / prev.scale;
+        const worldY = (my - prev.y) / prev.scale;
+        return { x: mx - worldX * newScale, y: my - worldY * newScale, scale: newScale };
+      });
+    };
+    el.addEventListener("wheel", onNativeWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onNativeWheel);
+  }, []);
+
+  const handleBackgroundPointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.target !== e.currentTarget) return; // only pan when grabbing empty background
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    panRef.current = { sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y };
+    setIsPanning(true);
+  }, [view.x, view.y]);
+
+  const handleBackgroundPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!panRef.current) return;
+    const { sx, sy, ox, oy } = panRef.current;
+    setView(v => ({ ...v, x: ox + (e.clientX - sx), y: oy + (e.clientY - sy) }));
+  }, []);
+
+  const handleBackgroundPointerUp = useCallback(() => {
+    panRef.current = null;
+    setIsPanning(false);
+  }, []);
+
   // Info panel position (draggable, independent of boxes state)
   const [infoPanelPos, setInfoPanelPos] = useState<{ x: number; y: number } | null>(null);
   const infoDragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
@@ -324,6 +373,19 @@ export function Scene({
       ref={containerRef}
       style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}
     >
+      {/* ── Pannable/zoomable world ── */}
+      <div
+        onPointerDown={handleBackgroundPointerDown}
+        onPointerMove={handleBackgroundPointerMove}
+        onPointerUp={handleBackgroundPointerUp}
+        style={{
+          position: "absolute",
+          inset: 0,
+          transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
+          transformOrigin: "0 0",
+          cursor: isPanning ? "grabbing" : "grab",
+        }}
+      >
       {/* ── SVG connector layer ── */}
       <svg
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 15 }}
@@ -376,6 +438,7 @@ export function Scene({
           />
         )}
       </svg>
+      </div>
 
       {/* ── Scene toolbar ── */}
       <div style={{ position: "absolute", top: 8, left: 8, display: "flex", flexDirection: "column", gap: 4, zIndex: 30 }}>
@@ -395,6 +458,17 @@ export function Scene({
             border: "1px solid #2a2a3e",
             borderRadius: 6, cursor: "pointer", fontSize: 15, fontWeight: 700, padding: 0, transition: "all 0.15s",
           }}>↺</button>
+          <button
+            onClick={resetView}
+            title={`Reset view (${Math.round(view.scale * 100)}%) — scroll to zoom, drag background to pan`}
+            style={{
+              width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+              background: "#1a1a2e", color: "#555",
+              border: "1px solid #2a2a3e",
+              borderRadius: 6, cursor: "pointer", fontSize: "0.55rem", fontFamily: "monospace",
+              fontWeight: 700, padding: 0, transition: "all 0.15s",
+            }}
+          >{Math.round(view.scale * 100)}%</button>
           <button
             onClick={onToggleTension}
             title={tensionMode ? "Hide tensions" : "View surface tensions"}
@@ -454,6 +528,20 @@ export function Scene({
         </div>
       </div>
 
+      {/* ── Pannable/zoomable world (continued) ── */}
+      <div
+        onPointerDown={handleBackgroundPointerDown}
+        onPointerMove={handleBackgroundPointerMove}
+        onPointerUp={handleBackgroundPointerUp}
+        style={{
+          position: "absolute",
+          inset: 0,
+          transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
+          transformOrigin: "0 0",
+          cursor: isPanning ? "grabbing" : "grab",
+        }}
+      >
+
       {/* ── Region boxes ── */}
       {Object.entries(regions).map(([id, grid]) => {
         const box = boxes[id];
@@ -463,7 +551,7 @@ export function Scene({
         const labelGrid = labels[id];
 
         return (
-          <LayerBox key={id} id={id} label={id} layout={box} onUpdate={updateBox}>
+          <LayerBox key={id} id={id} label={id} layout={box} onUpdate={updateBox} scale={view.scale}>
             <PixelCanvas
               grid={grid}
               tensionGrid={tensionRegions[id]}
@@ -527,6 +615,7 @@ export function Scene({
             label={`weights ← ${inspectedRegionId ?? regionId}`}
             layout={boxes[regionInspectKey]}
             onUpdate={updateBox}
+            scale={view.scale}
             highlighted
           >
             <PixelCanvas
@@ -553,6 +642,7 @@ export function Scene({
             label={`weights ← ${inputId}`}
             layout={boxes[inputInspectKey]}
             onUpdate={updateBox}
+            scale={view.scale}
             highlighted
           >
             <PixelCanvas
@@ -579,6 +669,7 @@ export function Scene({
               label={`weights ← ${id}`}
               layout={boxes[boxKey]}
               onUpdate={updateBox}
+              scale={view.scale}
               highlighted
             >
               <PixelCanvas
@@ -602,7 +693,7 @@ export function Scene({
           onPointerMove={e => {
             if (!infoDragRef.current) return;
             const { sx, sy, ox, oy } = infoDragRef.current;
-            setInfoPanelPos({ x: ox + e.clientX - sx, y: oy + e.clientY - sy });
+            setInfoPanelPos({ x: ox + (e.clientX - sx) / view.scale, y: oy + (e.clientY - sy) / view.scale });
           }}
           onPointerUp={() => { infoDragRef.current = null; }}
           style={{
@@ -659,7 +750,7 @@ export function Scene({
           </div>
         </div>
       )}
-
+      </div>
 
       {/* ── Initializing overlay ── */}
       {isInitializing && (

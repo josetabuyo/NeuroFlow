@@ -18,6 +18,8 @@ interface LayerBoxProps {
   minSize?: number;
   /** Glow border when this box is relevant to the current inspection. */
   highlighted?: boolean;
+  /** Current zoom scale of the enclosing pannable/zoomable world (1 = no zoom). */
+  scale?: number;
 }
 
 export const HEADER_H = 26;
@@ -31,6 +33,7 @@ export function LayerBox({
   children,
   minSize = 60,
   highlighted = false,
+  scale = 1,
 }: LayerBoxProps) {
   const { x, y, w, h } = layout;
 
@@ -50,9 +53,9 @@ export function LayerBox({
     (e: React.PointerEvent) => {
       if (!moveRef.current) return;
       const { sx, sy, ox, oy } = moveRef.current;
-      onUpdate(id, { x: ox + e.clientX - sx, y: oy + e.clientY - sy, w, h });
+      onUpdate(id, { x: ox + (e.clientX - sx) / scale, y: oy + (e.clientY - sy) / scale, w, h });
     },
-    [id, onUpdate, w, h],
+    [id, onUpdate, w, h, scale],
   );
 
   const onMoveUp = useCallback(() => { moveRef.current = null; }, []);
@@ -77,8 +80,8 @@ export function LayerBox({
     (e: React.PointerEvent) => {
       if (!resizeRef.current) return;
       const { sx, sy, ox, oy, ow, oh, edge } = resizeRef.current;
-      const dx = e.clientX - sx;
-      const dy = e.clientY - sy;
+      const dx = (e.clientX - sx) / scale;
+      const dy = (e.clientY - sy) / scale;
 
       let nx = ox, ny = oy, nw = ow, nh = oh;
 
@@ -89,7 +92,7 @@ export function LayerBox({
 
       onUpdate(id, { x: nx, y: ny, w: nw, h: nh });
     },
-    [id, onUpdate, minSize],
+    [id, onUpdate, minSize, scale],
   );
 
   const onResizeUp = useCallback(() => { resizeRef.current = null; }, []);
