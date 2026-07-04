@@ -917,20 +917,173 @@ const sidebarButtonStyle: React.CSSProperties = {
   transition: "all 0.15s",
 };
 
+type ConfigRow = { section: string; key: string; type: "soft" | "hard"; desc: string };
+
+// `key` is the literal single JSON property name — what you'd actually type in a
+// config. It's the unit the search/autocomplete/usage-lookup operate on. The same
+// key can legitimately appear in more than one row (e.g. "weight" shows up under
+// full, deamon.excitatory and nerve.from) — that's real, not a bug.
+const CONFIG_ROWS: ConfigRow[] = [
+  { section: "Region (top-level)", key: "process_mode", type: "soft", desc: "min_vs_max · avg_vs_avg · avg_vs_avg_normalized · sum · group_avg" },
+  { section: "Region (top-level)", key: "function", type: "soft", desc: 'tension.function — {"x":1,"x_pow_2":3,"x_pow_3":20,"b":-0.7} polynomial + bias (b shifts firing point; threshold = 0 always)' },
+  { section: "Region (top-level)", key: "threshold", type: "soft", desc: "firing threshold for the region (legacy alias: umbral). Default 0.0" },
+  { section: "Region (top-level)", key: "activation", type: "soft", desc: '"soft" — region emits continuous tension in [0,1] instead of a binary spike' },
+  { section: "Region (top-level)", key: "border", type: "hard", desc: 'grid.border — "connected" (toroidal wrap, default) or "cut" (edges truncated, fewer synapses)' },
+  { section: "Region (top-level)", key: "neuron_labels", type: "hard", desc: 'per-neuron class-label grid, e.g. [["A","B",...],...] — used by label_mismatch source and handlers' },
+  { section: "Region (top-level)", key: "handler", type: "hard", desc: "name of a Python handler class (experiments/handlers/*.py) that populates neuron_labels" },
+  { section: "Region (top-level)", key: "threshold", type: "hard", desc: "daemon.threshold — cluster detection: activation cutoff to count a neuron as active. Default 0.5" },
+  { section: "Region (top-level)", key: "min_size", type: "hard", desc: "daemon.min_size — cluster detection: minimum cluster size. Default 3" },
+
+  { section: "Connection › on (intra-region wiring)", key: "on", type: "hard", desc: 'region id — e.g. "tissue". Marks this as an intra-region wiring entry' },
+  { section: "Connection › on (intra-region wiring)", key: "deamon", type: "hard", desc: "daemon wiring object. Contains mask or shape/excitatory/inhibitory" },
+  { section: "Connection › on (intra-region wiring)", key: "mask", type: "hard", desc: 'deamon.mask — mask string, e.g. "deamon_e3_g2_i12_de1_di1"' },
+  { section: "Connection › on (intra-region wiring)", key: "shape", type: "hard", desc: "deamon.shape — daemon footprint shape" },
+  { section: "Connection › on (intra-region wiring)", key: "centroid", type: "hard", desc: "deamon.centroid — daemon center placement" },
+  { section: "Connection › on (intra-region wiring)", key: "weight", type: "hard", desc: "deamon.excitatory.weight — global excitatory dendrite weight" },
+  { section: "Connection › on (intra-region wiring)", key: "weight", type: "hard", desc: "deamon.inhibitory.weight — global inhibitory dendrite weight (negative)" },
+  { section: "Connection › on (intra-region wiring)", key: "rate", type: "soft", desc: "deamon.learning.rate — intra-region Hebbian rate" },
+  { section: "Connection › on (intra-region wiring)", key: "density", type: "hard", desc: "excitatory.density — excitatory dendrite sampling fraction" },
+  { section: "Connection › on (intra-region wiring)", key: "noise", type: "hard", desc: "excitatory.noise — excitatory weight jitter" },
+  { section: "Connection › on (intra-region wiring)", key: "multiplier", type: "hard", desc: "inhibitory.multiplier — inhibitory ring strength multiplier" },
+  { section: "Connection › on (intra-region wiring)", key: "density", type: "hard", desc: "inhibitory.density — inhibitory dendrite sampling fraction" },
+  { section: "Connection › on (intra-region wiring)", key: "noise", type: "hard", desc: "inhibitory.noise — inhibitory weight jitter" },
+  { section: "Connection › on (intra-region wiring)", key: "sectors", type: "hard", desc: "inhibitory.sectors — number of angular sectors in the inhibitory ring" },
+  { section: "Connection › on (intra-region wiring)", key: "shift", type: "hard", desc: "centroid.shift — offsets the daemon centroid from its default position" },
+  { section: "Connection › on (intra-region wiring)", key: "fixed", type: "hard", desc: "wiring.fixed — disables random weight jitter" },
+
+  { section: "Region › source (ascii)", key: "text", type: "soft", desc: 'chars to cycle: "AB" or synthetics "HALF_TOP,HALF_BOT,BARS_H,BARS_V,DOT_TL,DOT_BR"' },
+  { section: "Region › source (ascii)", key: "frames_per_char", type: "soft", desc: "steps per character" },
+  { section: "Region › source (ascii)", key: "font", type: "soft", desc: "font id" },
+  { section: "Region › source (ascii)", key: "font_size", type: "soft", desc: "font size in px" },
+  { section: "Region › source (ascii)", key: "background", type: "soft", desc: "noise.background — random pixel flip probability 0–1" },
+  { section: "Region › source (ascii)", key: "shift", type: "soft", desc: "noise.shift — random 1-px shift each frame" },
+  { section: "Region › source (ascii)", key: "inter_char", type: "soft", desc: "noise.inter_char — blank frame between characters" },
+  { section: "Region › source (ascii)", key: "type", type: "hard", desc: "ascii · error_diff · label · label_mismatch · draw" },
+
+  { section: "Region › source (label_mismatch)", key: "char_region", type: "hard", desc: 'region providing the current char. Default "input"' },
+  { section: "Region › source (label_mismatch)", key: "label_region", type: "hard", desc: "region whose neuron_labels define the expected class" },
+  { section: "Region › source (label_mismatch)", key: "mode", type: "hard", desc: '"mismatch" (default) or "active_avg" — broadcasts mean label activation to all nociceptor neurons' },
+
+  { section: "Region › source (error_diff)", key: "label_region", type: "hard", desc: "target region for prediction (alias: output_region)" },
+  { section: "Region › source (error_diff)", key: "target", type: "hard", desc: '"input" (default) or "label"' },
+  { section: "Region › source (error_diff)", key: "diff_mode", type: "hard", desc: '"abs" (default) or "relu"' },
+
+  { section: "Region › source (draw)", key: "noise", type: "soft", desc: "background noise on the user-painted region — nested {background:n} or a flat scalar" },
+
+  { section: "Region › spiking", key: "up_ticks", type: "soft", desc: "max consecutive active steps before rest" },
+  { section: "Region › spiking", key: "down_ticks", type: "soft", desc: "refractory period length" },
+
+  { section: "Region › grid", key: "width", type: "hard", desc: "grid width" },
+  { section: "Region › grid", key: "height", type: "hard", desc: "grid height" },
+
+  { section: "Connections (inter-region full)", key: "rate", type: "soft", desc: "full.learning.rate — Hebbian learning rate for this connection" },
+  { section: "Connections (inter-region full)", key: "exclude_range", type: "soft", desc: "full.learning.exclude_range — [lo, hi], skip weights in this range" },
+  { section: "Connections (inter-region full)", key: "weight", type: "hard", desc: "full.weight — initial dendrite weight" },
+  { section: "Connections (inter-region full)", key: "density", type: "hard", desc: "full.density — fraction of source neurons sampled" },
+  { section: "Connections (inter-region full)", key: "from", type: "hard", desc: "source region id (topology)" },
+  { section: "Connections (inter-region full)", key: "to", type: "hard", desc: "destination region id (topology)" },
+  { section: "Connections (inter-region full)", key: "id", type: "hard", desc: "explicit connection id, for orchestrator addressing" },
+
+  { section: "Connections › portion", key: "type", type: "hard", desc: '"portion" — divides the source region into a grid of blocks, wires each destination neuron to its block' },
+  { section: "Connections › portion", key: "portion", type: "hard", desc: "[rows, cols] — block grid shape (legacy alias: input.portion)" },
+
+  { section: "Connections › nerve", key: "nerve", type: "hard", desc: 'places a spatial nerve circle on a host region and wires axons in/out of it — {"on":"<region>","nerve":{...}}' },
+  { section: "Connections › nerve", key: "insertion", type: "hard", desc: 'nerve.insertion — {"x":int,"y":int} exact placement, or "random" (default)' },
+  { section: "Connections › nerve", key: "radius", type: "hard", desc: "nerve.radius — circle radius. Default 6" },
+  { section: "Connections › nerve", key: "region", type: "hard", desc: "nerve.from.region / nerve.to.region — source/destination region ids" },
+  { section: "Connections › nerve", key: "density", type: "hard", desc: "nerve.from.density / nerve.to.density — fraction of neurons sampled. Default 0.1" },
+  { section: "Connections › nerve", key: "weight", type: "soft", desc: "nerve.from.weight / nerve.to.weight — dendrite weight. Default 0.5" },
+  { section: "Connections › nerve", key: "rate", type: "soft", desc: "nerve.from.learning.rate / nerve.to.learning.rate — Hebbian rate for that side" },
+  { section: "Connections › nerve", key: "deamon", type: "hard", desc: "nerve.to.deamon — daemon-shaped wiring centered on each nerve circle, instead of plain full/dense wiring" },
+
+  { section: "Orchestrator", key: "gradient", type: "hard", desc: 'pattern — interpolates a scalar between two ticks: {"from":{"tick":0,"set":"..."},"to":{"tick":N,"set":"..."}}' },
+  { section: "Orchestrator", key: "one_shot", type: "hard", desc: 'pattern — fires once at tick N: {"at":{"tick":N},"set":"..."}. paths: connections[N]["full"]["weight"], regions[N]["text"], connections[N]["nerve"]["from"|"to"]["weight"|"rate"] — also addressable by connection "id" or by nerve region name' },
+  { section: "Orchestrator", key: "inject", type: "hard", desc: 'writes activations directly into a region after procesar(): {"at":{"tick":0},"inject":{...}}. tick-0 also applies at setup (visible in step 0)' },
+  { section: "Orchestrator", key: "tick_end", type: "hard", desc: 'inject sustained — repeats the injected pattern every tick in [tick, tick_end]: {"at":{"tick":0,"tick_end":20},"inject":{...}}' },
+  { section: "Orchestrator", key: "region", type: "hard", desc: "inject.region — region id to write into" },
+  { section: "Orchestrator", key: "template", type: "hard", desc: 'inject.template — "noise" (uniform random [0,1] activations) or "image" (PNG/JPG mapped to activations)' },
+  { section: "Orchestrator", key: "src", type: "hard", desc: 'inject.src — path to the PNG/JPG, relative to backend/configs/. Alpha channel: white=activate, black=silence, transparent=leave unchanged' },
+];
+
+const UNIQUE_KEYS = Array.from(new Set(CONFIG_ROWS.map((r) => r.key))).sort();
+
+type UsageResult =
+  | { found: true; key: string; snippet: unknown; experiment_name: string; timestamp: string; source: string }
+  | { found: false; key: string };
+
 function HelpPanel() {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [notice, setNotice] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
+  const [usage, setUsage] = useState<UsageResult | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const q = query.trim().toLowerCase();
+  const acceptedKey = UNIQUE_KEYS.find((k) => k.toLowerCase() === q);
+  const suggestions = q && !acceptedKey ? UNIQUE_KEYS.filter((k) => k.toLowerCase().startsWith(q)) : [];
+  const topSuggestion = suggestions[0];
+
+  useEffect(() => {
+    if (!acceptedKey) {
+      setUsage(null);
+      return;
+    }
+    let cancelled = false;
+    setUsageLoading(true);
+    fetch(`/api/config-reference/usage?key=${encodeURIComponent(acceptedKey)}`)
+      .then((r) => r.json())
+      .then((data: UsageResult) => {
+        if (!cancelled) setUsage(data);
+      })
+      .catch(() => {
+        if (!cancelled) setUsage(null);
+      })
+      .finally(() => {
+        if (!cancelled) setUsageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [acceptedKey]);
+
+  const showNotice = useCallback((text: string, tone: "ok" | "warn") => {
+    setNotice({ text, tone });
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 2200);
+  }, []);
+
+  const copyText = useCallback(
+    (value: string, okMessage: string) => {
+      navigator.clipboard?.writeText(value).then(() => showNotice(okMessage, "ok"));
+    },
+    [showNotice]
+  );
+
+  const copyRealUsage = useCallback(() => {
+    if (usageLoading) return;
+    if (usage && usage.found) {
+      copyText(JSON.stringify(usage.snippet, null, 2), `Copied ✓ real example (${usage.experiment_name})`);
+    } else {
+      showNotice("No usage recorded — add an experiment that uses it, or retire it from the code", "warn");
+    }
+  }, [usage, usageLoading, copyText, showNotice]);
+
   return (
     <div style={{ marginTop: "8px" }}>
       <button
         onClick={() => setOpen((o) => !o)}
         style={{
           width: "100%",
-          padding: "5px 10px",
-          background: "#12122a",
-          border: "1px solid #2a2a4a",
-          borderRadius: "4px",
-          color: "#666",
-          fontSize: "0.72rem",
+          padding: "8px 10px",
+          background: "linear-gradient(90deg, #1a1a3a, #12122a)",
+          border: "1px solid #3a3a6a",
+          borderRadius: open ? "5px 5px 0 0" : "5px",
+          color: "#8fb8ff",
+          fontSize: "0.8rem",
+          fontWeight: 700,
+          letterSpacing: "0.03em",
           cursor: "pointer",
           textAlign: "left",
           display: "flex",
@@ -938,8 +1091,8 @@ function HelpPanel() {
           alignItems: "center",
         }}
       >
-        <span>Config reference</span>
-        <span style={{ fontSize: "0.65rem" }}>{open ? "▲" : "▼"}</span>
+        <span>📖 Config Reference</span>
+        <span style={{ fontSize: "0.65rem", color: "#666" }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && (
         <div
@@ -947,88 +1100,250 @@ function HelpPanel() {
             background: "#0d0d1a",
             border: "1px solid #2a2a4a",
             borderTop: "none",
-            borderRadius: "0 0 4px 4px",
+            borderRadius: "0 0 5px 5px",
             padding: "10px",
-            fontSize: "0.7rem",
+            fontSize: "0.72rem",
             color: "#888",
             lineHeight: "1.6",
-            maxHeight: "400px",
-            overflowY: "auto",
           }}
         >
-          <HelpContent />
+          <div style={{ position: "relative", marginBottom: "6px" }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Tab") {
+                  if (topSuggestion) {
+                    e.preventDefault();
+                    setQuery(topSuggestion);
+                  }
+                  return;
+                }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const target = acceptedKey ?? topSuggestion;
+                  if (target) copyText(target, `Copied ✓ "${target}"`);
+                  else showNotice(`No config named "${query}"`, "warn");
+                  return;
+                }
+                const atEnd = e.currentTarget.selectionStart === query.length;
+                if ((e.key === "ArrowRight" && atEnd && acceptedKey) || (e.key === " " && acceptedKey)) {
+                  e.preventDefault();
+                  copyRealUsage();
+                }
+              }}
+              placeholder="Config to use… (Tab completes, Enter copies the name)"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "7px 8px",
+                background: "#12122a",
+                border: `1px solid ${acceptedKey ? "#4ade80" : "#3a3a6a"}`,
+                borderRadius: "4px",
+                color: "#e0e0ff",
+                fontSize: "0.75rem",
+                fontFamily: "monospace",
+                outline: "none",
+              }}
+            />
+            {notice && (
+              <span
+                style={{
+                  position: "absolute",
+                  right: "6px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: "0.62rem",
+                  color: notice.tone === "ok" ? "#4ade80" : "#fbbf24",
+                  background: "#12122a",
+                  padding: "0 4px",
+                  maxWidth: "70%",
+                  textAlign: "right",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+                title={notice.text}
+              >
+                {notice.text}
+              </span>
+            )}
+          </div>
+
+          <div style={{ color: "#555", fontSize: "0.62rem", marginBottom: "8px" }}>
+            {acceptedKey ? (
+              <>
+                <code style={{ color: "#4ade80" }}>{acceptedKey}</code> ready — Enter copies the name ·
+                → or space copies the real-usage JSON
+              </>
+            ) : topSuggestion ? (
+              <>
+                Tab → <code style={{ color: "#8fb8ff" }}>{topSuggestion}</code>
+              </>
+            ) : (
+              <>
+                <span style={{ color: "#4ade80" }}>soft</span> = applies live &nbsp;
+                <span style={{ color: "#f87171" }}>hard</span> = requires Refresh
+              </>
+            )}
+          </div>
+
+          <div
+            style={{
+              maxHeight: "360px",
+              minHeight: "120px",
+              height: "360px",
+              overflowY: "auto",
+              resize: "vertical",
+              border: "1px solid #1a1a2e",
+              borderRadius: "4px",
+              padding: "8px",
+            }}
+          >
+            <HelpContent query={query} acceptedKey={acceptedKey} usage={usage} usageLoading={usageLoading} onCopyKey={(k) => copyText(k, `Copied ✓ "${k}"`)} />
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function HelpContent() {
-  const S = ({ children }: { children: React.ReactNode }) => (
-    <span style={{ color: "#4cc9f0", fontFamily: "monospace" }}>{children}</span>
-  );
-  const Soft = () => <span style={{ color: "#4ade80", fontSize: "0.65rem" }}>soft</span>;
-  const Hard = () => <span style={{ color: "#f87171", fontSize: "0.65rem" }}>hard</span>;
-  const Row = ({ name, type, desc }: { name: string; type: "soft" | "hard"; desc: string }) => (
-    <div style={{ marginBottom: "4px" }}>
-      <S>{name}</S> {type === "soft" ? <Soft /> : <Hard />}
-      <span style={{ color: "#666", marginLeft: "4px" }}>{desc}</span>
-    </div>
-  );
-  const Section = ({ title }: { title: string }) => (
-    <div style={{ color: "#a0a0cc", fontWeight: 600, marginTop: "10px", marginBottom: "4px", textTransform: "uppercase", fontSize: "0.65rem", letterSpacing: "0.08em" }}>{title}</div>
-  );
+function HelpContent({
+  query,
+  acceptedKey,
+  usage,
+  usageLoading,
+  onCopyKey,
+}: {
+  query: string;
+  acceptedKey: string | undefined;
+  usage: UsageResult | null;
+  usageLoading: boolean;
+  onCopyKey: (key: string) => void;
+}) {
+  const q = query.trim().toLowerCase();
+
+  const filtered = acceptedKey
+    ? CONFIG_ROWS.filter((row) => row.key === acceptedKey)
+    : q
+    ? CONFIG_ROWS.filter(
+        (row) => row.key.toLowerCase().includes(q) || row.desc.toLowerCase().includes(q) || row.section.toLowerCase().includes(q)
+      )
+    : CONFIG_ROWS;
+
+  const sections: string[] = [];
+  for (const row of filtered) {
+    if (!sections.includes(row.section)) sections.push(row.section);
+  }
+
   return (
     <div>
-      <div style={{ color: "#555", marginBottom: "8px", fontSize: "0.65rem" }}>
-        <span style={{ color: "#4ade80" }}>soft</span> = applies live &nbsp;
-        <span style={{ color: "#f87171" }}>hard</span> = requires Refresh
-      </div>
+      {filtered.length === 0 && <div style={{ color: "#666", fontStyle: "italic" }}>No configs match "{query}"</div>}
 
-      <Section title="Region (top-level)" />
-      <Row name="process_mode" type="soft" desc="min_vs_max · avg_vs_avg · avg_vs_avg_normalized · sum · group_avg" />
-      <Row name="tension.function" type="soft" desc='{"x":1,"x_pow_2":3,"x_pow_3":20,"b":-0.7} — polynomial + bias (b shifts firing point; threshold = 0 always)' />
+      {sections.map((section, sIdx) => (
+        <div key={section} style={{ marginTop: sIdx === 0 ? 0 : "14px" }}>
+          <div
+            style={{
+              color: "#8fb8ff",
+              fontWeight: 700,
+              marginBottom: "6px",
+              paddingBottom: "3px",
+              borderBottom: "1px solid #22223f",
+              fontSize: "0.7rem",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {section}
+          </div>
+          {filtered
+            .filter((row) => row.section === section)
+            .map((row, i) => (
+              <div
+                key={`${row.key}-${i}`}
+                onClick={() => onCopyKey(row.key)}
+                title="Click to copy the name"
+                style={{
+                  cursor: "pointer",
+                  padding: "5px 0",
+                  borderBottom: i === filtered.filter((r) => r.section === section).length - 1 ? "none" : "1px dashed #1c1c33",
+                }}
+              >
+                <code
+                  style={{
+                    color: "#4cc9f0",
+                    background: "#141428",
+                    padding: "1px 6px",
+                    borderRadius: "3px",
+                    fontFamily: "monospace",
+                    fontWeight: 600,
+                  }}
+                >
+                  {row.key}
+                </code>{" "}
+                <span
+                  style={{
+                    fontSize: "0.58rem",
+                    fontWeight: 700,
+                    padding: "1px 5px",
+                    borderRadius: "3px",
+                    color: row.type === "soft" ? "#4ade80" : "#f87171",
+                    background: row.type === "soft" ? "#132218" : "#2a1414",
+                  }}
+                >
+                  {row.type}
+                </span>
+                <div style={{ color: "#999", marginTop: "2px" }}>{row.desc}</div>
+              </div>
+            ))}
+        </div>
+      ))}
 
-      <Section title='Connection › on (intra-region wiring)' />
-      <Row name="on" type="hard" desc='region id — e.g. "tissue". Marks this as an intra-region wiring entry' />
-      <Row name="deamon" type="hard" desc='daemon wiring object. Contains mask or shape/excitatory/inhibitory' />
-      <Row name="deamon.mask" type="hard" desc='mask string — e.g. "deamon_e3_g2_i12_de1_di1"' />
-      <Row name="deamon.shape / centroid / excitatory / inhibitory" type="hard" desc="daemon wiring geometry" />
-      <Row name="deamon.excitatory.weight" type="hard" desc="global excitatory dendrite weight" />
-      <Row name="deamon.inhibitory.weight" type="hard" desc="global inhibitory dendrite weight (negative)" />
-      <Row name="deamon.learning.rate" type="soft" desc="intra-region Hebbian rate" />
-
-      <Section title="Region › source (ascii)" />
-      <Row name="text" type="soft" desc='chars to cycle: "AB" or synthetics "HALF_TOP,HALF_BOT,BARS_H,BARS_V,DOT_TL,DOT_BR"' />
-      <Row name="frames_per_char" type="soft" desc="steps per character" />
-      <Row name="font / font_size" type="soft" desc="font id and size in px" />
-      <Row name="noise.background" type="soft" desc="random pixel flip probability 0–1" />
-      <Row name="noise.shift" type="soft" desc="random 1-px shift each frame" />
-      <Row name="noise.inter_char" type="soft" desc="blank frame between characters" />
-      <Row name="type" type="hard" desc="ascii · error_diff · label" />
-
-      <Section title="Region › spiking" />
-      <Row name="up_ticks" type="soft" desc="max consecutive active steps before rest" />
-      <Row name="down_ticks" type="soft" desc="refractory period length" />
-
-      <Section title="Region › grid" />
-      <Row name="width / height" type="hard" desc="grid dimensions" />
-
-      <Section title="Connections (inter-region full)" />
-      <Row name="full.learning.rate" type="soft" desc="Hebbian learning rate for this connection" />
-      <Row name="full.learning.exclude_range" type="soft" desc="[lo, hi] — skip weights in this range" />
-      <Row name="full.weight" type="hard" desc="initial dendrite weight" />
-      <Row name="full.density" type="hard" desc="fraction of source neurons sampled" />
-      <Row name="from / to" type="hard" desc="topology" />
-
-      <Section title="Orchestrator" />
-      <Row name='{"from":{"tick":0,"set":"..."},"to":{"tick":N,"set":"..."}}' type="hard" desc="gradient — interpolates scalar between two ticks" />
-      <Row name='{"at":{"tick":N},"set":"..."}' type="hard" desc='one-shot — fires once at tick N. paths: connections[N]["full"]["weight"], regions[N]["text"]' />
-      <Row name='{"at":{"tick":0},"inject":{...}}' type="hard" desc='inject — writes activations directly into a region after procesar(). tick-0 also applies at setup (visible in step 0)' />
-      <Row name='{"at":{"tick":0,"tick_end":20},"inject":{...}}' type="hard" desc="inject sustained — repeats the pattern every tick in [tick, tick_end]" />
-      <Row name="inject.region" type="hard" desc="region id to write into" />
-      <Row name='inject.template: "noise"' type="hard" desc="uniform random [0,1] activations" />
-      <Row name='inject.template: "image"' type="hard" desc='PNG/JPG mapped to activations. inject.src — path relative to backend/configs/. PNG with alpha: white=activate, black=silence, transparent=leave unchanged.' />
+      {acceptedKey && (
+        <div style={{ marginTop: "12px" }}>
+          <div
+            style={{
+              color: "#8fb8ff",
+              fontWeight: 700,
+              marginBottom: "6px",
+              paddingBottom: "3px",
+              borderBottom: "1px solid #22223f",
+              fontSize: "0.7rem",
+              letterSpacing: "0.02em",
+            }}
+          >
+            REAL EXAMPLE (last usage)
+          </div>
+          {usageLoading && <div style={{ color: "#666", fontStyle: "italic" }}>Looking up last usage…</div>}
+          {!usageLoading && usage && usage.found && (
+            <div>
+              <div style={{ color: "#666", marginBottom: "4px" }}>
+                {usage.experiment_name} · {usage.timestamp}
+              </div>
+              <pre
+                style={{
+                  background: "#141428",
+                  border: "1px solid #22223f",
+                  borderRadius: "4px",
+                  padding: "8px",
+                  color: "#c0c0e0",
+                  fontSize: "0.68rem",
+                  overflowX: "auto",
+                  margin: 0,
+                }}
+              >
+                {JSON.stringify(usage.snippet, null, 2)}
+              </pre>
+            </div>
+          )}
+          {!usageLoading && usage && !usage.found && (
+            <div style={{ color: "#fbbf24" }}>
+              No usage recorded in any experiment. Add one that uses it — or if it isn't worth keeping, it's time to retire it.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

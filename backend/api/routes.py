@@ -9,6 +9,7 @@ from core.ascii_renderer import get_available_fonts
 from db import (
     create_experiment,
     delete_experiment,
+    find_last_usage,
     get_experiment,
     get_runs,
     list_experiments,
@@ -51,6 +52,12 @@ async def preview_wiring(request: Request) -> dict:
     """Compute preview_grid and mask_stats for an inline deamon wiring definition."""
     wiring = await request.json()
     return preview_deamon_wiring(wiring)
+
+
+@router.get("/config-reference/usage")
+async def api_config_usage(key: str) -> dict:
+    """Most recent real experiment/run config that used this literal JSON key."""
+    return find_last_usage(key)
 
 
 # ── Experiments (ABM) ──

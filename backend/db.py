@@ -318,3 +318,70 @@ def get_runs(experiment_id: int) -> list[dict]:
         {"id": r[0], "config": json.loads(r[1]), "created_at": r[2]}
         for r in rows
     ]
+
+
+# ── Config reference (last real-world usage lookup) ──
+
+def _find_key_recursive(obj, key: str):
+    """DFS for the first dict that has a key matching `key` (case-insensitive).
+
+    Returns that dict (the smallest enclosing object, siblings included) so the
+    caller gets a realistic usage snippet instead of just the bare value.
+    """
+    if isinstance(obj, dict):
+        for k in obj:
+            if k.lower() == key:
+                return obj
+        for v in obj.values():
+            found = _find_key_recursive(v, key)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = _find_key_recursive(item, key)
+            if found is not None:
+                return found
+    return None
+
+
+def find_last_usage(key: str) -> dict:
+    """Most recent real config (experiment or run) that used this literal JSON key."""
+    key = key.strip().lower()
+    if not key:
+        return {"found": False, "key": key}
+
+    conn = _connect()
+    candidates = [
+        (updated_at, name, config, "experiment")
+        for _, name, config, updated_at in conn.execute(
+            "SELECT id, name, config, updated_at FROM experiments"
+        ).fetchall()
+    ]
+    for experiment_id, config, created_at in conn.execute(
+        "SELECT experiment_id, config, created_at FROM experiment_runs"
+    ).fetchall():
+        name_row = conn.execute(
+            "SELECT name FROM experiments WHERE id = ?", (experiment_id,)
+        ).fetchone()
+        name = name_row[0] if name_row else f"experiment #{experiment_id}"
+        candidates.append((created_at, name, config, "run"))
+    conn.close()
+
+    candidates.sort(key=lambda c: c[0], reverse=True)
+
+    for timestamp, name, config_json, source in candidates:
+        try:
+            config = json.loads(config_json)
+        except json.JSONDecodeError:
+            continue
+        snippet = _find_key_recursive(config, key)
+        if snippet is not None:
+            return {
+                "found": True,
+                "key": key,
+                "snippet": snippet,
+                "experiment_name": name,
+                "timestamp": timestamp,
+                "source": source,
+            }
+    return {"found": False, "key": key}
