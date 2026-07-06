@@ -441,6 +441,24 @@ def _compile_mask(wiring_cfg: dict[str, Any]) -> tuple[list[dict], bool]:
     return mask, random_weights
 
 
+def _deamon_learning_rates(deamon_cfg: dict[str, Any]) -> tuple[float | None, float | None]:
+    """Resolve (excitatory_rate, inhibitory_rate) for a deamon wiring block.
+
+    Each polarity's own ``excitatory.learning.rate`` / ``inhibitory.learning.rate``
+    wins; otherwise it falls back to the group-level ``deamon.learning.rate``.
+    Absent everywhere → None (no learning for that polarity).
+    """
+    group_rate = (deamon_cfg.get("learning") or {}).get("rate")
+    exc_rate = (deamon_cfg.get("excitatory", {}).get("learning") or {}).get("rate")
+    inh_rate = (deamon_cfg.get("inhibitory", {}).get("learning") or {}).get("rate")
+    exc_rate = exc_rate if exc_rate is not None else group_rate
+    inh_rate = inh_rate if inh_rate is not None else group_rate
+    return (
+        float(exc_rate) if exc_rate else None,
+        float(inh_rate) if inh_rate else None,
+    )
+
+
 def _tension_fns_of(cfg: dict[str, Any]) -> list[tuple[str, float]]:
     tf = cfg.get("tension", {}).get("function")
     if tf and isinstance(tf, dict):
@@ -908,17 +926,18 @@ class Experiment(Experimento):
         """Wire: from_region neurons → on_region neurons inside circles."""
         density = float(from_cfg.get("density", 0.1))
         weight = float(from_cfg.get("weight", 0.5))
+        gradient_gate = bool(from_cfg.get("gradient", True))
         from_neurons = list(self.regiones[from_rs.id].neuronas.values())
         on_neurons = list(self.regiones[on_rs.id].neuronas.values())
         k = max(1, round(len(from_neurons) * density))
         for circle in circles:
             for x, y, gradient in circle_cells_with_weights(circle, on_rs.width, on_rs.height):
-                if random.random() > gradient:
+                if gradient_gate and random.random() > gradient:
                     continue
                 tissue_n = on_neurons[y * on_rs.width + x]
                 sampled = random.sample(from_neurons, min(k, len(from_neurons)))
                 sinapsis_list = [
-                    Sinapsis(neurona_entrante=s, peso=1.0)
+                    Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0))
                     for s in sampled
                 ]
                 tissue_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
@@ -936,12 +955,13 @@ class Experiment(Experimento):
             return
         density = float(to_cfg.get("density", 0.1))
         weight = float(to_cfg.get("weight", 0.5))
+        gradient_gate = bool(to_cfg.get("gradient", True))
         to_neurons = list(self.regiones[to_rs.id].neuronas.values())
         on_neurons = list(self.regiones[on_rs.id].neuronas.values())
         for circle in circles:
             participating: list[tuple[Neurona, float]] = []
             for x, y, gradient in circle_cells_with_weights(circle, on_rs.width, on_rs.height):
-                if random.random() <= gradient:
+                if not gradient_gate or random.random() <= gradient:
                     participating.append((on_neurons[y * on_rs.width + x], gradient))
             if not participating:
                 continue
@@ -1055,8 +1075,13 @@ class Experiment(Experimento):
         """Build [NR, max_syn] effective learning rate per synapse.
 
         Intra-region synapses use region.wiring.learning_rate; cross-region synapses
-        use connection.learning.rate. NeuronaEntrada have no synapses, so they never
-        appear. Recomputed from scratch on every soft update.
+        use connection.learning.rate. When a wiring/side is deamon-based, excitatory
+        and inhibitory dendrites (identified by the sign of pesos_dendrita) can each
+        get their own rate via deamon.excitatory.learning.rate /
+        deamon.inhibitory.learning.rate, falling back to deamon.learning.rate as a
+        group default; a polarity with no rate anywhere simply doesn't learn.
+        NeuronaEntrada have no synapses, so they never appear. Recomputed from
+        scratch on every soft update.
         """
         bt = self.brain_tensor
         if bt is None:
@@ -1069,12 +1094,17 @@ class Experiment(Experimento):
 
         # Intra-region wiring synapses
         for r in self._wiring_regions():
-            wlr = r.wiring_cfg.get("learning_rate")
-            if not wlr:
-                continue
             in_region = (dst_idx >= r.start) & (dst_idx < r.end)
             local = in_region & ~bt.es_cross_region & bt.mascara_valida
-            lr = torch.where(local, torch.full_like(lr, float(wlr)), lr)
+            exc_rate, inh_rate = _deamon_learning_rates(r.wiring_cfg.get("deamon") or {})
+            if exc_rate is not None:
+                lr = torch.where(local & (bt.pesos_dendrita > 0), torch.full_like(lr, exc_rate), lr)
+            if inh_rate is not None:
+                lr = torch.where(local & (bt.pesos_dendrita < 0), torch.full_like(lr, inh_rate), lr)
+            if exc_rate is None and inh_rate is None:
+                wlr = r.wiring_cfg.get("learning_rate")
+                if wlr:
+                    lr = torch.where(local, torch.full_like(lr, float(wlr)), lr)
 
         # Cross-region connection synapses
         exclude_range: tuple[float, float] | None = None
@@ -1086,11 +1116,7 @@ class Experiment(Experimento):
                     continue
                 for side_key in ("from", "to"):
                     side = nerve_cfg.get(side_key) or {}
-                    learning = side.get("learning")
-                    if not learning:
-                        continue
-                    rate = float(learning.get("rate", 0.0))
-                    if rate == 0.0:
+                    if not side:
                         continue
                     other_rs = self._regions_by_id.get(side.get("region"))
                     if other_rs is None:
@@ -1102,6 +1128,22 @@ class Experiment(Experimento):
                         dst_in = (dst_idx >= other_rs.start) & (dst_idx < other_rs.end)
                         src_in = (src_safe >= on_rs.start) & (src_safe < on_rs.end)
                     conn_mask = dst_in & src_in & bt.mascara_valida
+
+                    deamon_cfg = side.get("deamon")
+                    if deamon_cfg:
+                        exc_rate, inh_rate = _deamon_learning_rates(deamon_cfg)
+                        if exc_rate is not None:
+                            lr = torch.where(conn_mask & (bt.pesos_dendrita > 0), torch.full_like(lr, exc_rate), lr)
+                        if inh_rate is not None:
+                            lr = torch.where(conn_mask & (bt.pesos_dendrita < 0), torch.full_like(lr, inh_rate), lr)
+                        continue
+
+                    learning = side.get("learning")
+                    if not learning:
+                        continue
+                    rate = float(learning.get("rate", 0.0))
+                    if rate == 0.0:
+                        continue
                     lr = torch.where(conn_mask, torch.full_like(lr, rate), lr)
                 continue
             s = self._regions_by_id.get(c.get("from"))
