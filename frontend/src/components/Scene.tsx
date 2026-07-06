@@ -587,6 +587,7 @@ export function Scene({
               onDragEnd={(cells) => onCellDragEnd?.(cells, id)}
               brushSize={brushSize}
               brushMode={brushMode}
+              paintActive={!inspectMode}
             />
 
             {/* Label column beside output regions */}

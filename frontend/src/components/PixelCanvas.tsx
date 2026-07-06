@@ -23,6 +23,8 @@ interface PixelCanvasProps {
   onDragEnd?: (cells: { x: number; y: number }[]) => void;
   brushSize?: number;
   brushMode?: "activate" | "deactivate";
+  /** Only show the brush cursor when the paint tool is the active tool (not e.g. inspect mode). */
+  paintActive?: boolean;
 }
 
 const COLORS = {
@@ -77,7 +79,7 @@ export function PixelCanvas({
   onCellDrag,
   onDragEnd,
   brushSize,
-  brushMode,
+  paintActive,
 }: PixelCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -192,29 +194,22 @@ export function PixelCanvas({
       }
     }
 
-    // ── Brush cursor overlay (only while mouse is pressed) ──
-    if (hoverCell && brushSize && isDragging) {
+    // ── Brush cursor: hollow dotted circle, only while the paint tool is active ──
+    if (hoverCell && brushSize && paintActive) {
       const r = Math.floor(brushSize / 2);
-      ctx.fillStyle = brushMode === "deactivate"
-        ? "rgba(80,80,80,0.55)"
-        : "rgba(255,255,255,0.25)";
-      ctx.strokeStyle = brushMode === "deactivate"
-        ? "rgba(120,120,120,0.8)"
-        : "rgba(255,255,255,0.7)";
-      ctx.lineWidth = 1;
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
-          if (dx * dx + dy * dy > r * r + r * 0.5) continue;
-          const cx = hoverCell.x + dx;
-          const cy = hoverCell.y + dy;
-          if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
-            ctx.fillRect(cx * cellSize, cy * cellSize, cellSize - 1, cellSize - 1);
-            ctx.strokeRect(cx * cellSize + 0.5, cy * cellSize + 0.5, cellSize - 2, cellSize - 2);
-          }
-        }
-      }
+      const cx = hoverCell.x * cellSize + cellSize / 2;
+      const cy = hoverCell.y * cellSize + cellSize / 2;
+      const radius = (r + 0.5) * cellSize;
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = "#4cc9f0";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.restore();
     }
-  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, nerveCircles, overlayGrids, neuronLabels, inspectedCell, getCellSize, hoverCell, brushSize, brushMode, isDragging]);
+  }, [grid, tensionGrid, tensionMode, width, height, weightGrid, nerveCircles, overlayGrids, neuronLabels, inspectedCell, getCellSize, hoverCell, brushSize, paintActive]);
 
   useEffect(() => { draw(); }, [draw]);
 
