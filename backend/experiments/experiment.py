@@ -447,33 +447,60 @@ def _apply_delta_weight(region: Region, delta_weight: dict[str, float]) -> None:
     inhibitory totals hold per-neuron, regardless of how many dendrites
     (daemon, nerve, ...) contribute to each polarity.
 
-    Each dendrite's current peso is treated as its relative share; shares
-    of the same polarity are rescaled so they sum to the configured total.
-    A neuron missing one polarity entirely is left alone for that side.
+    Mirrors exactly how process_mode="group_avg" combines dendrites at
+    runtime (BrainTensor._gavg): same-locality dendrites (all daemon/mask,
+    i.e. intra-region) are AVERAGED together, distant dendrites (nerve /
+    cross-region) are AVERAGED together separately, and the two averages
+    are ADDED. So a single scale factor per polarity — applied to every
+    dendrite regardless of locality — is what makes local_mean + distant_mean
+    land on the configured total; it is not a flat sum across all dendrites.
+    A neuron missing one polarity, or one locality of it, is left alone for
+    that side/bucket (nothing to redistribute from).
     """
     exc_total = delta_weight.get("excitatory")
     inh_total = delta_weight.get("inhibitory")
+    if exc_total is None and inh_total is None:
+        return
+    local_ids = set(region.neuronas.keys())
     for neurona in region.neuronas.values():
         if exc_total is not None:
             _rebalance_dendrite_group(
-                [d for d in neurona.dendritas if d.peso > 0], exc_total
+                [d for d in neurona.dendritas if d.peso > 0], exc_total, local_ids
             )
         if inh_total is not None:
             _rebalance_dendrite_group(
-                [d for d in neurona.dendritas if d.peso < 0], inh_total
+                [d for d in neurona.dendritas if d.peso < 0], inh_total, local_ids
             )
 
 
-def _rebalance_dendrite_group(dendritas: list[Dendrita], target: float) -> None:
-    """Rescale dendrite pesos in-place so they sum to `target`, preserving
-    each dendrite's relative share of the group's current total."""
+def _rebalance_dendrite_group(
+    dendritas: list[Dendrita], target: float, local_ids: set[str]
+) -> None:
+    """Rescale a same-polarity dendrite group in-place so it matches
+    process_mode="group_avg": the local-dendrite average plus the
+    distant-dendrite average sums to `target`. Uses one uniform scale factor
+    for the whole group, so each dendrite keeps its relative weight within
+    its own locality bucket."""
     if not dendritas:
         return
-    raw_sum = sum(d.peso for d in dendritas)
-    if raw_sum == 0:
-        return
+    local, distant = [], []
     for d in dendritas:
-        d.peso = max(-1.0, min(1.0, (d.peso / raw_sum) * target))
+        (local if _dendrite_is_local(d, local_ids) else distant).append(d)
+    local_mean = sum(d.peso for d in local) / len(local) if local else 0.0
+    distant_mean = sum(d.peso for d in distant) / len(distant) if distant else 0.0
+    raw_total = local_mean + distant_mean
+    if raw_total == 0:
+        return
+    scale = target / raw_total
+    for d in dendritas:
+        d.peso = max(-1.0, min(1.0, d.peso * scale))
+
+
+def _dendrite_is_local(dendrita: Dendrita, local_ids: set[str]) -> bool:
+    """A dendrite is local if all its synapses come from neurons in the same
+    region as its owner (daemon/mask wiring); distant if from another region
+    (nerve). Mirrors constructor_tensor.py's es_cross_region span check."""
+    return all(s.neurona_entrante.id in local_ids for s in dendrita.sinapsis)
 
 
 def _deamon_learning_rates(deamon_cfg: dict[str, Any]) -> tuple[float | None, float | None]:

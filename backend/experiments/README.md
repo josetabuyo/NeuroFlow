@@ -95,9 +95,19 @@ The canonical config is a JSON object with `regions[]` and `connections[]`.
 Declares the **total** excitatory and/or inhibitory weight every neuron in the
 region should end up with, regardless of how many dendrites contribute to
 each polarity or where they come from (daemon mask, nerve connection, or
-both). After all wiring for the region is complete, each neuron's dendrites
-are grouped by sign and rescaled proportionally — preserving each dendrite's
-relative share — so the group sums to the configured total.
+both). This is defined to match exactly how `process_mode: "group_avg"`
+combines dendrites at runtime — **not** a flat sum across every dendrite:
+
+- Dendrites are split into two buckets per polarity: **local** (intra-region,
+  i.e. daemon/mask wiring) and **distant** (cross-region, i.e. a nerve).
+- Each bucket's dendrites are **averaged** together (this is what `group_avg`
+  actually computes per bucket at runtime).
+- The two bucket averages are **added**; `delta_weight` is that sum.
+
+After all wiring for the region is complete, every neuron's dendrites of a
+given polarity are rescaled by one shared factor so the local-bucket average
+plus the distant-bucket average equals the configured total — preserving
+each dendrite's relative weight within its own bucket.
 
 ```json
 {
@@ -107,18 +117,28 @@ relative share — so the group sums to the configured total.
 }
 ```
 
-- A neuron with one excitatory and one inhibitory dendrite gets exactly those
-  totals as its dendrite weights.
-- A neuron with 12 inhibitory dendrites splits `-0.7` across them in
-  proportion to their current (arbitrary, even out-of-range) weights.
-- A neuron that also receives a nerve dendrite of the same polarity folds it
-  into the same total — so a tissue region with a nerve inserted in one
-  corner keeps a continuous excitatory/inhibitory balance across the whole
-  region instead of spiking wherever the nerve lands.
+- A neuron with one excitatory and one inhibitory dendrite (both local) gets
+  exactly those totals as its dendrite weights.
+- A neuron with 12 equal-weight local inhibitory sectors (a `crown`/`circle`
+  mask with `sectors: 12`) lands each sector's weight **on** `-0.7`, not
+  `-0.7 / 12` — because `group_avg` averages the 12 sectors, it doesn't sum
+  them. If the sectors already averaged to `-0.7` (the pre-`delta_weight`
+  convention: every sector gets the flat `deamon.inhibitory.weight`), nothing
+  changes at all.
+- A neuron that also receives a nerve dendrite of the same polarity gets its
+  own **distant** bucket, averaged separately and added to the local bucket —
+  so a tissue region with a nerve inserted in one corner keeps a continuous
+  excitatory/inhibitory balance across the whole region instead of spiking
+  wherever the nerve lands.
 - Omitting `excitatory` or `inhibitory` leaves that polarity unscaled.
 - Without `delta_weight` at all, dendrite weights are exactly whatever the
   wiring config (`deamon.excitatory.weight`, `nerve.from.weight`, ...) says —
   unchanged from before this field existed.
+- **Only exact under `process_mode: "group_avg"`.** Under the default
+  `min_vs_max` (competitive max/min across dendrites), only the single
+  strongest dendrite of each polarity counts toward tension — `delta_weight`
+  still redistributes weights proportionally, but the resulting tension
+  won't equal the configured total the way it does under `group_avg`.
 
 ### `activation: "soft"`
 
