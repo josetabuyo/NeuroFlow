@@ -88,6 +88,37 @@ The canonical config is a JSON object with `regions[]` and `connections[]`.
 | `activation` | string | `"soft"` — maps tension directly to `[0,1]` instead of binary threshold (see below) |
 | `tension.function` | object | Composable tension transform: `{"x": N, "x_pow_2": N, "x_pow_3": N, "b": N}` |
 | `spiking` | object | Spike-frequency adaptation: `{"up_ticks": N, "down_ticks": N}` |
+| `delta_weight` | object | Per-neuron excitatory/inhibitory weight totals: `{"excitatory": N, "inhibitory": N}` (see below) |
+
+### `delta_weight`
+
+Declares the **total** excitatory and/or inhibitory weight every neuron in the
+region should end up with, regardless of how many dendrites contribute to
+each polarity or where they come from (daemon mask, nerve connection, or
+both). After all wiring for the region is complete, each neuron's dendrites
+are grouped by sign and rescaled proportionally — preserving each dendrite's
+relative share — so the group sums to the configured total.
+
+```json
+{
+  "id": "tissue",
+  "grid": { "width": 50, "height": 50 },
+  "delta_weight": { "excitatory": 0.6, "inhibitory": -0.7 }
+}
+```
+
+- A neuron with one excitatory and one inhibitory dendrite gets exactly those
+  totals as its dendrite weights.
+- A neuron with 12 inhibitory dendrites splits `-0.7` across them in
+  proportion to their current (arbitrary, even out-of-range) weights.
+- A neuron that also receives a nerve dendrite of the same polarity folds it
+  into the same total — so a tissue region with a nerve inserted in one
+  corner keeps a continuous excitatory/inhibitory balance across the whole
+  region instead of spiking wherever the nerve lands.
+- Omitting `excitatory` or `inhibitory` leaves that polarity unscaled.
+- Without `delta_weight` at all, dendrite weights are exactly whatever the
+  wiring config (`deamon.excitatory.weight`, `nerve.from.weight`, ...) says —
+  unchanged from before this field existed.
 
 ### `activation: "soft"`
 

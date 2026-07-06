@@ -67,6 +67,7 @@ class RegionState:
     source_type: str | None = None
     source_cfg: dict[str, Any] = field(default_factory=dict)
     wiring_cfg: dict[str, Any] = field(default_factory=dict)
+    delta_weight: dict[str, float] | None = None
     umbral: float = 0.0
     process_mode: str = "min_vs_max"
     tension_fns: list[tuple[str, float]] = field(default_factory=list)
@@ -441,6 +442,40 @@ def _compile_mask(wiring_cfg: dict[str, Any]) -> tuple[list[dict], bool]:
     return mask, random_weights
 
 
+def _apply_delta_weight(region: Region, delta_weight: dict[str, float]) -> None:
+    """Rebalance every neuron's dendrites so the region-wide excitatory/
+    inhibitory totals hold per-neuron, regardless of how many dendrites
+    (daemon, nerve, ...) contribute to each polarity.
+
+    Each dendrite's current peso is treated as its relative share; shares
+    of the same polarity are rescaled so they sum to the configured total.
+    A neuron missing one polarity entirely is left alone for that side.
+    """
+    exc_total = delta_weight.get("excitatory")
+    inh_total = delta_weight.get("inhibitory")
+    for neurona in region.neuronas.values():
+        if exc_total is not None:
+            _rebalance_dendrite_group(
+                [d for d in neurona.dendritas if d.peso > 0], exc_total
+            )
+        if inh_total is not None:
+            _rebalance_dendrite_group(
+                [d for d in neurona.dendritas if d.peso < 0], inh_total
+            )
+
+
+def _rebalance_dendrite_group(dendritas: list[Dendrita], target: float) -> None:
+    """Rescale dendrite pesos in-place so they sum to `target`, preserving
+    each dendrite's relative share of the group's current total."""
+    if not dendritas:
+        return
+    raw_sum = sum(d.peso for d in dendritas)
+    if raw_sum == 0:
+        return
+    for d in dendritas:
+        d.peso = max(-1.0, min(1.0, (d.peso / raw_sum) * target))
+
+
 def _deamon_learning_rates(deamon_cfg: dict[str, Any]) -> tuple[float | None, float | None]:
     """Resolve (excitatory_rate, inhibitory_rate) for a deamon wiring block.
 
@@ -696,6 +731,7 @@ class Experiment(Experimento):
                 source_type=source.get("type") if source else None,
                 source_cfg=source or {},
                 wiring_cfg=wiring_cfg,
+                delta_weight=rc.get("delta_weight"),
                 umbral=_get_threshold(rc),
                 process_mode=wiring_cfg.get("process_mode", "min_vs_max"),
                 tension_fns=_tension_fns_of(rc),
@@ -765,6 +801,15 @@ class Experiment(Experimento):
         # ── Cross-region connections ──
         for conn in connections:
             self._wire_connection(conn)
+
+        # ── Delta-weight rebalancing ──
+        # Runs after ALL dendrites (daemon + nerve) are wired, so a neuron's
+        # total excitatory/inhibitory weight matches the region's configured
+        # delta_weight regardless of how many dendrites contribute to each
+        # polarity or where they came from.
+        for rs in self._regions:
+            if rs.delta_weight:
+                _apply_delta_weight(self.regiones[rs.id], rs.delta_weight)
 
         # ── Initialization ──
         for rs in self._wiring_regions():

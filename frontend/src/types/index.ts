@@ -105,6 +105,10 @@ export interface Region {
   daemon?: RegionDaemon;
   process_mode?: string;
   tension?: { function: Record<string, number> };
+  /** Per-neuron excitatory/inhibitory weight totals. When set, every
+   * neuron's dendrites of each polarity (daemon and/or nerve) are
+   * rescaled proportionally so they sum to these targets. */
+  delta_weight?: { excitatory?: number; inhibitory?: number };
 }
 
 export interface Connection {
