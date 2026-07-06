@@ -927,6 +927,7 @@ class Experiment(Experimento):
         density = float(from_cfg.get("density", 0.1))
         weight = float(from_cfg.get("weight", 0.5))
         gradient_gate = bool(from_cfg.get("gradient", True))
+        random_weights = bool(from_cfg.get("random_weights", False))
         from_neurons = list(self.regiones[from_rs.id].neuronas.values())
         on_neurons = list(self.regiones[on_rs.id].neuronas.values())
         k = max(1, round(len(from_neurons) * density))
@@ -937,7 +938,7 @@ class Experiment(Experimento):
                 tissue_n = on_neurons[y * on_rs.width + x]
                 sampled = random.sample(from_neurons, min(k, len(from_neurons)))
                 sinapsis_list = [
-                    Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0))
+                    Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0) if random_weights else 1.0)
                     for s in sampled
                 ]
                 tissue_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
