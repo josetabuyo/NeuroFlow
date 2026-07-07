@@ -74,9 +74,6 @@ interface SceneProps {
   onToggleInspect: () => void;
   onToggleTension: () => void;
 
-  drawNoise?: number;
-  onDrawNoiseChange?: (v: number) => void;
-
   isInitializing?: boolean;
 }
 
@@ -100,7 +97,6 @@ export function Scene({
   onCellClick, onCellDrag, onCellDragEnd,
   brushSize, brushMode, inspectMode, canInspect,
   onIncrease, onDecrease, onToggleMode, onToggleInspect, onToggleTension,
-  drawNoise, onDrawNoiseChange,
   isInitializing,
 }: SceneProps) {
   const hasConnectionMap = connectionMap != null;
@@ -497,8 +493,6 @@ export function Scene({
                   onIncrease={onIncrease}
                   onDecrease={onDecrease}
                   onToggleMode={onToggleMode}
-                  drawNoise={drawNoise}
-                  onDrawNoiseChange={onDrawNoiseChange}
                 />
               </div>
             )}

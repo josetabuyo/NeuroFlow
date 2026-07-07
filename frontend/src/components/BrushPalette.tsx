@@ -9,8 +9,6 @@ interface BrushPaletteProps {
   onIncrease: () => void;
   onDecrease: () => void;
   onToggleMode: () => void;
-  drawNoise?: number;
-  onDrawNoiseChange?: (v: number) => void;
 }
 
 function renderBrushPreview(size: number): React.ReactNode {
@@ -56,8 +54,6 @@ export function BrushPalette({
   onIncrease,
   onDecrease,
   onToggleMode,
-  drawNoise,
-  onDrawNoiseChange,
 }: BrushPaletteProps) {
   const isActivate = brushMode === "activate";
   const pixelCount = generateCircleBrush(brushSize).length;
@@ -194,42 +190,6 @@ export function BrushPalette({
           {isActivate ? "ON" : "OFF"}
         </button>
       </div>
-
-      {drawNoise !== undefined && onDrawNoiseChange && (
-        <>
-          <div style={{ width: "100%", height: 1, background: "#2a2a3e" }} />
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 3,
-            }}
-          >
-            <span style={{ fontSize: 9, color: "#8888aa", userSelect: "none" }}>noise</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={drawNoise}
-              onChange={(e) => onDrawNoiseChange(parseFloat(e.target.value))}
-              title={`Background noise: ${drawNoise.toFixed(2)}`}
-              style={{
-                writingMode: "vertical-lr",
-                direction: "rtl",
-                width: 20,
-                height: 60,
-                cursor: "pointer",
-                accentColor: "#a78bfa",
-              }}
-            />
-            <span style={{ fontSize: 9, color: "#a78bfa", userSelect: "none" }}>
-              {drawNoise.toFixed(2)}
-            </span>
-          </div>
-        </>
-      )}
     </div>
   );
 }
