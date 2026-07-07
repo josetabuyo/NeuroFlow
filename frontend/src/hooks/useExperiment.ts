@@ -161,7 +161,7 @@ export function useExperiment(): UseExperimentReturn {
   const [neuronLabelMap, setNeuronLabelMap] = useState<Record<string, string[][]>>({});
   const [orchestratorState, setOrchestratorState] = useState<OrchestratorEvent[]>([]);
   const [experimentActive, setExperimentActive] = useState(false);
-  const [brushSize, setBrushSize] = useState(1);
+  const [brushSize, setBrushSize] = useState(13);
   const [brushMode, setBrushMode] = useState<"activate" | "deactivate">("activate");
   const [normalizedConfig, setNormalizedConfig] = useState<CanonicalExperimentConfig | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
