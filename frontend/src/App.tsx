@@ -466,6 +466,18 @@ function App() {
     [inspectMode, inspect, computeBrushCells, flushDragFrame]
   );
 
+  // Clears the live draw-cursor stamp on mouse-up/mouse-leave so nothing
+  // stays painted once the user stops — draw regions rebuild from zero
+  // every tick and only show the cursor while actively painting.
+  const handleCellDragEnd = useCallback(
+    (_cells: { x: number; y: number }[], regionId?: string) => {
+      if (inspectMode) return;
+      const value = brushMode === "activate" ? 1.0 : 0.0;
+      paint([], value, regionId);
+    },
+    [inspectMode, brushMode, paint]
+  );
+
   const handlePlay = useCallback(
     () => play(10, stepsPerTick),
     [play, stepsPerTick]
@@ -596,6 +608,7 @@ function App() {
               nerveCircles={nerveCircles}
               onCellClick={handleCellClick}
               onCellDrag={handleCellDrag}
+              onCellDragEnd={handleCellDragEnd}
               brushSize={brushSize}
               brushMode={brushMode}
               inspectMode={inspectMode}

@@ -83,8 +83,11 @@ class RegionState:
     in_gap: bool = False
     current_frame: np.ndarray | None = None
     char_images: dict[str, np.ndarray] = field(default_factory=dict)
-    # draw source: clean painted values, kept separate from brain_tensor
-    draw_base: torch.Tensor | None = None
+    # draw source: live cursor stamp, re-applied on top of zero+noise every
+    # tick — nothing persists once painting stops, so no trail is left behind.
+    cursor_active: bool = False
+    cursor_cells: list[int] = field(default_factory=list)
+    cursor_value: float = 1.0
 
     @property
     def n(self) -> int:
@@ -1160,7 +1163,8 @@ class Experiment(Experimento):
 
         for rs in self._regions:
             if rs.source_type == "draw":
-                rs.draw_base = torch.zeros(rs.n, device=self.brain_tensor.valores.device)
+                rs.cursor_active = False
+                rs.cursor_cells = []
 
         self._rebuild_lr_per_syn()
         # Apply tick-0 injects so the initial display (before first step) shows the pattern
@@ -1755,7 +1759,7 @@ class Experiment(Experimento):
             if rs.is_ascii_input:
                 self._inject_ascii(rs)
 
-        self._apply_draw_noise()
+        self._apply_draw_source()
         self.brain_tensor.procesar()
 
         label_region = self._label_region()
@@ -1798,25 +1802,26 @@ class Experiment(Experimento):
             return float(noise_val.get("background", 0.0))
         return float(noise_val)
 
-    def _apply_draw_noise(self) -> None:
-        """Inject background noise into draw regions using draw_base as clean source.
+    def _render_draw_region(self, rs: RegionState) -> None:
+        """Rebuild a draw region from scratch: zero -> background noise -> cursor stamp.
 
-        Uses draw_base (the user's painted values) to apply white noise each step.
-        The noisy frame is written to brain_tensor so it is visible in the display
-        and processed by the network — the same pattern as ASCII noise.background.
-        draw_base itself is never mutated here; it is only updated by paint().
+        Draw regions never accumulate state across ticks. Nothing persists
+        once the user stops painting, so no trail is left on the canvas.
         """
+        flat = np.zeros(rs.n, dtype=np.float64)
+        noise_prob = self._draw_noise_prob(rs.source_cfg)
+        if noise_prob > 0.0:
+            flat = apply_white_noise(flat, noise_prob=noise_prob, rng=self._rng)
+        if rs.cursor_active and rs.cursor_cells:
+            flat[rs.cursor_cells] = rs.cursor_value
+        self.brain_tensor.valores[rs.start:rs.end] = torch.from_numpy(
+            flat.astype(np.float32)
+        ).to(self.brain_tensor.valores.device)
+
+    def _apply_draw_source(self) -> None:
         for rs in self._regions:
-            if rs.source_type != "draw" or rs.draw_base is None:
-                continue
-            noise_prob = self._draw_noise_prob(rs.source_cfg)
-            if noise_prob <= 0.0:
-                continue
-            flat = rs.draw_base.cpu().numpy().astype(np.float64)
-            noisy = apply_white_noise(flat, noise_prob=noise_prob, rng=self._rng)
-            self.brain_tensor.valores[rs.start:rs.end] = torch.from_numpy(
-                noisy.astype(np.float32)
-            ).to(self.brain_tensor.valores.device)
+            if rs.source_type == "draw":
+                self._render_draw_region(rs)
 
     def _advance_ascii_frames(self) -> None:
         for rs in self._regions:
@@ -1852,7 +1857,10 @@ class Experiment(Experimento):
         cells: list[dict[str, int]],
         value: float,
     ) -> None:
-        """Paint cells on a draw region, keeping draw_base in sync with brain_tensor."""
+        """Paint cells. For draw regions this only moves the live cursor stamp —
+        an empty ``cells`` list clears it (e.g. on mouse-up/mouse-leave) so nothing
+        stays painted once the user stops.
+        """
         if self.brain_tensor is None:
             return
         region = self._regions_by_id.get(region_id) if region_id else self._wiring_region
@@ -1861,14 +1869,27 @@ class Experiment(Experimento):
         if region is None:
             return
         rw, rh, start = region.width, region.height, region.start
+
+        if region.source_type == "draw":
+            local_idxs: list[int] = []
+            for cell in cells:
+                x, y = cell.get("x", 0), cell.get("y", 0)
+                if 0 <= x < rw and 0 <= y < rh:
+                    idx = start + y * rw + x
+                    if idx < self.brain_tensor.n_real:
+                        local_idxs.append(idx - start)
+            region.cursor_cells = local_idxs
+            region.cursor_value = value
+            region.cursor_active = bool(local_idxs)
+            self._render_draw_region(region)
+            return
+
         for cell in cells:
             x, y = cell.get("x", 0), cell.get("y", 0)
             if 0 <= x < rw and 0 <= y < rh:
                 idx = start + y * rw + x
                 if idx < self.brain_tensor.n_real:
                     self.brain_tensor.set_valor(idx, value)
-                    if region.source_type == "draw" and region.draw_base is not None:
-                        region.draw_base[idx - start] = value
 
     def step_n(self, count: int) -> dict[str, Any]:
         result: dict[str, Any] = {}

@@ -898,15 +898,16 @@ class TestDrawInput:
         exp.brain_tensor.set_valor(idx, 1.0)
         assert exp.brain_tensor.valores[idx].item() == 1.0
 
-    def test_draw_values_persist_across_steps(self) -> None:
+    def test_draw_region_resets_on_step_without_cursor(self) -> None:
+        """A value set outside paint()'s cursor mechanism doesn't survive a tick —
+        draw regions rebuild from zero every step, so nothing lingers unpainted."""
         exp = Experiment()
         exp.setup(_draw_config())
         rs = exp._regions_by_id["input"]
         idx = rs.start + 1 * 5 + 1
         exp.brain_tensor.set_valor(idx, 1.0)
-        for _ in range(3):
-            exp.step()
-        assert exp.brain_tensor.valores[idx].item() == 1.0
+        exp.step()
+        assert exp.brain_tensor.valores[idx].item() == 0.0
 
     def test_draw_frames_are_binary(self) -> None:
         exp = Experiment()
@@ -974,15 +975,15 @@ class TestDrawNoise:
         exp.setup(_draw_config())
         assert exp._draw_noise_prob({"type": "draw", "noise": 0.3}) == 0.3
 
-    def test_draw_base_initialized_to_zeros(self) -> None:
+    def test_cursor_inactive_by_default(self) -> None:
         exp = Experiment()
         exp.setup(_draw_config())
         rs = exp._regions_by_id["input"]
-        assert rs.draw_base is not None
-        assert rs.draw_base.tolist() == [0.0] * rs.n
+        assert rs.cursor_active is False
+        assert rs.cursor_cells == []
 
     def test_noise_visible_in_region_after_step(self) -> None:
-        """With noise=1.0 on all-zero draw_base, bt shows all-ones after step."""
+        """With noise=1.0 on an all-zero region, bt shows all-ones after step."""
         exp = Experiment()
         exp.setup(_draw_config(noise=1.0, input_w=4, input_h=4))
         rs = exp._regions_by_id["input"]
@@ -990,25 +991,37 @@ class TestDrawNoise:
         vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
         assert all(v == 1.0 for v in vals)
 
-    def test_draw_base_preserves_painted_values(self) -> None:
-        """paint() keeps draw_base intact across steps with full noise."""
+    def test_paint_sets_live_cursor_stamp(self) -> None:
+        """paint() moves the cursor stamp; it survives steps only while active."""
         exp = Experiment()
-        exp.setup(_draw_config(noise=1.0))
+        exp.setup(_draw_config(noise=0.0))
         rs = exp._regions_by_id["input"]
         exp.paint("input", [{"x": 3, "y": 2}], 1.0)
+        local_idx = 2 * 5 + 3
         for _ in range(5):
             exp.step()
-        # draw_base (canonical source) preserves the painted value
-        local_idx = 2 * 5 + 3
-        assert rs.draw_base[local_idx].item() == 1.0
+        vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+        assert vals[local_idx] == 1.0
 
-    def test_unpainted_zeros_preserved_in_draw_base(self) -> None:
+    def test_paint_with_empty_cells_clears_cursor_no_trail(self) -> None:
+        """An empty cells list (mouse-up/mouse-leave) clears the stamp — no trail."""
         exp = Experiment()
-        exp.setup(_draw_config(noise=1.0))
+        exp.setup(_draw_config(noise=0.0))
+        rs = exp._regions_by_id["input"]
+        exp.paint("input", [{"x": 3, "y": 2}], 1.0)
+        exp.paint("input", [], 1.0)
+        assert rs.cursor_active is False
+        exp.step()
+        vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+        assert all(v == 0.0 for v in vals)
+
+    def test_region_resets_to_zero_each_tick_without_cursor(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0))
         rs = exp._regions_by_id["input"]
         for _ in range(5):
             exp.step()
-        assert all(v == 0.0 for v in rs.draw_base.tolist())
+        assert all(v == 0.0 for v in exp.brain_tensor.valores[rs.start:rs.end].tolist())
 
     def test_soft_update_noise_applies(self) -> None:
         exp = Experiment()
@@ -1024,7 +1037,8 @@ class TestDrawNoise:
         exp.paint("input", [{"x": 0, "y": 0}], 1.0)
         result = exp.update_config(_draw_config(noise=0.3))
         assert result is True
-        assert rs.draw_base[0].item() == 1.0
+        assert rs.cursor_active is True
+        assert rs.cursor_cells == [0]
 
 
 class TestSourceTypes:
