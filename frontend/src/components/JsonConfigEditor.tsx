@@ -306,24 +306,13 @@ export function JsonConfigEditor({ config, onChange, metadata }: JsonConfigEdito
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h3
-          style={{
-            fontSize: "0.75rem",
-            textTransform: "uppercase",
-            color: "#888",
-            margin: 0,
-            letterSpacing: "0.1em",
-          }}
-        >
-          Config
-        </h3>
-        {parseError && (
+      {parseError && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <span style={{ fontSize: "0.6rem", color: "#ef476f", maxWidth: "160px", textAlign: "right", lineHeight: "1.2" }}>
             JSON Error
           </span>
-        )}
-      </div>
+        </div>
+      )}
       <div
         style={{
           borderRadius: "6px",

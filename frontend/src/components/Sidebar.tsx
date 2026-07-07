@@ -695,85 +695,6 @@ export function Sidebar({
             &#9660;
           </button>
         </div>
-        {/* Run history navigation */}
-        {runTotal > 0 && (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center", marginTop: "8px" }}>
-            <button
-              onClick={onPrevRun}
-              disabled={!canGoPrev}
-              title="Previous executed config"
-              style={{
-                padding: "6px 10px",
-                background: canGoPrev ? "#1e1e3a" : "#0d0d14",
-                border: `1px solid ${canGoPrev ? "#4cc9f0" : "#2a2a3e"}`,
-                borderRadius: "4px",
-                color: canGoPrev ? "#e0e0ff" : "#444",
-                fontSize: "0.8rem",
-                cursor: canGoPrev ? "pointer" : "not-allowed",
-                transition: "all 0.15s",
-              }}
-            >
-              &#9664;
-            </button>
-            <span
-              style={{
-                flex: 1,
-                textAlign: "center",
-                fontSize: "0.7rem",
-                color: "#888",
-                fontFamily: "monospace",
-                userSelect: "none",
-              }}
-            >
-              Run {runPosition} / {runTotal}
-            </span>
-            <button
-              onClick={onNextRun}
-              disabled={!canGoNext}
-              title="Next executed config"
-              style={{
-                padding: "6px 10px",
-                background: canGoNext ? "#1e1e3a" : "#0d0d14",
-                border: `1px solid ${canGoNext ? "#4cc9f0" : "#2a2a3e"}`,
-                borderRadius: "4px",
-                color: canGoNext ? "#e0e0ff" : "#444",
-                fontSize: "0.8rem",
-                cursor: canGoNext ? "pointer" : "not-allowed",
-                transition: "all 0.15s",
-              }}
-            >
-              &#9654;
-            </button>
-          </div>
-        )}
-        {/* Revert to last saved config */}
-        <div style={{ marginTop: "6px", display: "flex", gap: "6px" }}>
-          <button
-            onClick={onRevert}
-            title="Discard unsaved edits and reload the experiment's saved config"
-            style={{
-              flex: 1,
-              padding: "5px 10px",
-              background: "#1e1e3a",
-              border: "1px solid #4a4a7a",
-              borderRadius: "4px",
-              color: "#a0a0cc",
-              fontSize: "0.75rem",
-              cursor: "pointer",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#7c4dff";
-              (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4a7a";
-              (e.currentTarget as HTMLButtonElement).style.color = "#a0a0cc";
-            }}
-          >
-            Revert
-          </button>
-        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -790,7 +711,93 @@ export function Sidebar({
             config: {
               visible: true,
               label: 'Config',
-              body: <JsonConfigEditor config={config} onChange={onConfigChange} metadata={metadata} />,
+              body: (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: "6px", alignItems: "center" }}>
+                    <div />
+                    {runTotal > 0 ? (
+                      <div style={{ display: "flex", gap: "2px", alignItems: "center", justifySelf: "center" }}>
+                        <button
+                          onClick={onPrevRun}
+                          disabled={!canGoPrev}
+                          title="Previous executed config"
+                          style={{
+                            padding: "2px 6px",
+                            background: "transparent",
+                            border: `1px solid ${canGoPrev ? "#3a3a5a" : "#22222e"}`,
+                            borderRadius: "3px",
+                            color: canGoPrev ? "#777" : "#3a3a3a",
+                            fontSize: "0.65rem",
+                            cursor: canGoPrev ? "pointer" : "not-allowed",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          &#9664;
+                        </button>
+                        <span
+                          style={{
+                            fontSize: "0.65rem",
+                            color: "#555",
+                            fontFamily: "monospace",
+                            userSelect: "none",
+                            padding: "0 2px",
+                          }}
+                        >
+                          Run {runPosition}/{runTotal}
+                        </span>
+                        <button
+                          onClick={onNextRun}
+                          disabled={!canGoNext}
+                          title="Next executed config"
+                          style={{
+                            padding: "2px 6px",
+                            background: "transparent",
+                            border: `1px solid ${canGoNext ? "#3a3a5a" : "#22222e"}`,
+                            borderRadius: "3px",
+                            color: canGoNext ? "#777" : "#3a3a3a",
+                            fontSize: "0.65rem",
+                            cursor: canGoNext ? "pointer" : "not-allowed",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          &#9654;
+                        </button>
+                      </div>
+                    ) : (
+                      <div />
+                    )}
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      {onRevert && (
+                        <button
+                          onClick={onRevert}
+                          title="Discard unsaved edits and reload the experiment's saved config"
+                          style={{
+                            padding: "2px 6px",
+                            background: "transparent",
+                            border: "1px solid #3a3a5a",
+                            borderRadius: "3px",
+                            color: "#666",
+                            fontSize: "0.65rem",
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = "#7c4dff";
+                            (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = "#3a3a5a";
+                            (e.currentTarget as HTMLButtonElement).style.color = "#666";
+                          }}
+                        >
+                          Discard changes
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <JsonConfigEditor config={config} onChange={onConfigChange} metadata={metadata} />
+                </div>
+              ),
             },
             daemon: {
               visible: hasDaemon,
@@ -836,20 +843,22 @@ export function Sidebar({
             output_fn: {
               visible: !!activeFn,
               label: 'Output Function',
-              headerExtra: (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {fnRegions.length > 1 && (
-                    <select value={selectedFnId} onChange={e => setSelectedFnId(e.target.value)} style={selectStyle}>
-                      {fnRegions.map(r => <option key={r.id as string} value={r.id as string}>{r.id as string}</option>)}
-                    </select>
-                  )}
-                  {fnRegions.length === 1 && (
-                    <span style={{ fontSize: '0.65rem', color: '#555', fontFamily: 'monospace' }}>{selectedFnId}</span>
-                  )}
-                  {activeFnSoft && <span style={{ fontSize: '0.6rem', color: '#4ade80', fontFamily: 'monospace' }}>soft</span>}
-                </span>
-              ),
-              body: activeFn ? <TensionFunctionViz fn={activeFn} softMode={activeFnSoft} /> : null,
+              body: activeFn ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                    {fnRegions.length > 1 && (
+                      <select value={selectedFnId} onChange={e => setSelectedFnId(e.target.value)} style={selectStyle}>
+                        {fnRegions.map(r => <option key={r.id as string} value={r.id as string}>{r.id as string}</option>)}
+                      </select>
+                    )}
+                    {fnRegions.length === 1 && (
+                      <span style={{ fontSize: '0.65rem', color: '#555', fontFamily: 'monospace' }}>{selectedFnId}</span>
+                    )}
+                    {activeFnSoft && <span style={{ fontSize: '0.6rem', color: '#4ade80', fontFamily: 'monospace' }}>soft</span>}
+                  </div>
+                  <TensionFunctionViz fn={activeFn} softMode={activeFnSoft} />
+                </div>
+              ) : null,
             },
           };
 
@@ -1072,35 +1081,39 @@ function HelpPanel() {
 
   return (
     <div style={{ marginTop: "8px" }}>
-      <button
+      <div
         onClick={() => setOpen((o) => !o)}
-        style={{
-          width: "100%",
-          padding: "8px 10px",
-          background: "linear-gradient(90deg, #1a1a3a, #12122a)",
-          border: "1px solid #3a3a6a",
-          borderRadius: open ? "5px 5px 0 0" : "5px",
-          color: "#8fb8ff",
-          fontSize: "0.8rem",
-          fontWeight: 700,
-          letterSpacing: "0.03em",
-          cursor: "pointer",
-          textAlign: "left",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
+        style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: open ? "6px" : 0, cursor: "pointer" }}
       >
-        <span>📖 Config Reference</span>
-        <span style={{ fontSize: "0.65rem", color: "#666" }}>{open ? "▲" : "▼"}</span>
-      </button>
+        <div style={{ display: "flex", alignItems: "center", padding: "2px 3px", flexShrink: 0, opacity: 0.35 }}>
+          <svg width={8} height={12} viewBox="0 0 8 12">
+            {([[1,1],[5,1],[1,5],[5,5],[1,9],[5,9]] as [number,number][]).map(([x,y]) => (
+              <circle key={`${x}-${y}`} cx={x} cy={y} r={1.3} fill="#aaa" />
+            ))}
+          </svg>
+        </div>
+        <span
+          style={{
+            flex: 1,
+            fontSize: "0.75rem",
+            textTransform: "uppercase",
+            color: "#888",
+            letterSpacing: "0.1em",
+            userSelect: "none",
+          }}
+        >
+          Config Reference
+        </span>
+        <span style={{ color: "#444", fontSize: "0.65rem", userSelect: "none", paddingLeft: "4px" }}>
+          {open ? "▾" : "▸"}
+        </span>
+      </div>
       {open && (
         <div
           style={{
             background: "#0d0d1a",
             border: "1px solid #2a2a4a",
-            borderTop: "none",
-            borderRadius: "0 0 5px 5px",
+            borderRadius: "5px",
             padding: "10px",
             fontSize: "0.72rem",
             color: "#888",
