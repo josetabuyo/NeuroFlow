@@ -225,8 +225,11 @@ export function PixelCanvas({
       if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
       const cellSize = getCellSize();
-      const x = Math.floor((e.clientX - rect.left) / cellSize);
-      const y = Math.floor((e.clientY - rect.top) / cellSize);
+      // rect is post-CSS-transform (zoom/pan), but cellSize/canvas.width are in the
+      // canvas's own untransformed pixel buffer — scale screen deltas back down first.
+      const scaleFactor = rect.width / canvas.width;
+      const x = Math.floor((e.clientX - rect.left) / (cellSize * scaleFactor));
+      const y = Math.floor((e.clientY - rect.top) / (cellSize * scaleFactor));
       if (x >= 0 && x < width && y >= 0 && y < height) return { x, y };
       return null;
     },
