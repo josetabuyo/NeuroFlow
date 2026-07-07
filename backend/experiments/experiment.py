@@ -480,11 +480,19 @@ def _rebalance_dendrite_group(
     process_mode="group_avg": the local-dendrite average plus the
     distant-dendrite average sums to `target`. Uses one uniform scale factor
     for the whole group, so each dendrite keeps its relative weight within
-    its own locality bucket."""
+    its own locality bucket.
+
+    Dendrites flagged `exclude_from_delta_weight` (e.g. a nerve carrying a
+    strong labeled-line signal that must not be diluted) are skipped
+    entirely: they don't count toward `raw_total` and keep their configured
+    weight untouched, so the rest of the group still rebalances to the exact
+    target using only its own weights."""
     if not dendritas:
         return
     local, distant = [], []
     for d in dendritas:
+        if d.exclude_from_delta_weight:
+            continue
         (local if _dendrite_is_local(d, local_ids) else distant).append(d)
     local_mean = sum(d.peso for d in local) / len(local) if local else 0.0
     distant_mean = sum(d.peso for d in distant) / len(distant) if distant else 0.0
@@ -1000,6 +1008,7 @@ class Experiment(Experimento):
         weight = float(from_cfg.get("weight", 0.5))
         gradient_gate = bool(from_cfg.get("gradient", True))
         random_weights = bool(from_cfg.get("random_weights", False))
+        exclude_from_delta_weight = bool(from_cfg.get("exclude_from_delta_weight", False))
         from_neurons = list(self.regiones[from_rs.id].neuronas.values())
         on_neurons = list(self.regiones[on_rs.id].neuronas.values())
         k = max(1, round(len(from_neurons) * density))
@@ -1013,7 +1022,13 @@ class Experiment(Experimento):
                     Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0) if random_weights else 1.0)
                     for s in sampled
                 ]
-                tissue_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
+                tissue_n.dendritas.append(
+                    Dendrita(
+                        sinapsis=sinapsis_list,
+                        peso=weight,
+                        exclude_from_delta_weight=exclude_from_delta_weight,
+                    )
+                )
 
     def _wire_nerve_to(
         self,
