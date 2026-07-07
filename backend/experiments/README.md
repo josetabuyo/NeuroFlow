@@ -228,6 +228,62 @@ When showing T, noci_T stays silent (T is correct) → no interference.
 | `char_region` | Region ID of the ASCII input (provides `current_char`) |
 | `label_region` | Region ID whose `neuron_labels` define expected class per neuron |
 
+#### `"draw"` — user-painted input
+
+A region the user paints on directly (mouse/brush). Rebuilt from scratch every
+tick — zero → background noise → loop stamp → live cursor stamp — so nothing
+accumulates or leaves a trail once painting stops, except the recorded loop
+pattern (below), which is config, not runtime state.
+
+| Field | Description |
+|-------|-------------|
+| `noise` | Background noise on the region — nested `{"background": n}` or a flat scalar `n`, applied fresh every tick |
+| `loop` | Optional record-and-replay pattern. A plain number `N` (legacy) is auto-upgraded to the container below; see [loop reference](#draw-loop) |
+
+<a id="draw-loop"></a>
+**`loop` container:**
+
+```json
+"loop": {
+  "frames": 4,
+  "brush": { "radius": 2 },
+  "points": [
+    { "x": 3, "y": 2 },
+    null,
+    { "x": 1, "y": 1 },
+    null
+  ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `frames` | Loop length in ticks. The replay phase is `generation % frames` |
+| `brush.radius` | Shared brush radius (== brush size // 2) used to reconstruct the painted circle at every phase |
+| `points` | One entry per phase, `{"x", "y"}` (brush center) or `null` if nothing was painted at that phase |
+
+**How it works:** while the user holds the cursor down, every tick writes
+`points[generation % frames] = {x, y}` — overwriting whatever was there
+before, empty or a previous point — and updates `brush.radius`. This happens
+on *every* tick the cursor is held (not just when a new paint message
+arrives), so holding the mouse still across a full cycle fills in every
+phase and replay stays solid instead of flickering once every `frames`
+ticks. At render time each phase's stored point (if any) is expanded back
+into a filled circle using `brush.radius` — the same offset formula as the
+frontend's `generateCircleBrush`.
+
+This lives directly in `source_cfg` (i.e. in the experiment's config JSON,
+not a side buffer), so it:
+- **Persists across reset** — reset just re-derives from config.
+- **Survives unrelated soft config edits** (e.g. tweaking `noise`) — a soft
+  update carries `points`/`brush` forward when `frames` is unchanged. Only an
+  actual `frames` change starts the pattern over.
+- **Can drive a headless replay** with no UI/session involved — the config
+  alone fully describes the loop.
+
+If `loop` is absent entirely, nothing is recorded or replayed — draw regions
+behave exactly as without the feature.
+
 ---
 
 ### `orchestrator` — eventos de control por tick

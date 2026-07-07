@@ -842,10 +842,13 @@ def _draw_config(
     tissue_h: int = 8,
     weight: float = 1.0,
     noise: float = 0.0,
+    loop: int = 0,
 ) -> dict:
     source: dict = {"type": "draw"}
     if noise > 0:
         source["noise"] = {"background": noise}
+    if loop > 0:
+        source["loop"] = loop
     return {
         "regions": [
             {"id": "input", "grid": {"width": input_w, "height": input_h},
@@ -1039,6 +1042,157 @@ class TestDrawNoise:
         assert result is True
         assert rs.cursor_active is True
         assert rs.cursor_cells == [0]
+
+
+class TestDrawLoop:
+    """Draw source "loop": paint during a tick window, then it replays cyclically.
+
+    The pattern lives in source_cfg["loop"] itself — {"frames": N, "brush":
+    {"radius": r}, "points": [{"x","y"} | None, ...]} — it's config, not
+    runtime-only state, so it round-trips through setup/reset/soft-update and
+    could drive a headless replay with no UI involved.
+    """
+
+    def test_loop_disabled_by_default_no_replay(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0))
+        rs = exp._regions_by_id["input"]
+        exp.paint("input", [{"x": 3, "y": 2}], 1.0, origin={"x": 3, "y": 2}, radius=0)
+        exp.paint("input", [], 1.0)
+        exp.step()
+        vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+        assert all(v == 0.0 for v in vals)
+
+    def test_legacy_int_loop_migrates_to_frames_container(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0, loop=4))
+        rs = exp._regions_by_id["input"]
+        assert rs.source_cfg["loop"]["frames"] == 4
+
+    def test_loop_records_point_at_current_phase(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0, loop=4))
+        rs = exp._regions_by_id["input"]
+        exp.paint("input", [{"x": 3, "y": 2}], 1.0, origin={"x": 3, "y": 2}, radius=0)
+        assert rs.source_cfg["loop"]["points"][0] == {"x": 3, "y": 2}
+        assert rs.source_cfg["loop"]["brush"] == {"radius": 0}
+
+    def test_loop_replays_after_cursor_released(self) -> None:
+        """Paint at tick 0, release, then step through a full loop cycle — the
+        painted point should reappear every time the phase comes back around.
+
+        Rendering happens against the pre-increment generation, so the replay
+        lands on step calls n where (n - 1) % loop == 0 (n is 1-indexed)."""
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0, loop=4))
+        rs = exp._regions_by_id["input"]
+        local_idx = 2 * 5 + 3
+        exp.paint("input", [{"x": 3, "y": 2}], 1.0, origin={"x": 3, "y": 2}, radius=0)  # phase 0
+        exp.paint("input", [], 1.0)  # mouse-up: live cursor cleared
+
+        for n in range(1, 9):
+            exp.step()
+            vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+            if (n - 1) % 4 == 0:
+                assert vals[local_idx] == 1.0
+            else:
+                assert vals[local_idx] == 0.0
+
+    def test_loop_different_phases_hold_different_points(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0, loop=3))
+        rs = exp._regions_by_id["input"]
+        idx_a = 0 * 5 + 0
+        idx_b = 1 * 5 + 1
+
+        exp.paint("input", [{"x": 0, "y": 0}], 1.0, origin={"x": 0, "y": 0}, radius=0)  # gen=0 -> phase 0
+        exp.paint("input", [], 1.0)
+        exp.step()  # step#1 renders phase 0 (idx_a replays); generation -> 1
+
+        exp.paint("input", [{"x": 1, "y": 1}], 1.0, origin={"x": 1, "y": 1}, radius=0)  # gen=1 -> phase 1
+        exp.paint("input", [], 1.0)
+        exp.step()  # step#2 renders phase 1 (idx_b replays); generation -> 2
+
+        exp.step()  # step#3 renders phase 2 (empty); generation -> 3
+        vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+        assert vals[idx_a] == 0.0
+        assert vals[idx_b] == 0.0
+
+        exp.step()  # step#4 renders phase 0 again (idx_a replays); generation -> 4
+        vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+        assert vals[idx_a] == 1.0
+        assert vals[idx_b] == 0.0
+
+    def test_loop_records_every_tick_while_held_stationary(self) -> None:
+        """Holding the cursor still (no new paint() calls, just ticks passing)
+        must still fill in every loop phase — otherwise replay after release
+        only shows the point on 1-in-loop_len ticks, i.e. it flickers instead
+        of staying solid for the whole held duration."""
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0, loop=4))
+        rs = exp._regions_by_id["input"]
+        local_idx = 2 * 5 + 3
+        exp.paint("input", [{"x": 3, "y": 2}], 1.0, origin={"x": 3, "y": 2}, radius=0)
+        for _ in range(8):  # hold stationary across two full loop cycles
+            exp.step()
+        exp.paint("input", [], 1.0)  # mouse-up
+
+        for _ in range(8):
+            exp.step()
+            vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+            assert vals[local_idx] == 1.0
+
+    def test_loop_pattern_survives_reset(self) -> None:
+        """Reset restarts the simulation (generation, tensors, cursor) but the
+        loop pattern is config, not runtime state — it should survive."""
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0, loop=4))
+        rs = exp._regions_by_id["input"]
+        exp.paint("input", [{"x": 3, "y": 2}], 1.0, origin={"x": 3, "y": 2}, radius=0)
+        assert rs.source_cfg["loop"]["points"][0] == {"x": 3, "y": 2}
+        exp.reset()
+        rs2 = exp._regions_by_id["input"]
+        assert rs2.source_cfg["loop"]["points"][0] == {"x": 3, "y": 2}
+        assert rs2.cursor_active is False
+        assert rs2.cursor_cells == []
+
+    def test_loop_pattern_survives_unrelated_soft_update(self) -> None:
+        """Editing an unrelated field (e.g. noise) via a soft config update
+        must not wipe an in-progress loop pattern — the frontend doesn't
+        round-trip it back into its own config state."""
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0, loop=4))
+        rs = exp._regions_by_id["input"]
+        exp.paint("input", [{"x": 3, "y": 2}], 1.0, origin={"x": 3, "y": 2}, radius=0)
+        exp.update_config(_draw_config(noise=0.1, loop=4))
+        assert rs.source_cfg["loop"]["points"][0] == {"x": 3, "y": 2}
+
+    def test_loop_pattern_resets_when_frame_count_changes(self) -> None:
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0, loop=4))
+        rs = exp._regions_by_id["input"]
+        exp.paint("input", [{"x": 3, "y": 2}], 1.0, origin={"x": 3, "y": 2}, radius=0)
+        exp.paint("input", [], 1.0)  # mouse-up: cursor released
+        exp.update_config(_draw_config(noise=0.0, loop=6))
+        assert rs.source_cfg["loop"]["frames"] == 6
+        exp.step()
+        assert rs.source_cfg["loop"]["points"] == [None] * 6
+
+    def test_loop_brush_radius_expands_replay_cells(self) -> None:
+        """The stored radius reconstructs the full brush circle at replay
+        time — not just the single origin point."""
+        exp = Experiment()
+        exp.setup(_draw_config(noise=0.0, loop=4, input_w=7, input_h=7))
+        rs = exp._regions_by_id["input"]
+        exp.paint("input", [{"x": 3, "y": 3}], 1.0, origin={"x": 3, "y": 3}, radius=1)
+        exp.paint("input", [], 1.0)
+        exp.step()
+        vals = exp.brain_tensor.valores[rs.start:rs.end].tolist()
+        center = 3 * 7 + 3
+        assert vals[center] == 1.0
+        # a radius-1 circle also lights up the orthogonal neighbors
+        assert vals[center - 1] == 1.0
+        assert vals[center + 1] == 1.0
 
 
 class TestSourceTypes:

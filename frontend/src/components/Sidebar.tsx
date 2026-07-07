@@ -978,6 +978,7 @@ const CONFIG_ROWS: ConfigRow[] = [
   { section: "Region › source (error_diff)", key: "diff_mode", type: "hard", desc: '"abs" (default) or "relu"' },
 
   { section: "Region › source (draw)", key: "noise", type: "soft", desc: "background noise on the user-painted region — nested {background:n} or a flat scalar" },
+  { section: "Region › source (draw)", key: "loop", type: "soft", desc: '{frames:N, brush:{radius}, points:[{x,y}|null,...]} — one point per step-phase, replayed on a loop even after releasing the cursor. Written live while painting; survives reset. A plain number N is also accepted and auto-upgraded to this shape.' },
 
   { section: "Region › spiking", key: "up_ticks", type: "soft", desc: "max consecutive active steps before rest" },
   { section: "Region › spiking", key: "down_ticks", type: "soft", desc: "refractory period length" },

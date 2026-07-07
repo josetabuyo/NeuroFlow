@@ -417,10 +417,13 @@ function App() {
       } else {
         const cells = computeBrushCells(x, y, regionId);
         const value = brushMode === "activate" ? 1.0 : 0.0;
-        paint(cells, value, regionId);
+        // origin/radius are the raw (unexpanded) brush center+size — the
+        // backend uses these only to record a "loop" pattern into config,
+        // when the region has one configured.
+        paint(cells, value, regionId, { x, y }, Math.floor(brushSize / 2));
       }
     },
-    [inspectMode, inspect, computeBrushCells, brushMode, paint]
+    [inspectMode, inspect, computeBrushCells, brushMode, paint, brushSize]
   );
 
   // Coalesces paints from rapid drag movement into at most one `paint` per
@@ -428,6 +431,7 @@ function App() {
   // paint, so one message per mousemove event was the source of the freeze.
   const dragFrameRef = useRef<{
     cellsByKey: Map<string, { x: number; y: number }>;
+    lastPoint: { x: number; y: number } | null;
     regionId?: string;
     scheduled: boolean;
   } | null>(null);
@@ -438,10 +442,11 @@ function App() {
     frame.scheduled = false;
     if (frame.cellsByKey.size === 0) return;
     const cells = Array.from(frame.cellsByKey.values());
+    const lastPoint = frame.lastPoint;
     frame.cellsByKey.clear();
     const value = brushMode === "activate" ? 1.0 : 0.0;
-    paint(cells, value, frame.regionId);
-  }, [brushMode, paint]);
+    paint(cells, value, frame.regionId, lastPoint ?? undefined, Math.floor(brushSize / 2));
+  }, [brushMode, paint, brushSize]);
 
   const handleCellDrag = useCallback(
     (x: number, y: number, regionId?: string) => {
@@ -453,10 +458,11 @@ function App() {
       }
       const cells = computeBrushCells(x, y, regionId);
       if (!dragFrameRef.current) {
-        dragFrameRef.current = { cellsByKey: new Map(), regionId, scheduled: false };
+        dragFrameRef.current = { cellsByKey: new Map(), lastPoint: null, regionId, scheduled: false };
       }
       const frame = dragFrameRef.current;
       frame.regionId = regionId;
+      frame.lastPoint = { x, y };
       for (const cell of cells) frame.cellsByKey.set(`${cell.x},${cell.y}`, cell);
       if (!frame.scheduled) {
         frame.scheduled = true;

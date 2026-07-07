@@ -88,6 +88,12 @@ class RegionState:
     cursor_active: bool = False
     cursor_cells: list[int] = field(default_factory=list)
     cursor_value: float = 1.0
+    # draw source: raw (unexpanded) brush origin + radius behind the current
+    # cursor stamp — used only to record source_cfg["loop"]["points"] (see
+    # _render_draw_region). The expanded cursor_cells above already give the
+    # live visual; this is what gets persisted for loop replay.
+    cursor_origin: tuple[int, int] | None = None
+    cursor_radius: int = 0
 
     @property
     def n(self) -> int:
@@ -223,6 +229,20 @@ def _migrate_config(config: dict[str, Any]) -> dict[str, Any]:
             if k in w:
                 new_w[k] = w[k]
         region["wiring"] = new_w
+
+    for region in config.get("regions", []):
+        source = region.get("source")
+        if not source or source.get("type") != "draw":
+            continue
+        loop = source.get("loop")
+        if isinstance(loop, int):
+            # Old-style flat loop length → canonical container. "points"/
+            # "brush" are left unset here (rather than filled with Nones) so
+            # a soft-update merge can tell "no points supplied, carry the
+            # old ones over" apart from "explicitly cleared" — see
+            # update_config(). _render_draw_region lazily fills points in
+            # when frames > 0 and none exist yet.
+            source["loop"] = {"frames": loop}
 
     return config
 
@@ -709,6 +729,15 @@ class Experiment(Experimento):
         config = _to_canonical(config)
         config = _migrate_config(config)
         self._config = config
+        # _inject_wiring_from_connections deep-copies below, so its regions'
+        # source dicts are no longer the same objects as self._config's —
+        # keep a by-id map into self._config so draw regions can be handed a
+        # source_cfg that IS self._config's dict (see the "loop" special-case
+        # in the region-build loop). That's what makes a live-painted loop
+        # pattern part of the config for real, not a copy of it: mutating it
+        # during paint() mutates self._config directly, so it's already
+        # "written to json" for reset/save without any extra sync step.
+        canonical_regions_by_id = {r["id"]: r for r in self._config.get("regions", [])}
         self._orchestrator = config.get("orchestrator", [])
         config = _inject_wiring_from_connections(config)  # internal copy with wiring in regions
         self.generation = 0
@@ -759,6 +788,11 @@ class Experiment(Experimento):
             border = grid.get("border", "connected")
             source = rc.get("source")
             wiring_cfg = rc.get("wiring") or {}
+            if source is not None and source.get("type") == "draw":
+                # Use self._config's own source dict (not the deep copy made
+                # above for wiring-injection) so live loop mutations land
+                # directly in the canonical config.
+                source = canonical_regions_by_id.get(rc["id"], {}).get("source", source)
             rs = RegionState(
                 id=rc["id"],
                 start=0,
@@ -1165,6 +1199,8 @@ class Experiment(Experimento):
             if rs.source_type == "draw":
                 rs.cursor_active = False
                 rs.cursor_cells = []
+                rs.cursor_origin = None
+                rs.cursor_radius = 0
 
         self._rebuild_lr_per_syn()
         # Apply tick-0 injects so the initial display (before first step) shows the pattern
@@ -1802,16 +1838,62 @@ class Experiment(Experimento):
             return float(noise_val.get("background", 0.0))
         return float(noise_val)
 
+    @staticmethod
+    def _loop_stamp_cells(rs: RegionState, point: dict[str, int], radius: int) -> list[int]:
+        """Local flat indices for a brush circle of ``radius`` centered at ``point``.
+
+        Port of the frontend's generateCircleBrush, parametrized directly by
+        radius (== size // 2) instead of the odd "size" it's normally given —
+        both describe the same offset set.
+        """
+        cx, cy = point.get("x", 0), point.get("y", 0)
+        cells: list[int] = []
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                if dx * dx + dy * dy > radius * radius + radius * 0.5:
+                    continue
+                x, y = cx + dx, cy + dy
+                if 0 <= x < rs.width and 0 <= y < rs.height:
+                    cells.append(y * rs.width + x)
+        return cells
+
     def _render_draw_region(self, rs: RegionState) -> None:
-        """Rebuild a draw region from scratch: zero -> background noise -> cursor stamp.
+        """Rebuild a draw region from scratch: zero -> background noise -> loop stamp -> cursor stamp.
 
         Draw regions never accumulate state across ticks. Nothing persists
-        once the user stops painting, so no trail is left on the canvas.
+        once the user stops painting, so no trail is left on the canvas —
+        except for the loop pattern recorded into ``source_cfg["loop"]``
+        (see "loop" config), which is config data, not runtime state: it
+        replays at its recorded tick phase indefinitely, survives reset (it's
+        part of the config), and a config with no "loop" key behaves exactly
+        as before — nothing is recorded or replayed.
         """
         flat = np.zeros(rs.n, dtype=np.float64)
         noise_prob = self._draw_noise_prob(rs.source_cfg)
         if noise_prob > 0.0:
             flat = apply_white_noise(flat, noise_prob=noise_prob, rng=self._rng)
+        loop_cfg = rs.source_cfg.get("loop")
+        if isinstance(loop_cfg, dict):
+            frames = int(loop_cfg.get("frames", 0) or 0)
+            if frames > 0:
+                points = loop_cfg.get("points")
+                if not isinstance(points, list) or len(points) != frames:
+                    points = [None] * frames
+                    loop_cfg["points"] = points
+                phase = self.generation % frames
+                if rs.cursor_active and rs.cursor_origin is not None:
+                    # Record every tick the cursor is held, not just the tick a
+                    # new paint() call arrives — otherwise holding the mouse
+                    # still (no new mousemove events) only stamps the one
+                    # phase active at mousedown, and the replay flickers
+                    # instead of staying solid. Overwrites whatever was there,
+                    # empty or an old point — one point per phase.
+                    points[phase] = {"x": rs.cursor_origin[0], "y": rs.cursor_origin[1]}
+                    loop_cfg["brush"] = {"radius": rs.cursor_radius}
+                point = points[phase]
+                if point is not None:
+                    radius = int((loop_cfg.get("brush") or {}).get("radius", 0) or 0)
+                    flat[self._loop_stamp_cells(rs, point, radius)] = 1.0
         if rs.cursor_active and rs.cursor_cells:
             flat[rs.cursor_cells] = rs.cursor_value
         self.brain_tensor.valores[rs.start:rs.end] = torch.from_numpy(
@@ -1856,10 +1938,16 @@ class Experiment(Experimento):
         region_id: str | None,
         cells: list[dict[str, int]],
         value: float,
+        origin: dict[str, int] | None = None,
+        radius: int = 0,
     ) -> None:
         """Paint cells. For draw regions this only moves the live cursor stamp —
         an empty ``cells`` list clears it (e.g. on mouse-up/mouse-leave) so nothing
         stays painted once the user stops.
+
+        ``origin``/``radius`` are the raw (unexpanded) brush center and size
+        behind ``cells`` — used only to record a "loop" pattern into config
+        (see _render_draw_region), when the region has one configured.
         """
         if self.brain_tensor is None:
             return
@@ -1881,6 +1969,8 @@ class Experiment(Experimento):
             region.cursor_cells = local_idxs
             region.cursor_value = value
             region.cursor_active = bool(local_idxs)
+            region.cursor_origin = (origin["x"], origin["y"]) if origin else None
+            region.cursor_radius = int(radius or 0)
             self._render_draw_region(region)
             return
 
@@ -2245,6 +2335,11 @@ class Experiment(Experimento):
 
         new_config = _to_canonical(config)
         new_config = _migrate_config(new_config)
+        # new_internal is a further deep copy (for wiring-injection) — for
+        # draw regions we want the *canonical* new_config source dict below,
+        # so a live-mutated loop pattern keeps landing directly in
+        # self._config (see the matching comment in setup()).
+        new_config_regions_by_id = {r["id"]: r for r in new_config.get("regions", [])}
         new_internal = _inject_wiring_from_connections(new_config)
         old_internal = _inject_wiring_from_connections(self._config)
 
@@ -2323,7 +2418,21 @@ class Experiment(Experimento):
                 self._soft_update_ascii(rs, new_source)
                 rs.source_cfg = new_source
             elif rs.source_type == "draw" and new_source:
-                rs.source_cfg = new_source
+                # The frontend doesn't round-trip the live-painted loop
+                # pattern back into its own config state — it only edits
+                # things like noise/frames. Without this, any unrelated
+                # slider tweak would silently wipe the painted loop. Carry
+                # the old points/brush over when the new config doesn't
+                # supply its own (frame count unchanged); a real frame-count
+                # change starts the pattern over (see _migrate_config).
+                canonical_source = new_config_regions_by_id.get(rs.id, {}).get("source") or new_source
+                old_loop = rs.source_cfg.get("loop")
+                new_loop = canonical_source.get("loop")
+                if isinstance(old_loop, dict) and isinstance(new_loop, dict):
+                    if old_loop.get("frames") == new_loop.get("frames"):
+                        new_loop.setdefault("points", old_loop.get("points"))
+                        new_loop.setdefault("brush", old_loop.get("brush"))
+                rs.source_cfg = canonical_source
 
         # Sync brain_tensor global mode/specs/spiking from tissue
         if self._wiring_region is not None:

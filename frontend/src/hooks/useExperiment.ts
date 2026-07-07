@@ -86,7 +86,13 @@ interface UseExperimentReturn {
   reconnect: (config: ExperimentConfig) => void;
   updateConfig: (config: Partial<ExperimentConfig>) => void;
   click: (x: number, y: number) => void;
-  paint: (cells: { x: number; y: number }[], value: number, regionId?: string) => void;
+  paint: (
+    cells: { x: number; y: number }[],
+    value: number,
+    regionId?: string,
+    origin?: { x: number; y: number },
+    radius?: number
+  ) => void;
   step: (count?: number) => void;
   play: (fps?: number, stepsPerTick?: number) => void;
   pause: () => void;
@@ -370,8 +376,20 @@ export function useExperiment(): UseExperimentReturn {
   }, [send]);
 
   const paint = useCallback(
-    (cells: { x: number; y: number }[], value: number, regionId?: string) => {
-      send({ action: "paint", cells, value, ...(regionId ? { region_id: regionId } : {}) });
+    (
+      cells: { x: number; y: number }[],
+      value: number,
+      regionId?: string,
+      origin?: { x: number; y: number },
+      radius?: number
+    ) => {
+      send({
+        action: "paint",
+        cells,
+        value,
+        ...(regionId ? { region_id: regionId } : {}),
+        ...(origin ? { origin, radius: radius ?? 0 } : {}),
+      });
     },
     [send]
   );

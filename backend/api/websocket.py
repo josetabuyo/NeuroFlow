@@ -102,7 +102,9 @@ class ExperimentSession:
         cells: list[dict[str, int]] = message.get("cells", [])
         value: float = message.get("value", 1.0)
         region_id: str | None = message.get("region_id")
-        self.experiment.paint(region_id, cells, value)
+        origin: dict[str, int] | None = message.get("origin")
+        radius: int = message.get("radius", 0)
+        self.experiment.paint(region_id, cells, value, origin, radius)
         await self._send_frame()
 
     async def _stop_play_loop(self) -> None:
