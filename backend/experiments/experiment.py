@@ -1008,6 +1008,14 @@ class Experiment(Experimento):
         weight = float(from_cfg.get("weight", 0.5))
         gradient_gate = bool(from_cfg.get("gradient", True))
         exclude_from_delta_weight = bool(from_cfg.get("exclude_from_delta_weight", False))
+        # A synapse weight of exactly 1.0 makes "1 - |peso - x|" collapse to a pure
+        # linear pass-through of the source activation (x). Any other weight leaves
+        # a non-zero residual even when x=0, injecting a constant offset regardless
+        # of the source neuron's state. Trainable synapses (a `learning` block is
+        # present) need random init to have something to learn away from — same as
+        # daemon/full wiring. Untrained ones (raw signal transduction, e.g. a
+        # nociceptor's error magnitude) need the exact pass-through, so peso=1.0.
+        trainable = bool(from_cfg.get("learning"))
         from_neurons = list(self.regiones[from_rs.id].neuronas.values())
         on_neurons = list(self.regiones[on_rs.id].neuronas.values())
         k = max(1, round(len(from_neurons) * density))
@@ -1018,7 +1026,7 @@ class Experiment(Experimento):
                 tissue_n = on_neurons[y * on_rs.width + x]
                 sampled = random.sample(from_neurons, min(k, len(from_neurons)))
                 sinapsis_list = [
-                    Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0))
+                    Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0) if trainable else 1.0)
                     for s in sampled
                 ]
                 tissue_n.dendritas.append(
