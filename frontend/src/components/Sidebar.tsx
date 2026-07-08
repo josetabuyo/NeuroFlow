@@ -359,6 +359,16 @@ export function Sidebar({
 }: SidebarProps) {
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
+  const [configCopied, setConfigCopied] = useState(false);
+  const copyConfigTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const copyConfigToClipboard = useCallback(() => {
+    navigator.clipboard?.writeText(JSON.stringify(config, null, 2)).then(() => {
+      setConfigCopied(true);
+      if (copyConfigTimer.current) clearTimeout(copyConfigTimer.current);
+      copyConfigTimer.current = setTimeout(() => setConfigCopied(false), 1500);
+    });
+  }, [config]);
   const selectedExperiment = experiments.find((e) => e.id === selectedExperimentId) ?? null;
 
   const startRenaming = useCallback(() => {
@@ -766,7 +776,33 @@ export function Sidebar({
                     ) : (
                       <div />
                     )}
-                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                      <button
+                        onClick={copyConfigToClipboard}
+                        title="Copy the full current config JSON to the clipboard — includes any draw-source loop.points recorded live while painting"
+                        style={{
+                          padding: "2px 6px",
+                          background: "transparent",
+                          border: `1px solid ${configCopied ? "#5ce07a" : "#3a3a5a"}`,
+                          borderRadius: "3px",
+                          color: configCopied ? "#5ce07a" : "#666",
+                          fontSize: "0.65rem",
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (configCopied) return;
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = "#7c4dff";
+                          (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (configCopied) return;
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = "#3a3a5a";
+                          (e.currentTarget as HTMLButtonElement).style.color = "#666";
+                        }}
+                      >
+                        {configCopied ? "Copied ✓" : "Copy config"}
+                      </button>
                       {onRevert && (
                         <button
                           onClick={onRevert}

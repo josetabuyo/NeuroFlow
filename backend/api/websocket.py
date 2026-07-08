@@ -105,6 +105,10 @@ class ExperimentSession:
         origin: dict[str, int] | None = message.get("origin")
         radius: int = message.get("radius", 0)
         self.experiment.paint(region_id, cells, value, origin, radius)
+        # Painting a "draw" source region records the stroke into
+        # source.loop.points on the live config — keep the client's copy in
+        # sync so the JSON editor reflects it without a reconnect.
+        await self.send({"type": "config_normalized", "config": self.experiment._config})
         await self._send_frame()
 
     async def _stop_play_loop(self) -> None:
