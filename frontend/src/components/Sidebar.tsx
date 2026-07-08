@@ -724,7 +724,34 @@ export function Sidebar({
               body: (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: "6px", alignItems: "center" }}>
-                    <div />
+                    <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                      <button
+                        onClick={copyConfigToClipboard}
+                        title="Copy the full current config JSON to the clipboard — includes any draw-source loop.points recorded live while painting"
+                        style={{
+                          padding: "2px 6px",
+                          background: "transparent",
+                          border: `1px solid ${configCopied ? "#5ce07a" : "#3a3a5a"}`,
+                          borderRadius: "3px",
+                          color: configCopied ? "#5ce07a" : "#666",
+                          fontSize: "0.65rem",
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (configCopied) return;
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = "#7c4dff";
+                          (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (configCopied) return;
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = "#3a3a5a";
+                          (e.currentTarget as HTMLButtonElement).style.color = "#666";
+                        }}
+                      >
+                        {configCopied ? "Copied ✓" : "Copy"}
+                      </button>
+                    </div>
                     {runTotal > 0 ? (
                       <div style={{ display: "flex", gap: "2px", alignItems: "center", justifySelf: "center" }}>
                         <button
@@ -777,32 +804,6 @@ export function Sidebar({
                       <div />
                     )}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-                      <button
-                        onClick={copyConfigToClipboard}
-                        title="Copy the full current config JSON to the clipboard — includes any draw-source loop.points recorded live while painting"
-                        style={{
-                          padding: "2px 6px",
-                          background: "transparent",
-                          border: `1px solid ${configCopied ? "#5ce07a" : "#3a3a5a"}`,
-                          borderRadius: "3px",
-                          color: configCopied ? "#5ce07a" : "#666",
-                          fontSize: "0.65rem",
-                          cursor: "pointer",
-                          transition: "all 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (configCopied) return;
-                          (e.currentTarget as HTMLButtonElement).style.borderColor = "#7c4dff";
-                          (e.currentTarget as HTMLButtonElement).style.color = "#e0e0ff";
-                        }}
-                        onMouseLeave={(e) => {
-                          if (configCopied) return;
-                          (e.currentTarget as HTMLButtonElement).style.borderColor = "#3a3a5a";
-                          (e.currentTarget as HTMLButtonElement).style.color = "#666";
-                        }}
-                      >
-                        {configCopied ? "Copied ✓" : "Copy config"}
-                      </button>
                       {onRevert && (
                         <button
                           onClick={onRevert}
