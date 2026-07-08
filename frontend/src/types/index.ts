@@ -50,6 +50,24 @@ export interface ProcessModeInfo {
 
 /* ── Canonical config schema (regions + connections) ── */
 
+export interface CentroidTwist {
+  center: [number, number];
+  direction: "cw" | "ccw";
+  /** Scales 0 at center -> max_magnitude at the farthest grid corner. */
+  max_magnitude?: number;
+  /** Constant magnitude everywhere (instead of scaling with radius). Takes precedence over max_magnitude. */
+  fix_magnitude?: number;
+}
+
+export interface CentroidConfig {
+  /** Uniform static shift [dx, dy]. Stacks with `twist` if both are set. */
+  shift?: [number, number] | "twist";
+  /** Rotational shift — set this (shift is optional) to enable twist mode. Adds on top of `shift`. */
+  twist?: CentroidTwist;
+  /** Per-neuron random jitter of the shift. Default false. Ignored when `twist` is set. */
+  random?: boolean;
+}
+
 export interface RegionSource {
   type: "ascii";
   text?: string;
@@ -63,11 +81,11 @@ export interface RegionWiring {
   deamon?: {
     mask?: string;
     shape?: string;
-    centroid?: Record<string, unknown>;
+    centroid?: CentroidConfig;
     fixed?: boolean;
     excitatory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
     inhibitory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
-    learning?: { rate?: number };
+    learning?: { rate?: number; exclude_range?: [number, number] };
   };
   process_mode?: string;
   tension?: { function: Record<string, number> };
@@ -130,11 +148,11 @@ export interface Connection {
   deamon?: {
     mask?: string;
     shape?: string;
-    centroid?: Record<string, unknown>;
+    centroid?: CentroidConfig;
     fixed?: boolean;
     excitatory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
     inhibitory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
-    learning?: { rate?: number };
+    learning?: { rate?: number; exclude_range?: [number, number] };
   };
   /** @deprecated use deamon */
   mask?: string;

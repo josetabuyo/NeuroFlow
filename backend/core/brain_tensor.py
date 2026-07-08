@@ -310,7 +310,8 @@ class BrainTensor:
     def learn(
         self,
         lr_per_syn: torch.Tensor,
-        conn_exclude_range: tuple[float, float] | None = None,
+        excl_lo: torch.Tensor | None = None,
+        excl_hi: torch.Tensor | None = None,
     ) -> None:
         """Tension-modulated Hebbian learning with a per-synapse learning rate.
 
@@ -318,8 +319,11 @@ class BrainTensor:
           - lr_per_syn [NR, max_syn]: effective learning rate per synapse. It is
             built once in setup() (intra-region wiring rate vs. per-connection rate)
             and updated on soft-updates. A 0.0 entry freezes that synapse.
-          - conn_exclude_range: dead zone for cross-region synapses (skip update
-            when the current weight is inside [lo, hi]).
+          - excl_lo/excl_hi [NR, max_syn]: per-synapse dead-zone bounds — skip the
+            update where the current weight lies in [excl_lo, excl_hi] for that
+            synapse. Any learning source (intra-region, nerve, or full connection)
+            can configure its own range; synapses without one get a sentinel
+            (lo > hi) that never matches.
         """
         NR = self.n_real
 
@@ -328,10 +332,9 @@ class BrainTensor:
 
         delta = lr_per_syn * tension * (source_vals - self.pesos_sinapsis)
 
-        if conn_exclude_range is not None:
-            lo, hi = conn_exclude_range
-            in_range = (self.pesos_sinapsis >= lo) & (self.pesos_sinapsis <= hi)
-            delta = delta.masked_fill(self.es_cross_region & in_range, 0.0)
+        if excl_lo is not None and excl_hi is not None:
+            in_range = (self.pesos_sinapsis >= excl_lo) & (self.pesos_sinapsis <= excl_hi)
+            delta = delta.masked_fill(in_range, 0.0)
 
         self.pesos_sinapsis = (self.pesos_sinapsis + delta * self.mascara_valida).clamp(0.0, 1.0)
 

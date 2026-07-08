@@ -297,11 +297,15 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
 
     centroid = wiring.get("centroid")
     if centroid:
-        explicit = centroid.get("shift", [0, 0])
-        sdx, sdy = int(explicit[0]), int(explicit[1])
-        if sdx != 0 or sdy != 0:
-            for dendrite in mask:
-                dendrite["offsets"] = _shift(dendrite["offsets"], sdx, sdy)
+        shift = centroid.get("shift", [0, 0])
+        # "twist" is a per-neuron rotational shift — depends on each neuron's
+        # absolute grid position, so it can't be baked into this shared mask
+        # template. It's applied later, per-neuron, in Constructor.aplicar_mascara_2d.
+        if isinstance(shift, (list, tuple)):
+            sdx, sdy = int(shift[0]), int(shift[1])
+            if sdx != 0 or sdy != 0:
+                for dendrite in mask:
+                    dendrite["offsets"] = _shift(dendrite["offsets"], sdx, sdy)
 
     return mask
 

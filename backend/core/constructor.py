@@ -7,6 +7,7 @@ The resulting Brain is compiled to BrainTensor for parallel processing.
 
 from __future__ import annotations
 
+import math
 import random
 
 from .sinapsis import Sinapsis
@@ -177,6 +178,7 @@ class Constructor:
         *,
         random_weights: bool = True,
         centroid_jitter: int = 0,
+        twist: dict[str, object] | None = None,
         border: str = "connected",
     ) -> None:
         """Apply a connection mask to every neuron in the 2D grid.
@@ -194,15 +196,61 @@ class Constructor:
             random_weights: If True, synapses without explicit pesos_sinapsis
                 get random weights in [0.2, 1.0]. If False, they get 1.0.
                 Dendrites with pesos_sinapsis always use those exact values.
+            twist: Optional rotational shift, overrides centroid_jitter when set:
+                {"center": [cx, cy], "direction": "cw" | "ccw",
+                 "max_magnitude": float}  # scales 0 at center -> max_magnitude at
+                                          # the farthest grid corner, OR
+                {"center": [cx, cy], "direction": "cw" | "ccw",
+                 "fix_magnitude": float}  # constant magnitude everywhere (except
+                                          # exactly at the center, which has none)
+                Every neuron's whole mask is translated by a vector tangent to the
+                circle around (cx, cy) through that neuron.
             border: "connected" (toroidal wrap-around, default) or "cut"
                 (out-of-bounds offsets are dropped; border neurons get fewer synapses).
         """
         cut = border == "cut"
+
+        twist_center: tuple[float, float] | None = None
+        twist_sign = 1.0
+        twist_max_magnitude = 0.0
+        twist_fix_magnitude: float | None = None
+        twist_max_radius = 1.0
+        if twist:
+            cx, cy = twist["center"]  # type: ignore[misc]
+            twist_center = (float(cx), float(cy))
+            twist_sign = 1.0 if twist.get("direction", "cw") == "cw" else -1.0  # type: ignore[union-attr]
+            if "fix_magnitude" in twist:
+                twist_fix_magnitude = float(twist["fix_magnitude"])  # type: ignore[index]
+            else:
+                twist_max_magnitude = float(twist.get("max_magnitude", 0.0))  # type: ignore[union-attr]
+                corners = [(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)]
+                twist_max_radius = max(
+                    math.hypot(px - twist_center[0], py - twist_center[1]) for px, py in corners
+                ) or 1.0
+
         for y in range(height):
             for x in range(width):
                 neurona_destino = brain.get_neurona(self.key_by_coord(x, y))
-                jdx = random.randint(-centroid_jitter, centroid_jitter) if centroid_jitter else 0
-                jdy = random.randint(-centroid_jitter, centroid_jitter) if centroid_jitter else 0
+                if twist_center is not None:
+                    tdx = x - twist_center[0]
+                    tdy = y - twist_center[1]
+                    r = math.hypot(tdx, tdy)
+                    if r > 0:
+                        # Tangent to the circle through (x, y) around the twist
+                        # center. "cw"/"ccw" as seen on a row-major grid drawn
+                        # top-down (row 0 at the top, x growing right).
+                        tan_x, tan_y = (-tdy, tdx) if twist_sign > 0 else (tdy, -tdx)
+                        magnitude = (
+                            twist_fix_magnitude if twist_fix_magnitude is not None
+                            else twist_max_magnitude * (r / twist_max_radius)
+                        )
+                        jdx = round(tan_x / r * magnitude)
+                        jdy = round(tan_y / r * magnitude)
+                    else:
+                        jdx = jdy = 0
+                else:
+                    jdx = random.randint(-centroid_jitter, centroid_jitter) if centroid_jitter else 0
+                    jdy = random.randint(-centroid_jitter, centroid_jitter) if centroid_jitter else 0
 
                 for def_dendrita in mascara:
                     peso_dendrita: float = def_dendrita["peso_dendrita"]  # type: ignore[assignment]

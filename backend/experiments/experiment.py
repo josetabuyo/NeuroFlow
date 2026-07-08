@@ -616,7 +616,8 @@ class Experiment(Experimento):
         # Learning
         self.learning_enabled: bool = False
         self._lr_per_syn: torch.Tensor | None = None
-        self._conn_exclude_range: tuple[float, float] | None = None
+        self._excl_lo: torch.Tensor | None = None
+        self._excl_hi: torch.Tensor | None = None
 
         # Spiking
         self.adaptation_enabled: bool = False
@@ -857,9 +858,11 @@ class Experiment(Experimento):
             if rs is self._wiring_region:
                 centroid_cfg = rs.wiring_cfg.get("deamon", {}).get("centroid") or {}
                 centroid_jitter = 1 if centroid_cfg.get("random") else 0
+                twist_cfg = centroid_cfg.get("twist")
                 Constructor().aplicar_mascara_2d(
                     self.brain, rs.width, rs.height, mask,
                     random_weights=random_weights, centroid_jitter=centroid_jitter,
+                    twist=twist_cfg,
                     border=rs.border,
                 )
             else:
@@ -1217,6 +1220,12 @@ class Experiment(Experimento):
         group default; a polarity with no rate anywhere simply doesn't learn.
         NeuronaEntrada have no synapses, so they never appear. Recomputed from
         scratch on every soft update.
+
+        Also builds the per-synapse exclude_range dead-zone (excl_lo/excl_hi):
+        any ``learning.exclude_range`` — on a region's deamon wiring, a nerve
+        side, or a full connection — applies only to the synapses it governs,
+        not globally. Synapses with no exclude_range configured get a sentinel
+        range (lo > hi) that never matches any weight.
         """
         bt = self.brain_tensor
         if bt is None:
@@ -1224,14 +1233,25 @@ class Experiment(Experimento):
         NR = bt.n_real
         max_syn = bt.pesos_sinapsis.shape[1]
         lr = torch.zeros(NR, max_syn, dtype=torch.float32, device=bt.device)
+        excl_lo = torch.full((NR, max_syn), 2.0, dtype=torch.float32, device=bt.device)
+        excl_hi = torch.full((NR, max_syn), -1.0, dtype=torch.float32, device=bt.device)
         src_safe = bt.indices_fuente.clamp(0, bt.mascara_entrada.shape[0] - 1)
         dst_idx = torch.arange(NR, device=bt.device).unsqueeze(1).expand(NR, max_syn)
+
+        def _set_exclude_range(mask: torch.Tensor, er: object) -> None:
+            nonlocal excl_lo, excl_hi
+            if not er:
+                return
+            lo, hi = float(er[0]), float(er[1])  # type: ignore[index]
+            excl_lo = torch.where(mask, torch.full_like(excl_lo, lo), excl_lo)
+            excl_hi = torch.where(mask, torch.full_like(excl_hi, hi), excl_hi)
 
         # Intra-region wiring synapses
         for r in self._wiring_regions():
             in_region = (dst_idx >= r.start) & (dst_idx < r.end)
             local = in_region & ~bt.es_cross_region & bt.mascara_valida
-            exc_rate, inh_rate = _deamon_learning_rates(r.wiring_cfg.get("deamon") or {})
+            deamon_cfg = r.wiring_cfg.get("deamon") or {}
+            exc_rate, inh_rate = _deamon_learning_rates(deamon_cfg)
             if exc_rate is not None:
                 lr = torch.where(local & (bt.pesos_dendrita > 0), torch.full_like(lr, exc_rate), lr)
             if inh_rate is not None:
@@ -1240,9 +1260,10 @@ class Experiment(Experimento):
                 wlr = r.wiring_cfg.get("learning_rate")
                 if wlr:
                     lr = torch.where(local, torch.full_like(lr, float(wlr)), lr)
+            if exc_rate is not None or inh_rate is not None or r.wiring_cfg.get("learning_rate"):
+                _set_exclude_range(local, (deamon_cfg.get("learning") or {}).get("exclude_range"))
 
         # Cross-region connection synapses
-        exclude_range: tuple[float, float] | None = None
         for c in self._connections:
             if "nerve" in c:
                 nerve_cfg = c["nerve"]
@@ -1271,6 +1292,8 @@ class Experiment(Experimento):
                             lr = torch.where(conn_mask & (bt.pesos_dendrita > 0), torch.full_like(lr, exc_rate), lr)
                         if inh_rate is not None:
                             lr = torch.where(conn_mask & (bt.pesos_dendrita < 0), torch.full_like(lr, inh_rate), lr)
+                        if exc_rate is not None or inh_rate is not None:
+                            _set_exclude_range(conn_mask, (deamon_cfg.get("learning") or {}).get("exclude_range"))
                         continue
 
                     learning = side.get("learning")
@@ -1280,6 +1303,7 @@ class Experiment(Experimento):
                     if rate == 0.0:
                         continue
                     lr = torch.where(conn_mask, torch.full_like(lr, rate), lr)
+                    _set_exclude_range(conn_mask, learning.get("exclude_range"))
                 continue
             s = self._regions_by_id.get(c.get("from"))
             d = self._regions_by_id.get(c.get("to"))
@@ -1287,11 +1311,10 @@ class Experiment(Experimento):
                 continue
             _full = c.get("full") or {}
             learning = _full.get("learning")
+            er = None
             if isinstance(learning, dict):
                 rate = float(learning.get("rate", 0.0))
                 er = learning.get("exclude_range")
-                if er:
-                    exclude_range = (float(er[0]), float(er[1]))
             else:
                 rate = float(_full.get("learning_rate", 0.0))
             if rate == 0.0:
@@ -1300,9 +1323,11 @@ class Experiment(Experimento):
             src_in = (src_safe >= s.start) & (src_safe < s.end)
             conn_mask = dst_in & src_in & bt.mascara_valida
             lr = torch.where(conn_mask, torch.full_like(lr, rate), lr)
+            _set_exclude_range(conn_mask, er)
 
         self._lr_per_syn = lr
-        self._conn_exclude_range = exclude_range
+        self._excl_lo = excl_lo
+        self._excl_hi = excl_hi
         self.learning_enabled = bool((lr != 0).any().item())
 
     # ── Orchestrator ──
@@ -1818,7 +1843,8 @@ class Experiment(Experimento):
         if self.learning_enabled and self._lr_per_syn is not None:
             self.brain_tensor.learn(
                 lr_per_syn=self._lr_per_syn,
-                conn_exclude_range=self._conn_exclude_range,
+                excl_lo=self._excl_lo,
+                excl_hi=self._excl_hi,
             )
 
         self.generation += 1
