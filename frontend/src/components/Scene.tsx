@@ -399,7 +399,9 @@ export function Scene({
       ref={containerRef}
       style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}
     >
-      {/* ── Pannable/zoomable world (background pan-catcher, kept below the HUD) ── */}
+      {/* ── Background pan-catcher: fixed, untransformed, always covers the
+          full viewport so panning works anywhere — not just near the
+          current (transformed) content, kept below the HUD ── */}
       <div
         onPointerDown={handleBackgroundPointerDown}
         onPointerMove={handleBackgroundPointerMove}
@@ -407,8 +409,6 @@ export function Scene({
         style={{
           position: "absolute",
           inset: 0,
-          transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
-          transformOrigin: "0 0",
           cursor: isPanning ? "grabbing" : "grab",
         }}
       />
