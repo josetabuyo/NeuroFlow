@@ -196,7 +196,7 @@ export function useExperiment(): UseExperimentReturn {
           setGeneration(msg.generation);
           generationRef.current = msg.generation;
           setStats(msg.stats);
-          setPerf(msg.perf ?? null);
+          if (msg.perf) setPerf(msg.perf);
           setTensionGrid(msg.tension_grid ?? null);
           setInputFrame(msg.input_frame ?? null);
           if (msg.regions) setRegions(msg.regions);

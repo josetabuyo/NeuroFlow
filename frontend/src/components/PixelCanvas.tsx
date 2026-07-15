@@ -87,6 +87,8 @@ export function PixelCanvas({
   const [isDragging, setIsDragging] = useState(false);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const lastCellRef = useRef<string | null>(null);
+  const hoverCellRef = useRef<{ x: number; y: number } | null>(null);
+  const paintIntervalRef = useRef<number | null>(null);
   const paintedCellsRef = useRef<{ x: number; y: number }[]>([]);
   const paintedKeysRef = useRef<Set<string>>(new Set());
 
@@ -244,6 +246,30 @@ export function PixelCanvas({
     }
   };
 
+  const onCellDragRef = useRef(onCellDrag);
+  onCellDragRef.current = onCellDrag;
+
+  // While the mouse is held down, keeps painting the cell under the cursor even
+  // if the cursor itself doesn't move — otherwise a stationary held-down mouse
+  // silently stops painting since nothing but mousemove used to trigger a paint.
+  const stopPaintInterval = useCallback(() => {
+    if (paintIntervalRef.current != null) {
+      window.clearInterval(paintIntervalRef.current);
+      paintIntervalRef.current = null;
+    }
+  }, []);
+
+  const startPaintInterval = useCallback(() => {
+    if (paintIntervalRef.current != null) return;
+    paintIntervalRef.current = window.setInterval(() => {
+      const cell = hoverCellRef.current;
+      if (!cell) return;
+      trackCell(cell);
+      lastCellRef.current = `${cell.x},${cell.y}`;
+      onCellDragRef.current?.(cell.x, cell.y);
+    }, 16);
+  }, []);
+
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const cell = getCellFromEvent(e);
     if (!cell) return;
@@ -252,14 +278,17 @@ export function PixelCanvas({
     trackCell(cell);
     setIsDragging(true);
     setHoverCell(cell);
+    hoverCellRef.current = cell;
     lastCellRef.current = `${cell.x},${cell.y}`;
     onCellClick(cell.x, cell.y);
-  }, [getCellFromEvent, onCellClick]);
+    startPaintInterval();
+  }, [getCellFromEvent, onCellClick, startPaintInterval]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const cell = getCellFromEvent(e);
     if (!cell) return;
     setHoverCell(cell);
+    hoverCellRef.current = cell;
 
     if (!isDragging) return;
     const key = `${cell.x},${cell.y}`;
@@ -270,6 +299,7 @@ export function PixelCanvas({
   }, [isDragging, getCellFromEvent, onCellDrag]);
 
   const handleMouseUp = useCallback(() => {
+    stopPaintInterval();
     if (paintedCellsRef.current.length > 0) {
       onDragEnd?.(paintedCellsRef.current);
       paintedCellsRef.current = [];
@@ -277,10 +307,11 @@ export function PixelCanvas({
     }
     setIsDragging(false);
     lastCellRef.current = null;
-  }, [onDragEnd]);
+  }, [onDragEnd, stopPaintInterval]);
 
   const handleMouseLeave = useCallback(() => {
     setHoverCell(null);
+    hoverCellRef.current = null;
     lastCellRef.current = null;
   }, []);
 
@@ -289,6 +320,7 @@ export function PixelCanvas({
 
   useEffect(() => {
     const up = () => {
+      stopPaintInterval();
       if (paintedCellsRef.current.length > 0) {
         onDragEndRef.current?.(paintedCellsRef.current);
         paintedCellsRef.current = [];
@@ -298,8 +330,11 @@ export function PixelCanvas({
       lastCellRef.current = null;
     };
     window.addEventListener("mouseup", up);
-    return () => window.removeEventListener("mouseup", up);
-  }, []);
+    return () => {
+      window.removeEventListener("mouseup", up);
+      stopPaintInterval();
+    };
+  }, [stopPaintInterval]);
 
   return (
     <div ref={containerRef} style={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>

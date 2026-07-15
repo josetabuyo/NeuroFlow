@@ -67,6 +67,8 @@ interface SceneProps {
   brushSize: number;
   brushMode: "activate" | "deactivate";
   inspectMode: boolean;
+  drawOpen: boolean;
+  onToggleDraw: () => void;
   canInspect: boolean;
   onIncrease: () => void;
   onDecrease: () => void;
@@ -95,7 +97,7 @@ export function Scene({
   regionOverlays,
   nerveCircles,
   onCellClick, onCellDrag, onCellDragEnd,
-  brushSize, brushMode, inspectMode, canInspect,
+  brushSize, brushMode, inspectMode, drawOpen, onToggleDraw, canInspect,
   onIncrease, onDecrease, onToggleMode, onToggleInspect, onToggleTension,
   isInitializing,
 }: SceneProps) {
@@ -104,7 +106,6 @@ export function Scene({
   const [oneToOne, setOneToOne] = useState(false);
   const [boxes, setBoxes] = useState<Boxes>({});
   const [layoutKey, setLayoutKey] = useState(0);
-  const [drawOpen, setDrawOpen] = useState(false);
 
   // Regions collapsed to a small square — skips mounting their PixelCanvas,
   // so the (potentially expensive) grid draw is not paid while minimized.
@@ -325,9 +326,12 @@ export function Scene({
 
     const regionBox = boxes[inspectedRegionId];
     if (!regionBox) return;
-    // Place panel to the left of the region box, outside any neuron grid
-    const panelX = Math.max(MARGIN, regionBox.x - INFO_W - GAP);
-    const panelY = regionBox.y + HEADER_H;
+    // Place panel below the region box, outside any neuron grid — anchoring
+    // to the left (regionBox.x - INFO_W - GAP) used to get clamped back under
+    // the box itself whenever the box sat near the canvas's left edge,
+    // covering the grid it was inspecting.
+    const panelX = Math.max(MARGIN, regionBox.x);
+    const panelY = regionBox.y + regionBox.h + GAP;
     setInfoPanelPos({ x: panelX, y: panelY });
   }, [inspectedCell?.x, inspectedCell?.y, inspectedRegionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -471,7 +475,7 @@ export function Scene({
           >⊙</button>
           <div style={{ position: "relative" }}>
             <button
-              onClick={() => setDrawOpen(o => !o)}
+              onClick={onToggleDraw}
               title={drawOpen ? "Close draw palette" : "Open draw palette"}
               aria-label="Draw tool"
               style={{
@@ -581,7 +585,7 @@ export function Scene({
               onDragEnd={(cells) => onCellDragEnd?.(cells, id)}
               brushSize={brushSize}
               brushMode={brushMode}
-              paintActive={!inspectMode}
+              paintActive={!inspectMode && drawOpen}
             />
 
             {/* Label column beside output regions */}

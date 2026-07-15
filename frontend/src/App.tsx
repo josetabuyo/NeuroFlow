@@ -196,6 +196,10 @@ function App() {
     toggleBrushMode,
   } = useExperiment();
 
+  // Whether the pincel (draw tool) toggle button is active — painting on the
+  // canvas is only enabled while this is true, matching the button's checked state.
+  const [drawOpen, setDrawOpen] = useState(false);
+
   // When backend sends back the normalized config, update the editor
   useEffect(() => {
     if (normalizedConfig) {
@@ -414,7 +418,7 @@ function App() {
     (x: number, y: number, regionId?: string) => {
       if (inspectMode) {
         inspect(x, y, regionId);
-      } else {
+      } else if (drawOpen) {
         const cells = computeBrushCells(x, y, regionId);
         const value = brushMode === "activate" ? 1.0 : 0.0;
         // origin/radius are the raw (unexpanded) brush center+size — the
@@ -423,7 +427,7 @@ function App() {
         paint(cells, value, regionId, { x, y }, Math.floor(brushSize / 2));
       }
     },
-    [inspectMode, inspect, computeBrushCells, brushMode, paint, brushSize]
+    [inspectMode, inspect, drawOpen, computeBrushCells, brushMode, paint, brushSize]
   );
 
   // Coalesces paints from rapid drag movement into at most one `paint` per
@@ -456,6 +460,7 @@ function App() {
         inspect(x, y, regionId);
         return;
       }
+      if (!drawOpen) return;
       const cells = computeBrushCells(x, y, regionId);
       if (!dragFrameRef.current) {
         dragFrameRef.current = { cellsByKey: new Map(), lastPoint: null, regionId, scheduled: false };
@@ -469,7 +474,7 @@ function App() {
         requestAnimationFrame(flushDragFrame);
       }
     },
-    [inspectMode, inspect, computeBrushCells, flushDragFrame]
+    [inspectMode, inspect, drawOpen, computeBrushCells, flushDragFrame]
   );
 
   // Clears the live draw-cursor stamp on mouse-up/mouse-leave so nothing
@@ -477,11 +482,11 @@ function App() {
   // every tick and only show the cursor while actively painting.
   const handleCellDragEnd = useCallback(
     (_cells: { x: number; y: number }[], regionId?: string) => {
-      if (inspectMode) return;
+      if (inspectMode || !drawOpen) return;
       const value = brushMode === "activate" ? 1.0 : 0.0;
       paint([], value, regionId);
     },
-    [inspectMode, brushMode, paint]
+    [inspectMode, drawOpen, brushMode, paint]
   );
 
   const handlePlay = useCallback(
@@ -618,6 +623,8 @@ function App() {
               brushSize={brushSize}
               brushMode={brushMode}
               inspectMode={inspectMode}
+              drawOpen={drawOpen}
+              onToggleDraw={() => setDrawOpen((o) => !o)}
               canInspect={state === "ready" || state === "paused" || state === "running"}
               onIncrease={increaseBrushSize}
               onDecrease={decreaseBrushSize}
