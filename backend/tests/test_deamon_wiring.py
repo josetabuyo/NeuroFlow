@@ -20,16 +20,13 @@ from core.masks import _compute_preview_grid, _ring_ci, compile_deamon_wiring
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _square_wiring(exc_noise=None, inh_noise=None, sectors=4):
-    w = {
-        "shape": "square",
-        "excitatory": {"offset": 1, "weights": [1, 1, 1]},
-        "inhibitory": {"offset": 4, "weights": [1, 1, 1], "sectors": sectors},
-    }
+    exc = {"id": "excitatory", "offset": 1, "weights": [1, 1, 1]}
+    inh = {"id": "inhibitory", "offset": 4, "weights": [1, 1, 1], "sectors": sectors}
     if exc_noise is not None:
-        w["excitatory"]["noise"] = exc_noise
+        exc["noise"] = exc_noise
     if inh_noise is not None:
-        w["inhibitory"]["noise"] = inh_noise
-    return w
+        inh["noise"] = inh_noise
+    return {"shape": "square", "groups": [exc, inh]}
 
 
 def _build_brain_with_mask(mask, random_weights=True, width=20, height=20):
@@ -92,8 +89,10 @@ class TestCompileDeamonWiringRandomNoise:
     def test_square_flower_petals_get_random_noise(self):
         wiring = {
             "shape": "square_flower",
-            "excitatory": {"offset": 1, "weights": [1], "noise": 0.3},
-            "inhibitory": {"offset": 5, "weights": [1], "multiplier": 4, "noise": 0.3},
+            "groups": [
+                {"id": "excitatory", "offset": 1, "weights": [1], "noise": 0.3},
+                {"id": "inhibitory", "offset": 5, "weights": [1], "multiplier": 4, "noise": 0.3},
+            ],
         }
         mask = compile_deamon_wiring(wiring)
         inh = [d for d in mask if d["peso_dendrita"] < 0]
@@ -273,8 +272,10 @@ class TestPreviewGridNoise:
 def _circle_wiring(sectors=4):
     return {
         "shape": "circle",
-        "excitatory": {"offset": 1, "weights": [1.0, 0.5]},
-        "inhibitory": {"offset": 4, "weights": [1.0, 1.0], "sectors": sectors},
+        "groups": [
+            {"id": "excitatory", "offset": 1, "weights": [1.0, 0.5]},
+            {"id": "inhibitory", "offset": 4, "weights": [1.0, 1.0], "sectors": sectors},
+        ],
     }
 
 
@@ -328,8 +329,10 @@ class TestCircleFlowerShape:
     def test_structure_same_as_square_flower(self):
         wiring = {
             "shape": "circle_flower",
-            "excitatory": {"offset": 1, "weights": [1.0]},
-            "inhibitory": {"offset": 5, "weights": [1.0], "multiplier": 4},
+            "groups": [
+                {"id": "excitatory", "offset": 1, "weights": [1.0]},
+                {"id": "inhibitory", "offset": 5, "weights": [1.0], "multiplier": 4},
+            ],
         }
         mask = compile_deamon_wiring(wiring)
         exc = [d for d in mask if d["peso_dendrita"] > 0]
@@ -345,7 +348,9 @@ class TestCircleFlowerShape:
         """
         wiring = {
             "shape": "circle_flower",
-            "inhibitory": {"offset": 5, "weights": [1.0, 0.5], "multiplier": 1},
+            "groups": [
+                {"id": "inhibitory", "offset": 5, "weights": [1.0, 0.5], "multiplier": 1},
+            ],
         }
         mask = compile_deamon_wiring(wiring)
         petal = mask[0]
@@ -359,10 +364,70 @@ class TestCircleFlowerShape:
     def test_noise_defaults_on_circle_flower(self):
         wiring = {
             "shape": "circle_flower",
-            "excitatory": {"offset": 1, "weights": [1.0]},
-            "inhibitory": {"offset": 5, "weights": [1.0], "multiplier": 3},
+            "groups": [
+                {"id": "excitatory", "offset": 1, "weights": [1.0]},
+                {"id": "inhibitory", "offset": 5, "weights": [1.0], "multiplier": 3},
+            ],
         }
         mask = compile_deamon_wiring(wiring)
         assert all(d["random_noise"] == 0.5 for d in mask)
+
+
+# ── grupo_id from declared id ───────────────────────────────────────────────
+
+class TestGrupoIdFromDeclaredId:
+    """A group's declared `id` becomes every one of its dendrites' grupo_id —
+    used by process_mode="group_avg" tension. Falls back to a positional
+    "g{index}" only when the group doesn't declare one. `id` never determines
+    polarity — that's always the sign of the group's resolved weight."""
+
+    def test_declared_id_used_as_grupo_id_square(self):
+        wiring = {
+            "shape": "square",
+            "groups": [
+                {"id": "first_ring", "offset": 1, "weights": [1]},
+                {"id": "second_ring", "offset": 3, "weights": [1], "sectors": 4},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        grupo_ids = {d["grupo_id"] for d in mask}
+        assert grupo_ids == {"first_ring", "second_ring"}
+
+    def test_missing_id_falls_back_to_positional(self):
+        wiring = {
+            "shape": "square",
+            "groups": [
+                {"offset": 1, "weights": [1]},
+                {"offset": 3, "weights": [1], "sectors": 4},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        grupo_ids = {d["grupo_id"] for d in mask}
+        assert grupo_ids == {"g0", "g1"}
+
+    def test_declared_id_used_as_grupo_id_flower(self):
+        wiring = {
+            "shape": "square_flower",
+            "groups": [
+                {"id": "core", "offset": 1, "weights": [1.0]},
+                {"id": "petals", "offset": 5, "weights": [1.0], "multiplier": 3},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        grupo_ids = {d["grupo_id"] for d in mask}
+        assert grupo_ids == {"core", "petals"}
+
+    def test_declared_id_does_not_affect_polarity(self):
+        """A group named "second_ring" with a positive weight still resolves
+        positive — the id is a label, not a polarity source."""
+        wiring = {
+            "shape": "square",
+            "groups": [
+                {"id": "second_ring", "weight": 0.5, "offset": 1, "weights": [1]},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        assert mask[0]["peso_dendrita"] == 0.5
+        assert mask[0]["grupo_id"] == "second_ring"
 
 

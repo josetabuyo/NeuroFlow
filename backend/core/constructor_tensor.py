@@ -74,6 +74,13 @@ class ConstructorTensor:
         pesos_d_np = np.zeros((N, max_syn), dtype=np.float32)
         mascara_v_np = np.zeros((N, max_syn), dtype=np.bool_)
         dend_ids_np = np.zeros((N, max_syn), dtype=np.int64)
+        # Per-dendrite (not per-synapse) group index: dendrites sharing a
+        # Dendrita.grupo_id (e.g. the same deamon groups[] entry, or the same
+        # nerve/full connection) get the same local index here, so group_avg
+        # can average them together before splitting by sign. A dendrite with
+        # no declared grupo_id ("" — e.g. Wolfram row wiring) always gets its
+        # own singleton index, never merged with anything else.
+        grupo_idx_np = np.full((N, max_dend), -1, dtype=np.int64)
 
         for i, neurona in enumerate(brain.neuronas):
             valores_np[i] = neurona.valor
@@ -87,6 +94,7 @@ class ConstructorTensor:
             pd: list[float] = []
             di: list[int] = []
 
+            grupo_id_to_local: dict[str, int] = {}
             for d_idx, dendrita in enumerate(neurona.dendritas):
                 dw = dendrita.peso
                 for sinapsis in dendrita.sinapsis:
@@ -94,6 +102,8 @@ class ConstructorTensor:
                     fi.append(id_to_idx.get(sinapsis.neurona_entrante.id, N))
                     pd.append(dw)
                     di.append(d_idx)
+                key = dendrita.grupo_id or f"__singleton__{d_idx}"
+                grupo_idx_np[i, d_idx] = grupo_id_to_local.setdefault(key, len(grupo_id_to_local))
 
             k = len(ps)
             if k:
@@ -111,6 +121,7 @@ class ConstructorTensor:
         pesos_dendrita = torch.from_numpy(pesos_d_np)
         mascara_valida = torch.from_numpy(mascara_v_np)
         dendrita_ids = torch.from_numpy(dend_ids_np)
+        dendrite_grupo_ids = torch.from_numpy(grupo_idx_np)
 
         has_border = (indices_fuente == N).any().item()
         if has_border:
@@ -140,6 +151,7 @@ class ConstructorTensor:
             pesos_dendrita=pesos_dendrita,
             mascara_valida=mascara_valida,
             dendrita_ids=dendrita_ids,
+            dendrite_grupo_ids=dendrite_grupo_ids,
             max_dendritas=max_dend,
             umbrales=umbrales,
             mascara_entrada=mascara_entrada,

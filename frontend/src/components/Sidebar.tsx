@@ -968,7 +968,7 @@ type ConfigRow = { section: string; key: string; type: "soft" | "hard"; desc: st
 // `key` is the literal single JSON property name — what you'd actually type in a
 // config. It's the unit the search/autocomplete/usage-lookup operate on. The same
 // key can legitimately appear in more than one row (e.g. "weight" shows up under
-// full, deamon.excitatory and nerve.from) — that's real, not a bug.
+// full, deamon.groups and nerve.from) — that's real, not a bug.
 const CONFIG_ROWS: ConfigRow[] = [
   { section: "Region (top-level)", key: "process_mode", type: "soft", desc: "min_vs_max · avg_vs_avg · avg_vs_avg_normalized · sum · group_avg" },
   { section: "Region (top-level)", key: "function", type: "soft", desc: 'tension.function — {"x":1,"x_pow_2":3,"x_pow_3":20,"b":-0.7} polynomial + bias (b shifts firing point; threshold = 0 always)' },
@@ -981,20 +981,19 @@ const CONFIG_ROWS: ConfigRow[] = [
   { section: "Region (top-level)", key: "min_size", type: "hard", desc: "daemon.min_size — cluster detection: minimum cluster size. Default 3" },
 
   { section: "Connection › on (intra-region wiring)", key: "on", type: "hard", desc: 'region id — e.g. "tissue". Marks this as an intra-region wiring entry' },
-  { section: "Connection › on (intra-region wiring)", key: "deamon", type: "hard", desc: "daemon wiring object. Contains mask or shape/excitatory/inhibitory" },
+  { section: "Connection › on (intra-region wiring)", key: "deamon", type: "hard", desc: "daemon wiring object. Contains mask, or shape + groups[] (dendrite groups, no fixed excitatory/inhibitory keys)" },
   { section: "Connection › on (intra-region wiring)", key: "mask", type: "hard", desc: 'deamon.mask — mask string, e.g. "deamon_e3_g2_i12_de1_di1"' },
-  { section: "Connection › on (intra-region wiring)", key: "shape", type: "hard", desc: "deamon.shape — daemon footprint shape" },
+  { section: "Connection › on (intra-region wiring)", key: "shape", type: "hard", desc: "deamon.shape — daemon footprint shape (square, circle, square_flower, circle_flower). Default circle" },
   { section: "Connection › on (intra-region wiring)", key: "centroid", type: "hard", desc: "deamon.centroid — daemon center placement" },
-  { section: "Connection › on (intra-region wiring)", key: "weight", type: "hard", desc: "deamon.excitatory.weight — global excitatory dendrite weight" },
-  { section: "Connection › on (intra-region wiring)", key: "weight", type: "hard", desc: "deamon.inhibitory.weight — global inhibitory dendrite weight (negative)" },
-  { section: "Connection › on (intra-region wiring)", key: "rate", type: "soft", desc: "deamon.learning.rate — intra-region Hebbian rate" },
-  { section: "Connection › on (intra-region wiring)", key: "exclude_range", type: "soft", desc: "deamon.learning.exclude_range — [lo, hi], skip weight updates for this dendrite group while the weight is in this range" },
-  { section: "Connection › on (intra-region wiring)", key: "density", type: "hard", desc: "excitatory.density — excitatory dendrite sampling fraction" },
-  { section: "Connection › on (intra-region wiring)", key: "noise", type: "hard", desc: "excitatory.noise — excitatory weight jitter" },
-  { section: "Connection › on (intra-region wiring)", key: "multiplier", type: "hard", desc: "inhibitory.multiplier — inhibitory ring strength multiplier" },
-  { section: "Connection › on (intra-region wiring)", key: "density", type: "hard", desc: "inhibitory.density — inhibitory dendrite sampling fraction" },
-  { section: "Connection › on (intra-region wiring)", key: "noise", type: "hard", desc: "inhibitory.noise — inhibitory weight jitter" },
-  { section: "Connection › on (intra-region wiring)", key: "sectors", type: "hard", desc: "inhibitory.sectors — number of angular sectors in the inhibitory ring" },
+  { section: "Connection › on (intra-region wiring)", key: "groups", type: "hard", desc: "deamon.groups — array of dendrite groups; each is {id, weight?, offset, weights, density?, noise?, sectors?, multiplier?, learning?}" },
+  { section: "Connection › on (intra-region wiring)", key: "id", type: "hard", desc: "groups[].id — becomes the group's grupo_id for process_mode=\"group_avg\" tension voting. Purely a label (e.g. \"first_ring\"/\"second_ring\" by nesting convention) — never determines polarity, that's always the sign of weight. Omitted → falls back to a positional \"g0\"/\"g1\"/..." },
+  { section: "Connection › on (intra-region wiring)", key: "weight", type: "hard", desc: "groups[].weight — this group's dendrite weight; its sign is the polarity. Defaults to +1 for a single dendrite, -1 once sectors/multiplier make it partitioned" },
+  { section: "Connection › on (intra-region wiring)", key: "rate", type: "soft", desc: "deamon.learning.rate (fallback) or groups[].learning.rate (per-group override) — Hebbian rate" },
+  { section: "Connection › on (intra-region wiring)", key: "exclude_range", type: "soft", desc: "groups[].learning.exclude_range — [lo, hi], skip weight updates for this dendrite group while the weight is in this range" },
+  { section: "Connection › on (intra-region wiring)", key: "density", type: "hard", desc: "groups[].density — dendrite sampling fraction for this group" },
+  { section: "Connection › on (intra-region wiring)", key: "noise", type: "hard", desc: "groups[].noise — per-neuron weight jitter for this group" },
+  { section: "Connection › on (intra-region wiring)", key: "multiplier", type: "hard", desc: "groups[].multiplier — petal count (flower shapes only); presence marks this group as partitioned" },
+  { section: "Connection › on (intra-region wiring)", key: "sectors", type: "hard", desc: "groups[].sectors — number of angular sectors (square/circle shapes only); presence marks this group as partitioned" },
   { section: "Connection › on (intra-region wiring)", key: "shift", type: "hard", desc: "centroid.shift — [dx, dy] static offset of the daemon centroid. Stacks with centroid.twist if both are set" },
   { section: "Connection › on (intra-region wiring)", key: "twist", type: "hard", desc: "centroid.twist — {center:[cx,cy], direction:\"cw\"|\"ccw\", max_magnitude|fix_magnitude}. Rotational shift tangent to the circle around center. max_magnitude scales 0 at center -> max at the farthest grid corner; fix_magnitude is constant everywhere (takes precedence if both given). Setting this alone enables twist mode (shift not required); adds on top of shift if both are set" },
   { section: "Connection › on (intra-region wiring)", key: "random", type: "hard", desc: "centroid.random — per-neuron random jitter (±1) of the shift. Default false. Ignored when centroid.twist is set" },

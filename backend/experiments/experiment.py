@@ -35,7 +35,7 @@ from core.brain import Brain
 from core.region import Region
 from core.sinapsis import Sinapsis
 from core.dendrita import Dendrita
-from core.masks import get_mask, get_mask_type, get_random_weights, compile_deamon_wiring
+from core.masks import get_mask, get_mask_type, get_random_weights, compile_deamon_wiring, resolve_group_weight
 from core.nerve import place_nerve_circles, circle_cells_with_weights, NerveCircle
 from core.ascii_renderer import render_char, apply_white_noise, apply_shift_noise, load_image_grid
 from .base import Experimento
@@ -67,7 +67,7 @@ class RegionState:
     source_type: str | None = None
     source_cfg: dict[str, Any] = field(default_factory=dict)
     wiring_cfg: dict[str, Any] = field(default_factory=dict)
-    delta_weight: dict[str, float] | None = None
+    delta_weight: dict[str, Any] | None = None
     umbral: float = 0.0
     process_mode: str = "min_vs_max"
     tension_fns: list[tuple[str, float]] = field(default_factory=list)
@@ -153,13 +153,75 @@ def _detect_daemons(
     return len(sizes), daemon_indices, noise_indices, sizes
 
 
+def _convert_deamon_groups(deamon: dict[str, Any]) -> dict[str, Any]:
+    """Convert a deamon block's deprecated {"excitatory": {...}, "inhibitory":
+    {...}} shape to groups[]. No-op if already groups[]-based or has neither
+    key. Shared by _migrate_config and scripts/migrate_deamon_groups.py so the
+    two can't drift out of sync. Ids are assigned by position convention
+    ("first_ring"/"second_ring") — never a source of polarity, that's always
+    the sign of each group's resolved weight."""
+    if "groups" in deamon or ("excitatory" not in deamon and "inhibitory" not in deamon):
+        return deamon
+    is_flower = deamon.get("shape") in ("square_flower", "circle_flower")
+    groups: list[dict[str, Any]] = []
+    if "excitatory" in deamon:
+        groups.append({"id": "first_ring", **deamon["excitatory"]})
+    if "inhibitory" in deamon:
+        inh = dict(deamon["inhibitory"])
+        inh.setdefault("multiplier" if is_flower else "sectors", 8 if is_flower else 12)
+        groups.append({"id": "second_ring", **inh})
+    new_deamon = {k: v for k, v in deamon.items() if k not in ("excitatory", "inhibitory")}
+    new_deamon["groups"] = groups
+    return new_deamon
+
+
+def _convert_delta_weight_entries(delta_weight: Any) -> Any:
+    """Convert a region's deprecated delta_weight shapes to the current
+    {"positive"?: magnitude, "negative"?: magnitude} dict. Both keys are
+    optional; each value is always a magnitude (>= 0) — the key itself is the
+    sole source of sign, since the parent field is already named
+    `delta_weight`. Handles:
+    - the old signed-value dict shape {"excitatory": e, "inhibitory": i}
+    - the intermediate id-list shape [{"id": "excitatory"|"inhibitory", "weight": signed}]
+    - the intermediate polarity-list shape [{"polarity": "positive"|"negative", "weight": magnitude}]
+    No-op if already the current {"positive"?, "negative"?} dict (or anything
+    else, e.g. None)."""
+    if isinstance(delta_weight, dict):
+        if "excitatory" in delta_weight or "inhibitory" in delta_weight:
+            result: dict[str, float] = {}
+            if delta_weight.get("excitatory") is not None:
+                result["positive"] = abs(delta_weight["excitatory"])
+            if delta_weight.get("inhibitory") is not None:
+                result["negative"] = abs(delta_weight["inhibitory"])
+            return result
+        return delta_weight
+    if isinstance(delta_weight, list):
+        result = {}
+        for entry in delta_weight:
+            if not isinstance(entry, dict):
+                continue
+            weight = entry.get("weight")
+            if weight is None:
+                continue
+            polarity = entry.get("polarity")
+            if polarity is None:
+                polarity = "positive" if weight >= 0 else "negative"
+            result[polarity] = abs(weight)
+        return result
+    return delta_weight
+
+
 def _migrate_config(config: dict[str, Any]) -> dict[str, Any]:
     """Migrate old-format connections and region wirings to the new canonical format.
 
     Old → new:
     - {"type":"full","weight":w,...} → {"full":{"weight":w,...}}
-    - {"type":"deamon","shape":s,"dendrite_exc_weight":w,...} → {"deamon":{"shape":s,"excitatory":{"weight":w,...},...}}
-    - region.wiring {"mask":m,"dendrite_exc_weight":w} → {"deamon":{"mask":m,"excitatory":{"weight":w}}}
+    - {"type":"deamon","shape":s,"dendrite_exc_weight":w,...} → {"deamon":{"shape":s,"groups":[{"id":"first_ring","weight":w,...}],...}}
+    - region.wiring {"mask":m,"dendrite_exc_weight":w} → {"deamon":{"mask":m,"groups":[{"id":"first_ring","weight":w}]}}
+    - deamon {"excitatory":{...},"inhibitory":{...}} (however it arrived, even
+      already deamon-wrapped) → deamon {"groups":[{"id":"first_ring",...},{"id":"second_ring",...}]}
+    - region.delta_weight {"excitatory":e,"inhibitory":i}, [{"id":...,"weight":signed}],
+      or [{"polarity":...,"weight":magnitude}] → {"positive"?:magnitude,"negative"?:magnitude}
     """
     import copy
     config = copy.deepcopy(config)
@@ -177,20 +239,20 @@ def _migrate_config(config: dict[str, Any]) -> dict[str, Any]:
             if "excitatory" in conn:
                 exc = dict(conn["excitatory"])
                 if exc_w is not None:
-                    exc = {"weight": exc_w, **{k: v for k, v in exc.items() if k != "weight"}}
+                    exc["weight"] = exc_w
                 deamon["excitatory"] = exc
             elif exc_w is not None:
                 deamon["excitatory"] = {"weight": exc_w}
             if "inhibitory" in conn:
                 inh = dict(conn["inhibitory"])
                 if inh_w is not None:
-                    inh = {"weight": inh_w, **{k: v for k, v in inh.items() if k != "weight"}}
+                    inh["weight"] = inh_w
                 deamon["inhibitory"] = inh
             elif inh_w is not None:
                 deamon["inhibitory"] = {"weight": inh_w}
             if "learning_rate" in conn:
                 deamon["learning"] = {"rate": conn["learning_rate"]}
-            new_conns.append({"on": conn["on"], "deamon": deamon})
+            new_conns.append({"on": conn["on"], "deamon": _convert_deamon_groups(deamon)})
         elif ctype == "full" or ("from" in conn and "to" in conn and "full" not in conn and ctype != "portion"):
             # Old-style inter-region full connection → full key
             full: dict[str, Any] = {}
@@ -204,12 +266,18 @@ def _migrate_config(config: dict[str, Any]) -> dict[str, Any]:
                 full["learning"] = {"rate": conn["learning_rate"]}
             new_conns.append({"from": conn["from"], "to": conn["to"], "full": full})
         else:
+            if isinstance(conn.get("deamon"), dict):
+                conn["deamon"] = _convert_deamon_groups(conn["deamon"])
             new_conns.append(conn)
     if config.get("connections") is not None:
         config["connections"] = new_conns
 
     for region in config.get("regions", []):
         w = region.get("wiring")
+        if w and isinstance(w.get("deamon"), dict):
+            w["deamon"] = _convert_deamon_groups(w["deamon"])
+        if "delta_weight" in region:
+            region["delta_weight"] = _convert_delta_weight_entries(region["delta_weight"])
         if not w or "deamon" in w:
             continue
         top_mask = w.get("mask", "")
@@ -224,7 +292,7 @@ def _migrate_config(config: dict[str, Any]) -> dict[str, Any]:
             deamon["excitatory"] = {"weight": exc_w}
         if inh_w is not None:
             deamon["inhibitory"] = {"weight": inh_w}
-        new_w: dict[str, Any] = {"deamon": deamon}
+        new_w: dict[str, Any] = {"deamon": _convert_deamon_groups(deamon)}
         for k in ("process_mode", "learning_rate", "tension"):
             if k in w:
                 new_w[k] = w[k]
@@ -427,7 +495,10 @@ def _apply_mask_to_neuron_grid(
                         peso = base * random.uniform(0.2, 1.0)
                     sinapsis_list.append(Sinapsis(neurona_entrante=src, peso=peso))
                 if sinapsis_list:
-                    dest.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=peso_d))
+                    dest.dendritas.append(Dendrita(
+                        sinapsis=sinapsis_list, peso=peso_d,
+                        grupo_id=dend_def.get("grupo_id", ""),
+                    ))
 
 
 def _compile_mask(wiring_cfg: dict[str, Any]) -> tuple[list[dict], bool]:
@@ -441,69 +512,86 @@ def _compile_mask(wiring_cfg: dict[str, Any]) -> tuple[list[dict], bool]:
         else:
             random_weights = not deamon_cfg.get("fixed", False)
             raw_mask = compile_deamon_wiring(deamon_cfg)
-        exc_w = deamon_cfg.get("excitatory", {}).get("weight")
-        inh_w = deamon_cfg.get("inhibitory", {}).get("weight")
+        # Only groups with an explicit `weight` override the compiled mask —
+        # groups without one already got their structural default baked in by
+        # compile_deamon_wiring (a no-op override for the inline-groups path,
+        # still needed for the named-preset `mask` path above).
+        weight_by_sign: dict[int, float] = {}
+        for group in deamon_cfg.get("groups", []):
+            w = group.get("weight")
+            if w is not None:
+                weight_by_sign[1 if w >= 0 else -1] = float(w)
     else:
         # Wolfram masks keep mask at wiring top level (no deamon key)
         mask_id = wiring_cfg.get("mask", "")
         random_weights = get_random_weights(mask_id)
         raw_mask = get_mask(mask_id)
-        exc_w = None
-        inh_w = None
-    if exc_w is None and inh_w is None:
+        weight_by_sign = {}
+    if not weight_by_sign:
         return raw_mask, random_weights
 
     mask: list[dict] = []
     for d in raw_mask:
         peso = d["peso_dendrita"]
-        if exc_w is not None and peso > 0:
-            mask.append({**d, "peso_dendrita": exc_w})
-        elif inh_w is not None and peso < 0:
-            mask.append({**d, "peso_dendrita": inh_w})
+        sign = 1 if peso > 0 else -1 if peso < 0 else 0
+        if sign in weight_by_sign:
+            mask.append({**d, "peso_dendrita": weight_by_sign[sign]})
         else:
             mask.append(d)
     return mask, random_weights
 
 
-def _apply_delta_weight(region: Region, delta_weight: dict[str, float]) -> None:
+def delta_weight_totals(
+    delta_weight: dict[str, Any],
+) -> tuple[float | None, float | None]:
+    """Resolve (excitatory_total, inhibitory_total) from a delta_weight spec.
+
+    `delta_weight` is a `{"positive"?: magnitude, "negative"?: magnitude}`
+    dict — both keys optional, each value always a magnitude (>= 0). The key
+    itself is the sole source of sign: "positive" resolves to the excitatory
+    total as-is; "negative" resolves to the inhibitory total as its negation.
+    """
+    positive = delta_weight.get("positive")
+    negative = delta_weight.get("negative")
+    exc_total = abs(positive) if positive is not None else None
+    inh_total = -abs(negative) if negative is not None else None
+    return exc_total, inh_total
+
+
+def _apply_delta_weight(region: Region, delta_weight: dict[str, Any]) -> None:
     """Rebalance every neuron's dendrites so the region-wide excitatory/
     inhibitory totals hold per-neuron, regardless of how many dendrites
     (daemon, nerve, ...) contribute to each polarity.
 
     Mirrors exactly how process_mode="group_avg" combines dendrites at
-    runtime (BrainTensor._gavg): same-locality dendrites (all daemon/mask,
-    i.e. intra-region) are AVERAGED together, distant dendrites (nerve /
-    cross-region) are AVERAGED together separately, and the two averages
-    are ADDED. So a single scale factor per polarity — applied to every
-    dendrite regardless of locality — is what makes local_mean + distant_mean
-    land on the configured total; it is not a flat sum across all dendrites.
-    A neuron missing one polarity, or one locality of it, is left alone for
-    that side/bucket (nothing to redistribute from).
+    runtime (BrainTensor._compute_tension): dendrites sharing a declared
+    grupo_id (one deamon groups[] entry, or one nerve/full connection) are
+    AVERAGED together first, and those per-group averages are themselves
+    AVERAGED — one vote per group that's actually present, not weighted by
+    how many raw dendrites it has. So a single scale factor per polarity —
+    applied to every dendrite regardless of group — is what makes that
+    average-of-group-averages land on the configured total; it is not a flat
+    sum/average across all dendrites. A neuron missing one polarity is left
+    alone for that side (nothing to redistribute from).
     """
-    exc_total = delta_weight.get("excitatory")
-    inh_total = delta_weight.get("inhibitory")
+    exc_total, inh_total = delta_weight_totals(delta_weight)
     if exc_total is None and inh_total is None:
         return
-    local_ids = set(region.neuronas.keys())
     for neurona in region.neuronas.values():
         if exc_total is not None:
-            _rebalance_dendrite_group(
-                [d for d in neurona.dendritas if d.peso > 0], exc_total, local_ids
-            )
+            _rebalance_dendrite_group([d for d in neurona.dendritas if d.peso > 0], exc_total)
         if inh_total is not None:
-            _rebalance_dendrite_group(
-                [d for d in neurona.dendritas if d.peso < 0], inh_total, local_ids
-            )
+            _rebalance_dendrite_group([d for d in neurona.dendritas if d.peso < 0], inh_total)
 
 
-def _rebalance_dendrite_group(
-    dendritas: list[Dendrita], target: float, local_ids: set[str]
-) -> None:
+def _rebalance_dendrite_group(dendritas: list[Dendrita], target: float) -> None:
     """Rescale a same-polarity dendrite group in-place so it matches
-    process_mode="group_avg": the local-dendrite average plus the
-    distant-dendrite average sums to `target`. Uses one uniform scale factor
-    for the whole group, so each dendrite keeps its relative weight within
-    its own locality bucket.
+    process_mode="group_avg": dendrites sharing a declared `grupo_id` are
+    averaged together first (one value per group), and those per-group
+    averages are themselves averaged — one vote per group, not weighted by
+    how many raw dendrites it has. Uses one uniform scale factor for the
+    whole group, so each dendrite keeps its relative weight within its own
+    declared group.
 
     Dendrites flagged `exclude_from_delta_weight` (e.g. a nerve carrying a
     strong labeled-line signal that must not be diluted) are skipped
@@ -512,14 +600,16 @@ def _rebalance_dendrite_group(
     target using only its own weights."""
     if not dendritas:
         return
-    local, distant = [], []
+    by_grupo: dict[str, list[Dendrita]] = {}
     for d in dendritas:
         if d.exclude_from_delta_weight:
             continue
-        (local if _dendrite_is_local(d, local_ids) else distant).append(d)
-    local_mean = sum(d.peso for d in local) / len(local) if local else 0.0
-    distant_mean = sum(d.peso for d in distant) / len(distant) if distant else 0.0
-    raw_total = local_mean + distant_mean
+        key = d.grupo_id or f"__singleton__{id(d)}"
+        by_grupo.setdefault(key, []).append(d)
+    if not by_grupo:
+        return
+    grupo_means = [sum(d.peso for d in ds) / len(ds) for ds in by_grupo.values()]
+    raw_total = sum(grupo_means) / len(grupo_means)
     if raw_total == 0:
         return
     scale = target / raw_total
@@ -527,25 +617,23 @@ def _rebalance_dendrite_group(
         d.peso = max(-1.0, min(1.0, d.peso * scale))
 
 
-def _dendrite_is_local(dendrita: Dendrita, local_ids: set[str]) -> bool:
-    """A dendrite is local if all its synapses come from neurons in the same
-    region as its owner (daemon/mask wiring); distant if from another region
-    (nerve). Mirrors constructor_tensor.py's es_cross_region span check."""
-    return all(s.neurona_entrante.id in local_ids for s in dendrita.sinapsis)
-
-
 def _deamon_learning_rates(deamon_cfg: dict[str, Any]) -> tuple[float | None, float | None]:
     """Resolve (excitatory_rate, inhibitory_rate) for a deamon wiring block.
 
-    Each polarity's own ``excitatory.learning.rate`` / ``inhibitory.learning.rate``
-    wins; otherwise it falls back to the group-level ``deamon.learning.rate``.
-    Absent everywhere → None (no learning for that polarity).
+    Each group's own ``learning.rate`` wins for its resolved-weight sign bucket
+    (last group in that bucket with an explicit rate wins); otherwise it falls
+    back to the block-level ``deamon.learning.rate``. Absent everywhere → None
+    (no learning for that polarity).
     """
-    group_rate = (deamon_cfg.get("learning") or {}).get("rate")
-    exc_rate = (deamon_cfg.get("excitatory", {}).get("learning") or {}).get("rate")
-    inh_rate = (deamon_cfg.get("inhibitory", {}).get("learning") or {}).get("rate")
-    exc_rate = exc_rate if exc_rate is not None else group_rate
-    inh_rate = inh_rate if inh_rate is not None else group_rate
+    fallback_rate = (deamon_cfg.get("learning") or {}).get("rate")
+    rate_by_sign: dict[int, float] = {}
+    for group in deamon_cfg.get("groups", []):
+        rate = (group.get("learning") or {}).get("rate")
+        if rate is not None:
+            sign = 1 if resolve_group_weight(group) >= 0 else -1
+            rate_by_sign[sign] = rate
+    exc_rate = rate_by_sign.get(1, fallback_rate)
+    inh_rate = rate_by_sign.get(-1, fallback_rate)
     return (
         float(exc_rate) if exc_rate else None,
         float(inh_rate) if inh_rate else None,
@@ -874,8 +962,8 @@ class Experiment(Experimento):
                 _apply_mask_to_neuron_grid(grid2d, mask, random_weights, border=rs.border)
 
         # ── Cross-region connections ──
-        for conn in connections:
-            self._wire_connection(conn)
+        for conn_index, conn in enumerate(connections):
+            self._wire_connection(conn, conn_index)
 
         # ── Delta-weight rebalancing ──
         # Runs after ALL dendrites (daemon + nerve) are wired, so a neuron's
@@ -950,9 +1038,9 @@ class Experiment(Experimento):
         self._daemon_history.clear()
         self._last_history_gen = -1
 
-    def _wire_connection(self, conn: dict[str, Any]) -> None:
+    def _wire_connection(self, conn: dict[str, Any], conn_index: int) -> None:
         if "nerve" in conn:
-            self._wire_nerve_connection(conn)
+            self._wire_nerve_connection(conn, conn_index)
             return
         src = self._regions_by_id.get(conn.get("from"))
         dst = self._regions_by_id.get(conn.get("to"))
@@ -966,8 +1054,9 @@ class Experiment(Experimento):
         if not src_neurons or not dst_neurons:
             return
 
+        grupo_id = f"full:{conn_index}"
         if (conn.get("type") == "portion" or ("portion" in conn and "full" not in conn)) and conn.get("portion") and src.is_ascii_input:
-            self._wire_portion(conn, src, dst, weight, src_neurons, dst_neurons)
+            self._wire_portion(conn, src, dst, weight, src_neurons, dst_neurons, grupo_id)
             return
 
         k = max(1, round(len(src_neurons) * density))
@@ -977,11 +1066,11 @@ class Experiment(Experimento):
                 Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0))
                 for s in sampled
             ]
-            dst_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
+            dst_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight, grupo_id=grupo_id))
 
     def _wire_portion(
         self, conn: dict[str, Any], src: RegionState, dst: RegionState,
-        weight: float, src_neurons: list, dst_neurons: list,
+        weight: float, src_neurons: list, dst_neurons: list, grupo_id: str,
     ) -> None:
         n_div_y, n_div_x = int(conn["portion"][0]), int(conn["portion"][1])
         res = src.width
@@ -1004,9 +1093,9 @@ class Experiment(Experimento):
                 Sinapsis(neurona_entrante=s, peso=random.uniform(0.2, 1.0))
                 for s in src_regions[(ry, rx)]
             ]
-            dst_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
+            dst_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight, grupo_id=grupo_id))
 
-    def _wire_nerve_connection(self, conn: dict[str, Any]) -> None:
+    def _wire_nerve_connection(self, conn: dict[str, Any], conn_index: int) -> None:
         on_rs = self._regions_by_id.get(conn.get("on"))
         if on_rs is None:
             return
@@ -1029,12 +1118,12 @@ class Experiment(Experimento):
         if from_cfg:
             from_rs = self._regions_by_id.get(from_cfg.get("region"))
             if from_rs:
-                self._wire_nerve_from(circles, on_rs, from_rs, from_cfg)
+                self._wire_nerve_from(circles, on_rs, from_rs, from_cfg, f"nerve:{conn_index}:from")
 
         if to_cfg:
             to_rs = self._regions_by_id.get(to_cfg.get("region"))
             if to_rs:
-                self._wire_nerve_to(circles, on_rs, to_rs, to_cfg)
+                self._wire_nerve_to(circles, on_rs, to_rs, to_cfg, f"nerve:{conn_index}:to")
 
     def _wire_nerve_from(
         self,
@@ -1042,6 +1131,7 @@ class Experiment(Experimento):
         on_rs: RegionState,
         from_rs: RegionState,
         from_cfg: dict[str, Any],
+        grupo_id: str,
     ) -> None:
         """Wire: from_region neurons → on_region neurons inside circles."""
         density = float(from_cfg.get("density", 0.1))
@@ -1074,6 +1164,7 @@ class Experiment(Experimento):
                         sinapsis=sinapsis_list,
                         peso=weight,
                         exclude_from_delta_weight=exclude_from_delta_weight,
+                        grupo_id=grupo_id,
                     )
                 )
 
@@ -1083,10 +1174,11 @@ class Experiment(Experimento):
         on_rs: RegionState,
         to_rs: RegionState,
         to_cfg: dict[str, Any],
+        grupo_id: str,
     ) -> None:
         """Wire: on_region neurons inside circles → to_region neurons."""
         if to_cfg.get("deamon"):
-            self._wire_nerve_to_deamon(circles, on_rs, to_rs, to_cfg)
+            self._wire_nerve_to_deamon(circles, on_rs, to_rs, to_cfg, grupo_id)
             return
         density = float(to_cfg.get("density", 0.1))
         weight = float(to_cfg.get("weight", 0.5))
@@ -1107,7 +1199,7 @@ class Experiment(Experimento):
                     Sinapsis(neurona_entrante=n, peso=grad)
                     for n, grad in sampled
                 ]
-                to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight))
+                to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=weight, grupo_id=grupo_id))
 
     def _wire_nerve_to_deamon(
         self,
@@ -1115,6 +1207,7 @@ class Experiment(Experimento):
         on_rs: RegionState,
         to_rs: RegionState,
         to_cfg: dict[str, Any],
+        grupo_id: str,
     ) -> None:
         """Wire nerve-to using daemon spatial pattern centred on each circle.
 
@@ -1133,6 +1226,10 @@ class Experiment(Experimento):
                     offsets: list[tuple[int, int]] = dend_def["offsets"]
                     pesos_s: list[float] | None = dend_def.get("pesos_sinapsis")
                     noise_amp = dend_def.get("random_noise")
+                    # Sub-group within this connection: each deamon groups[]
+                    # entry (compile_deamon_wiring's own "gN" tag) stays its
+                    # own group, just namespaced under this nerve connection.
+                    dend_grupo_id = f"{grupo_id}:{dend_def.get('grupo_id', '')}"
                     sinapsis_list: list[Sinapsis] = []
                     for i, (dx, dy) in enumerate(offsets):
                         nx, ny = cx + dx, cy + dy
@@ -1149,7 +1246,7 @@ class Experiment(Experimento):
                             peso = base * random.uniform(0.2, 1.0)
                         sinapsis_list.append(Sinapsis(neurona_entrante=src, peso=peso))
                     if sinapsis_list:
-                        to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=peso_d))
+                        to_n.dendritas.append(Dendrita(sinapsis=sinapsis_list, peso=peso_d, grupo_id=dend_grupo_id))
 
     def _compile(self) -> None:
         if self._is_wolfram:
@@ -1213,11 +1310,11 @@ class Experiment(Experimento):
         """Build [NR, max_syn] effective learning rate per synapse.
 
         Intra-region synapses use region.wiring.learning_rate; cross-region synapses
-        use connection.learning.rate. When a wiring/side is deamon-based, excitatory
-        and inhibitory dendrites (identified by the sign of pesos_dendrita) can each
-        get their own rate via deamon.excitatory.learning.rate /
-        deamon.inhibitory.learning.rate, falling back to deamon.learning.rate as a
-        group default; a polarity with no rate anywhere simply doesn't learn.
+        use connection.learning.rate. When a wiring/side is deamon-based, dendrites
+        are bucketed by the sign of pesos_dendrita, and each bucket can get its own
+        rate via any deamon.groups[].learning.rate whose resolved weight falls in
+        that bucket, falling back to deamon.learning.rate as a group default; a
+        polarity with no rate anywhere simply doesn't learn.
         NeuronaEntrada have no synapses, so they never appear. Recomputed from
         scratch on every soft update.
 

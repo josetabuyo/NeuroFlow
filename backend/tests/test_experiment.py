@@ -654,10 +654,13 @@ def _wiring_region(rid: str, w: int, h: int, **wiring: object) -> dict:
     exc_w = wiring.pop("dendrite_exc_weight", None)
     inh_w = wiring.pop("dendrite_inh_weight", None)
     deamon: dict = {"mask": "simple"}
+    groups: list[dict] = []
     if exc_w is not None:
-        deamon["excitatory"] = {"weight": exc_w}
+        groups.append({"id": "excitatory", "weight": exc_w})
     if inh_w is not None:
-        deamon["inhibitory"] = {"weight": inh_w}
+        groups.append({"id": "inhibitory", "weight": inh_w})
+    if groups:
+        deamon["groups"] = groups
     deamon.update(wiring)
     cfg: dict = {"deamon": deamon, "process_mode": process_mode}
     if lr is not None:

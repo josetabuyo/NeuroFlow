@@ -1,12 +1,15 @@
 """Tests for delta_weight — per-neuron excitatory/inhibitory total balance.
 
-When a region declares "delta_weight": {"excitatory": e, "inhibitory": i},
-every neuron's dendrites of each polarity get rebalanced to reproduce exactly
-how process_mode="group_avg" combines them at runtime (BrainTensor._gavg):
-same-locality dendrites (daemon/mask, intra-region) are AVERAGED together,
-distant dendrites (nerve, cross-region) are AVERAGED together separately, and
-the two averages are ADDED. So the target is the SUM of the local mean and
-the distant mean — not a flat sum across every individual dendrite.
+When a region declares "delta_weight": {"positive": e, "negative": i} (both
+keys optional, values are always magnitudes >= 0), every neuron's dendrites
+of each polarity (bucketed by weight sign) get rebalanced to reproduce
+exactly how process_mode="group_avg" combines them at runtime
+(BrainTensor._compute_tension): dendrites sharing a declared grupo_id (one
+deamon groups[] entry, or one nerve/full connection) are AVERAGED together
+first, and those per-group averages are themselves AVERAGED — one vote per
+group that's actually present, not weighted by how many raw dendrites it
+has. So the target is the AVERAGE of the present groups' means — not a flat
+sum/average across every individual dendrite.
 """
 
 import random
@@ -16,14 +19,21 @@ from core.dendrita import Dendrita
 from core.neurona import Neurona
 from core.region import Region
 from core.sinapsis import Sinapsis
-from experiments.experiment import Experiment, _apply_delta_weight, _rebalance_dendrite_group
+from experiments.experiment import (
+    Experiment,
+    _apply_delta_weight,
+    _convert_delta_weight_entries,
+    _rebalance_dendrite_group,
+    delta_weight_totals,
+)
 
 
-def _dendrita(peso: float, source_id: str = "outside") -> Dendrita:
-    """A dendrite whose single synapse comes from `source_id`. Locality is
-    decided by whether that id is a member of the region passed to
-    _rebalance_dendrite_group/_apply_delta_weight."""
-    return Dendrita(sinapsis=[Sinapsis(neurona_entrante=Neurona(id=source_id), peso=1.0)], peso=peso)
+def _dendrita(peso: float, grupo_id: str = "") -> Dendrita:
+    """A dendrite with an optional declared grupo_id — dendrites sharing one
+    are the same group for _rebalance_dendrite_group/_apply_delta_weight.
+    Empty (default) means "its own singleton group", never merged with
+    another empty-grupo_id dendrite."""
+    return Dendrita(sinapsis=[Sinapsis(neurona_entrante=Neurona(id="src"), peso=1.0)], peso=peso, grupo_id=grupo_id)
 
 
 # ---------------------------------------------------------------------------
@@ -33,50 +43,50 @@ def _dendrita(peso: float, source_id: str = "outside") -> Dendrita:
 class TestRebalanceDendriteGroup:
     def test_single_dendrite_takes_full_total(self) -> None:
         d = _dendrita(0.3)
-        _rebalance_dendrite_group([d], 0.6, local_ids=set())
+        _rebalance_dendrite_group([d], 0.6)
         assert d.peso == pytest.approx(0.6)
 
-    def test_two_same_locality_dendrites_average_to_target(self) -> None:
-        """Both dendrites share one locality bucket (neither id is 'local'),
-        so the bucket MEAN — not the raw sum — must hit the target: unequal
-        starting shares (1:2) keep that ratio, but land on 0.4/0.8, not 0.2/0.4,
-        because averaging two dendrites halves their combined pull on the mean."""
-        d1, d2 = _dendrita(0.1), _dendrita(0.2)
-        _rebalance_dendrite_group([d1, d2], 0.6, local_ids=set())
+    def test_two_dendrites_in_same_group_average_to_target(self) -> None:
+        """Both dendrites share one declared group, so the group MEAN — not
+        the raw sum — must hit the target: unequal starting shares (1:2) keep
+        that ratio, but land on 0.4/0.8, not 0.2/0.4, because averaging two
+        dendrites halves their combined pull on the mean."""
+        d1, d2 = _dendrita(0.1, grupo_id="g0"), _dendrita(0.2, grupo_id="g0")
+        _rebalance_dendrite_group([d1, d2], 0.6)
         assert d1.peso / d2.peso == pytest.approx(0.1 / 0.2)
         assert (d1.peso + d2.peso) / 2 == pytest.approx(0.6)
 
-    def test_local_and_distant_dendrite_split_proportionally(self) -> None:
-        """José's example (10 vs 20, summing to a 0.6 total) is exactly this
-        case: one local (daemon) dendrite and one distant (nerve) dendrite,
-        each its own single-member bucket — their two means add to target."""
-        local_d = _dendrita(0.1, source_id="n0")
-        distant_d = _dendrita(0.2, source_id="elsewhere")
-        _rebalance_dendrite_group([local_d, distant_d], 0.6, local_ids={"n0"})
-        assert local_d.peso == pytest.approx(0.2)
-        assert distant_d.peso == pytest.approx(0.4)
-        assert local_d.peso + distant_d.peso == pytest.approx(0.6)
+    def test_two_different_groups_vote_equally(self) -> None:
+        """Two dendrites in two DIFFERENT declared groups, each its own
+        single-member group — their two group-means AVERAGE (one vote per
+        group, not per raw dendrite count) to the target, keeping their
+        1:2 starting ratio."""
+        d1 = _dendrita(0.1, grupo_id="g0")
+        d2 = _dendrita(0.2, grupo_id="g1")
+        _rebalance_dendrite_group([d1, d2], 0.6)
+        assert d1.peso / d2.peso == pytest.approx(0.1 / 0.2)
+        assert (d1.peso + d2.peso) / 2 == pytest.approx(0.6)
 
-    def test_twelve_equal_local_dendrites_land_exactly_on_target(self) -> None:
-        """The crown-mask case: 12 equal-weight local inhibitory sectors.
-        Their MEAN must equal the target (matching group_avg) — if they
-        already averaged to the target, nothing should change."""
-        dends = [_dendrita(-0.7, source_id="n0") for _ in range(12)]
-        _rebalance_dendrite_group(dends, -0.7, local_ids={"n0"})
+    def test_twelve_equal_dendrites_in_one_group_land_exactly_on_target(self) -> None:
+        """The crown-mask case: 12 equal-weight inhibitory sectors, all one
+        declared group. Their MEAN must equal the target (matching
+        group_avg) — if they already averaged to the target, nothing changes."""
+        dends = [_dendrita(-0.7, grupo_id="g0") for _ in range(12)]
+        _rebalance_dendrite_group(dends, -0.7)
         assert all(d.peso == pytest.approx(-0.7) for d in dends)
 
     def test_empty_group_is_noop(self) -> None:
-        _rebalance_dendrite_group([], 0.6, local_ids=set())  # must not raise
+        _rebalance_dendrite_group([], 0.6)  # must not raise
 
     def test_zero_raw_mean_is_noop(self) -> None:
-        d1, d2 = _dendrita(0.0), _dendrita(0.0)
-        _rebalance_dendrite_group([d1, d2], 0.6, local_ids=set())
+        d1, d2 = _dendrita(0.0, grupo_id="g0"), _dendrita(0.0, grupo_id="g1")
+        _rebalance_dendrite_group([d1, d2], 0.6)
         assert d1.peso == 0.0
         assert d2.peso == 0.0
 
     def test_clamped_to_valid_dendrite_range(self) -> None:
         d = _dendrita(0.1)
-        _rebalance_dendrite_group([d], 5.0, local_ids=set())
+        _rebalance_dendrite_group([d], 5.0)
         assert d.peso == 1.0
 
 
@@ -94,7 +104,7 @@ class TestApplyDeltaWeight:
     def test_one_excitatory_one_inhibitory_take_totals_exactly(self) -> None:
         exc, inh = _dendrita(1.0), _dendrita(-1.0)
         region = self._region_with_neuron([exc, inh])
-        _apply_delta_weight(region, {"excitatory": 0.6, "inhibitory": -0.7})
+        _apply_delta_weight(region, {"positive": 0.6, "negative": 0.7})
         assert exc.peso == pytest.approx(0.6)
         assert inh.peso == pytest.approx(-0.7)
 
@@ -105,20 +115,20 @@ class TestApplyDeltaWeight:
         exc = _dendrita(1.0)
         inhs = [_dendrita(-1.0) for _ in range(12)]
         region = self._region_with_neuron([exc, *inhs])
-        _apply_delta_weight(region, {"excitatory": 0.6, "inhibitory": -0.7})
+        _apply_delta_weight(region, {"positive": 0.6, "negative": 0.7})
         assert exc.peso == pytest.approx(0.6)
         assert all(d.peso == pytest.approx(-0.7) for d in inhs)
 
     def test_missing_polarity_left_untouched(self) -> None:
         exc = _dendrita(1.0)
         region = self._region_with_neuron([exc])
-        _apply_delta_weight(region, {"excitatory": 0.6, "inhibitory": -0.7})
+        _apply_delta_weight(region, {"positive": 0.6, "negative": 0.7})
         assert exc.peso == pytest.approx(0.6)
 
-    def test_only_excitatory_key_set_leaves_inhibitory_alone(self) -> None:
+    def test_only_positive_key_set_leaves_negative_alone(self) -> None:
         exc, inh = _dendrita(1.0), _dendrita(-1.0)
         region = self._region_with_neuron([exc, inh])
-        _apply_delta_weight(region, {"excitatory": 0.6})
+        _apply_delta_weight(region, {"positive": 0.6})
         assert exc.peso == pytest.approx(0.6)
         assert inh.peso == pytest.approx(-1.0)  # untouched
 
@@ -142,8 +152,10 @@ def _tissue_config(delta_weight: dict | None = None, **extra_conns: object) -> d
                 "on": "tissue",
                 "deamon": {
                     "shape": "square",
-                    "excitatory": {"weight": 0.6, "offset": 1, "noise": 0, "weights": [1]},
-                    "inhibitory": {"weight": -0.7, "offset": 3, "noise": 0, "sectors": 12, "weights": [1]},
+                    "groups": [
+                        {"id": "first_ring", "weight": 0.6, "offset": 1, "noise": 0, "weights": [1]},
+                        {"id": "second_ring", "weight": -0.7, "offset": 3, "noise": 0, "sectors": 12, "weights": [1]},
+                    ],
                 },
             },
         ],
@@ -154,12 +166,12 @@ def _tissue_config(delta_weight: dict | None = None, **extra_conns: object) -> d
 class TestDeltaWeightIntegration:
     def test_daemon_only_with_12_sectors_is_imperceptible(self) -> None:
         """The exact bug José hit: 12 equal inhibitory sectors at -0.7 each.
-        With delta_weight={"inhibitory": -0.7} (same number as the flat
-        override), every sector must stay at -0.7 — no change at all,
-        because their mean already equals the target."""
+        With delta_weight targeting -0.7 (same number as the flat override),
+        every sector must stay at -0.7 — no change at all, because their
+        mean already equals the target."""
         random.seed(1)
         exp = Experiment()
-        exp.setup(_tissue_config(delta_weight={"excitatory": 0.6, "inhibitory": -0.7}))
+        exp.setup(_tissue_config(delta_weight={"positive": 0.6, "negative": 0.7}))
         neurona = exp.brain.get_neurona("x10y10")
         exc = [d for d in neurona.dendritas if d.peso > 0]
         inh = [d for d in neurona.dendritas if d.peso < 0]
@@ -172,14 +184,16 @@ class TestDeltaWeightIntegration:
         neuron elsewhere in the region — no more energetic discontinuity."""
         random.seed(1)
         config = _tissue_config(
-            delta_weight={"excitatory": 0.6, "inhibitory": -0.7},
+            delta_weight={"positive": 0.6, "negative": 0.7},
             connections=[
                 {
                     "on": "tissue",
                     "deamon": {
                         "shape": "square",
-                        "excitatory": {"weight": 0.6, "offset": 1, "noise": 0, "weights": [1]},
-                        "inhibitory": {"weight": -0.7, "offset": 3, "noise": 0, "sectors": 12, "weights": [1]},
+                        "groups": [
+                            {"id": "first_ring", "weight": 0.6, "offset": 1, "noise": 0, "weights": [1]},
+                            {"id": "second_ring", "weight": -0.7, "offset": 3, "noise": 0, "sectors": 12, "weights": [1]},
+                        ],
                     },
                 },
                 {
@@ -198,20 +212,19 @@ class TestDeltaWeightIntegration:
         inside = exp.brain.get_neurona("x10y10")   # inside the nerve circle
         outside = exp.brain.get_neurona("x1y1")    # outside the nerve circle
 
-        def _exc_group_avg_total(neurona, local_ids) -> float:
+        def _exc_group_avg_total(neurona) -> float:
             exc = [d for d in neurona.dendritas if d.peso > 0]
-            local = [d for d in exc if all(s.neurona_entrante.id in local_ids for s in d.sinapsis)]
-            distant = [d for d in exc if d not in local]
-            local_mean = sum(d.peso for d in local) / len(local) if local else 0.0
-            distant_mean = sum(d.peso for d in distant) / len(distant) if distant else 0.0
-            return local_mean + distant_mean
+            by_grupo: dict[str, list] = {}
+            for d in exc:
+                by_grupo.setdefault(d.grupo_id or f"__singleton__{id(d)}", []).append(d)
+            grupo_means = [sum(d.peso for d in ds) / len(ds) for ds in by_grupo.values()]
+            return sum(grupo_means) / len(grupo_means) if grupo_means else 0.0
 
-        tissue_ids = set(exp.regiones["tissue"].neuronas.keys())
         assert len(inside.dendritas) > len(outside.dendritas), (
             "sanity check: the nerve must have actually added a dendrite inside the circle"
         )
-        assert _exc_group_avg_total(inside, tissue_ids) == pytest.approx(0.6)
-        assert _exc_group_avg_total(outside, tissue_ids) == pytest.approx(0.6)
+        assert _exc_group_avg_total(inside) == pytest.approx(0.6)
+        assert _exc_group_avg_total(outside) == pytest.approx(0.6)
 
     def test_without_delta_weight_totals_are_not_forced(self) -> None:
         """Backward compatibility: no delta_weight → raw configured weights stand."""
@@ -223,8 +236,10 @@ class TestDeltaWeightIntegration:
                     "on": "tissue",
                     "deamon": {
                         "shape": "square",
-                        "excitatory": {"weight": 0.6, "offset": 1, "noise": 0, "weights": [1]},
-                        "inhibitory": {"weight": -0.7, "offset": 3, "noise": 0, "sectors": 12, "weights": [1]},
+                        "groups": [
+                            {"id": "first_ring", "weight": 0.6, "offset": 1, "noise": 0, "weights": [1]},
+                            {"id": "second_ring", "weight": -0.7, "offset": 3, "noise": 0, "sectors": 12, "weights": [1]},
+                        ],
                     },
                 },
                 {
@@ -249,3 +264,66 @@ class TestDeltaWeightIntegration:
         # exactly the discontinuity delta_weight is meant to remove.
         assert sorted(inside_exc) == pytest.approx(sorted([0.6, 0.2]))
         assert outside_exc == pytest.approx([0.6])
+
+
+# ---------------------------------------------------------------------------
+# delta_weight_totals — key is the sole source of sign
+# ---------------------------------------------------------------------------
+
+class TestDeltaWeightTotals:
+    def test_both_keys_present(self) -> None:
+        exc, inh = delta_weight_totals({"positive": 0.6, "negative": 0.7})
+        assert exc == pytest.approx(0.6)
+        assert inh == pytest.approx(-0.7)
+
+    def test_only_positive_present_leaves_negative_none(self) -> None:
+        exc, inh = delta_weight_totals({"positive": 0.6})
+        assert exc == pytest.approx(0.6)
+        assert inh is None
+
+    def test_only_negative_present_leaves_positive_none(self) -> None:
+        exc, inh = delta_weight_totals({"negative": 0.7})
+        assert exc is None
+        assert inh == pytest.approx(-0.7)
+
+    def test_neither_key_present_returns_both_none(self) -> None:
+        exc, inh = delta_weight_totals({})
+        assert exc is None
+        assert inh is None
+
+    def test_value_is_always_treated_as_magnitude(self) -> None:
+        """Even if the "negative" value is (incorrectly) given as
+        already-negative, the result must still be exactly one negative
+        value — the key, not the value's own sign, decides."""
+        exc, inh = delta_weight_totals({"negative": -0.7})
+        assert exc is None
+        assert inh == pytest.approx(-0.7)
+
+
+# ---------------------------------------------------------------------------
+# _convert_delta_weight_entries — legacy shapes -> {"positive"?, "negative"?}
+# ---------------------------------------------------------------------------
+
+class TestConvertDeltaWeightEntries:
+    def test_legacy_signed_dict_shape_converts(self) -> None:
+        result = _convert_delta_weight_entries({"excitatory": 0.6, "inhibitory": -0.7})
+        assert result == {"positive": 0.6, "negative": 0.7}
+
+    def test_intermediate_id_list_shape_converts(self) -> None:
+        result = _convert_delta_weight_entries(
+            [{"id": "excitatory", "weight": 0.6}, {"id": "inhibitory", "weight": -0.7}]
+        )
+        assert result == {"positive": 0.6, "negative": 0.7}
+
+    def test_intermediate_polarity_list_shape_converts(self) -> None:
+        result = _convert_delta_weight_entries(
+            [{"polarity": "positive", "weight": 0.6}, {"polarity": "negative", "weight": 0.7}]
+        )
+        assert result == {"positive": 0.6, "negative": 0.7}
+
+    def test_already_current_dict_shape_is_noop(self) -> None:
+        already = {"positive": 0.6, "negative": 0.7}
+        assert _convert_delta_weight_entries(already) is already
+
+    def test_none_passes_through(self) -> None:
+        assert _convert_delta_weight_entries(None) is None

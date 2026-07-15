@@ -77,25 +77,36 @@ export interface RegionSource {
   density?: number;
 }
 
+/** One dendrite group within a deamon wiring block. No fixed "excitatory"/
+ * "inhibitory" keys — `id` is just a label, and `weight`'s sign is the
+ * group's polarity (defaults to +1 for a single dendrite, -1 once `sectors`/
+ * `multiplier` make it partitioned, unless `weight` overrides it). */
+export interface DeamonGroup {
+  id: string;
+  weight?: number;
+  offset?: number;
+  weights?: number[];
+  noise?: number;
+  density?: number;
+  sectors?: number;
+  multiplier?: number;
+  learning?: { rate?: number; exclude_range?: [number, number] };
+}
+
+export interface DeamonWiring {
+  mask?: string;
+  shape?: string;
+  centroid?: CentroidConfig;
+  fixed?: boolean;
+  groups?: DeamonGroup[];
+  learning?: { rate?: number; exclude_range?: [number, number] };
+}
+
 export interface RegionWiring {
-  deamon?: {
-    mask?: string;
-    shape?: string;
-    centroid?: CentroidConfig;
-    fixed?: boolean;
-    excitatory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
-    inhibitory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
-    learning?: { rate?: number; exclude_range?: [number, number] };
-  };
+  deamon?: DeamonWiring;
   process_mode?: string;
   tension?: { function: Record<string, number> };
   learning_rate?: number;
-  /** @deprecated use deamon.mask */
-  mask?: string;
-  /** @deprecated use deamon.excitatory.weight */
-  dendrite_exc_weight?: number;
-  /** @deprecated use deamon.inhibitory.weight */
-  dendrite_inh_weight?: number;
 }
 
 export interface RegionNoise {
@@ -123,10 +134,12 @@ export interface Region {
   daemon?: RegionDaemon;
   process_mode?: string;
   tension?: { function: Record<string, number> };
-  /** Per-neuron excitatory/inhibitory weight totals. When set, every
-   * neuron's dendrites of each polarity (daemon and/or nerve) are
-   * rescaled proportionally so they sum to these targets. */
-  delta_weight?: { excitatory?: number; inhibitory?: number };
+  /** Per-neuron weight totals by polarity. Both keys optional; each value is
+   * always a magnitude (>= 0) — the key itself is the sole source of sign.
+   * When set, every neuron's dendrites of that polarity (daemon and/or
+   * nerve) are rescaled proportionally so they sum to these targets. Omitted
+   * entirely → no rebalancing, dendrites keep their raw configured weights. */
+  delta_weight?: { positive?: number; negative?: number };
 }
 
 export interface Connection {
@@ -145,17 +158,7 @@ export interface Connection {
   weight?: number;
   // intra-region (on-connection)
   on?: string;
-  deamon?: {
-    mask?: string;
-    shape?: string;
-    centroid?: CentroidConfig;
-    fixed?: boolean;
-    excitatory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
-    inhibitory?: { weight?: number; offset?: number; noise?: number; weights?: number[]; sectors?: number; density?: number; multiplier?: number };
-    learning?: { rate?: number; exclude_range?: [number, number] };
-  };
-  /** @deprecated use deamon */
-  mask?: string;
+  deamon?: DeamonWiring;
 }
 
 export interface CanonicalExperimentConfig {

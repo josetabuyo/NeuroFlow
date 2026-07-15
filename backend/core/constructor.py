@@ -285,6 +285,8 @@ class Constructor:
 
                     if sinapsis_list:
                         dendrita = Dendrita(
-                            sinapsis=sinapsis_list, peso=peso_dendrita
+                            sinapsis=sinapsis_list,
+                            peso=peso_dendrita,
+                            grupo_id=def_dendrita.get("grupo_id", ""),  # type: ignore[union-attr]
                         )
                         neurona_destino.dendritas.append(dendrita)

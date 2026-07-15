@@ -93,6 +93,79 @@ class TestBrainTensorCompilacion:
             )
 
 
+def _bare_brain_tensor(pesos: list[list[float]], valid: list[list[bool]], grupo_ids: list[list[int]]) -> "BrainTensor":
+    """A minimal BrainTensor with only what _compute_tension's group_avg
+    branch reads: per-dendrite weight, validity, and declared group index.
+    One row = one neuron; bypasses Constructor/ConstructorTensor entirely so
+    the group-then-sign averaging math can be tested in isolation."""
+    from core.brain_tensor import BrainTensor
+    bt = object.__new__(BrainTensor)
+    bt.device = "cpu"
+    bt._dend_pesos = torch.tensor(pesos, dtype=torch.float32)
+    bt._dendrita_mascara = torch.tensor(valid, dtype=torch.bool)
+    bt._dendrite_grupo_ids = torch.tensor(grupo_ids, dtype=torch.int64)
+    bt.max_grupos = int(bt._dendrite_grupo_ids.max().item()) + 1
+    return bt
+
+
+class TestGroupAvgTension:
+    """_compute_tension('group_avg') averages dendrites within a declared
+    group first, then averages present groups by sign, then diffs — one vote
+    per group, not per raw dendrite."""
+
+    def test_single_group_per_sign_matches_flat_average(self):
+        """No divergence case: one positive group (2 dendrites) and one
+        negative group (1 dendrite) — same as flat per-sign averaging."""
+        bt = _bare_brain_tensor(
+            pesos=[[0.6, 0.6, -0.7]],
+            valid=[[True, True, True]],
+            grupo_ids=[[0, 0, 1]],
+        )
+        dpc = torch.tensor([[0.6, 0.6, -0.7]])
+        tension = bt._compute_tension(dpc, "group_avg", 0, 1)
+        assert tension.item() == pytest.approx(0.6 + (-0.7))
+
+    def test_two_positive_groups_vote_equally_regardless_of_dendrite_count(self):
+        """The divergence case: group A has 1 dendrite (value 0.6), group B
+        has 3 dendrites (all 0.2) — a flat per-dendrite average would skew
+        toward B (4 dendrites total, 3 of them 0.2); group-then-sign gives
+        each GROUP one vote: mean(0.6, 0.2) = 0.4, not mean of the 4 raw
+        values (0.6+0.2*3)/4 = 0.3."""
+        bt = _bare_brain_tensor(
+            pesos=[[0.6, 0.2, 0.2, 0.2]],
+            valid=[[True, True, True, True]],
+            grupo_ids=[[0, 1, 1, 1]],
+        )
+        dpc = torch.tensor([[0.6, 0.2, 0.2, 0.2]])
+        tension = bt._compute_tension(dpc, "group_avg", 0, 1)
+        assert tension.item() == pytest.approx(0.4)
+
+    def test_absent_group_excluded_not_zero_padded(self):
+        """A neuron with only a negative group (no positive dendrites at all)
+        gets neg_avg alone — the missing positive side must not pull the
+        result toward 0 as if it contributed a 0-valued group."""
+        bt = _bare_brain_tensor(
+            pesos=[[-0.7, -0.7]],
+            valid=[[True, True]],
+            grupo_ids=[[0, 0]],
+        )
+        dpc = torch.tensor([[-0.7, -0.7]])
+        tension = bt._compute_tension(dpc, "group_avg", 0, 1)
+        assert tension.item() == pytest.approx(-0.7)
+
+    def test_invalid_dendrite_slots_excluded(self):
+        """Padding/invalid dendrite slots (mask False) must not count toward
+        any group's average."""
+        bt = _bare_brain_tensor(
+            pesos=[[0.6, 0.6, 0.0]],
+            valid=[[True, True, False]],
+            grupo_ids=[[0, 0, 0]],
+        )
+        dpc = torch.tensor([[0.6, 0.6, 0.0]])
+        tension = bt._compute_tension(dpc, "group_avg", 0, 1)
+        assert tension.item() == pytest.approx(0.6)
+
+
 class TestBrainTensorSetValor:
     """set_valor modifies the tensor correctly."""
 

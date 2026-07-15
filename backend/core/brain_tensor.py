@@ -44,6 +44,7 @@ class BrainTensor:
         tension_fns: list[tuple[str, float]] | None = None,
         region_specs: list[tuple[int, int, str, list]] | None = None,
         es_cross_region: torch.BoolTensor | None = None,
+        dendrite_grupo_ids: torch.LongTensor | None = None,
     ) -> None:
         self.device = device
         self.process_mode = process_mode
@@ -102,6 +103,18 @@ class BrainTensor:
 
         # Per-dendrite mask: True if that dendrite is a distant (cross-region) connection
         self._is_input_dendrite = self._precompute_input_dendrite_mask()
+
+        # Per-dendrite declared-group index [n_real, max_dend]: dendrites sharing a
+        # group get averaged together before group_avg splits groups by sign (see
+        # Dendrita.grupo_id / ConstructorTensor). Absent → every dendrite is its own
+        # singleton group (identity default, matches "no declared grouping").
+        if dendrite_grupo_ids is not None:
+            self._dendrite_grupo_ids = dendrite_grupo_ids.to(device)
+        else:
+            self._dendrite_grupo_ids = torch.arange(
+                self.max_dendritas, device=device
+            ).unsqueeze(0).expand(n_real, -1)
+        self.max_grupos = int(self._dendrite_grupo_ids.max().item()) + 1 if self.max_dendritas > 0 else 1
 
         # Tension values (updated each procesar() call)
         self.tensiones = torch.zeros(self.N, device=device)
@@ -182,24 +195,44 @@ class BrainTensor:
             return (max_pos + neg_avg).clamp(-1.0, 1.0)
 
         if mode == "group_avg":
-            is_inp = self._is_input_dendrite[r_start:r_end]
-            is_loc = ~is_inp
-            is_pos = self._dend_pesos[r_start:r_end] > 0
-            is_neg = self._dend_pesos[r_start:r_end] < 0
             valid = self._dendrita_mascara[r_start:r_end]
+            pesos = self._dend_pesos[r_start:r_end]
+            grupo_ids = self._dendrite_grupo_ids[r_start:r_end]
+            rows = grupo_ids.shape[0]
+            expanded = self.max_grupos + 1  # +1 trash column, mirrors _precompute_dendrite_info
 
-            def _gavg(mask: torch.BoolTensor) -> torch.Tensor:
-                m = mask & valid
-                s = (dpc * m).sum(dim=1)
-                c = m.sum(dim=1).clamp(min=1.0)
-                return (s / c) * m.any(dim=1).float()
+            safe_grupo_ids = grupo_ids.clone()
+            safe_grupo_ids[~valid] = self.max_grupos
 
-            return (
-                _gavg(is_loc & is_pos) +
-                _gavg(is_loc & is_neg) +
-                _gavg(is_inp & is_pos) +
-                _gavg(is_inp & is_neg)
-            ).clamp(-1.0, 1.0)
+            # Level 1: average dendrites sharing a declared grupo_id (one
+            # deamon groups[] entry, or one nerve/full connection) into a
+            # single per-group value.
+            valid_f = valid.float()
+            group_sum = torch.zeros(rows, expanded, device=self.device)
+            group_sum.scatter_add_(1, safe_grupo_ids, dpc)
+            group_count = torch.zeros(rows, expanded, device=self.device)
+            group_count.scatter_add_(1, safe_grupo_ids, valid_f)
+            group_avg = (group_sum / group_count.clamp(min=1.0))[:, :self.max_grupos]
+            group_present = group_count[:, :self.max_grupos] > 0
+
+            # Each group's polarity is intrinsic to its declared weight (not the
+            # runtime activation value) — scatter the raw dendrite weight to
+            # recover one representative sign per group.
+            peso_sum = torch.zeros(rows, expanded, device=self.device)
+            peso_sum.scatter_add_(1, safe_grupo_ids, pesos * valid_f)
+            group_peso = (peso_sum / group_count.clamp(min=1.0))[:, :self.max_grupos]
+
+            # Level 2: average the present groups' values by sign — one vote
+            # per group, not per raw dendrite — then diff (neg side is
+            # already negative-valued).
+            def _polarity_avg(sign_mask: torch.BoolTensor) -> torch.Tensor:
+                m = sign_mask & group_present
+                count = m.sum(dim=1).clamp(min=1.0)
+                return (group_avg * m).sum(dim=1) / count
+
+            pos_avg = _polarity_avg(group_peso > 0)
+            neg_avg = _polarity_avg(group_peso < 0)
+            return (pos_avg + neg_avg).clamp(-1.0, 1.0)
 
         # min_vs_max (default)
         max_vals = dpc.max(dim=1).values.clamp(min=0.0)

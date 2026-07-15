@@ -141,159 +141,192 @@ def _apply_noise(weights: list[float], noise: float, seed: int) -> list[float]:
     ]
 
 
-def _build_exc_dendrite(
-    exc: dict[str, Any],
+def default_group_weight(group: dict[str, Any]) -> float:
+    """Structural default weight for a group that doesn't set its own:
+    unsectored/unmultiplied (single dendrite) groups default to +1.0,
+    sectored/petal groups to -1.0 — the historical excitatory/inhibitory
+    convention, driven by shape instead of by name."""
+    return -1.0 if ("sectors" in group or "multiplier" in group) else 1.0
+
+
+def resolve_group_weight(group: dict[str, Any]) -> float:
+    """A group's own ``weight`` wins; otherwise falls back to its structural
+    default (see `default_group_weight`)."""
+    weight = group.get("weight")
+    return float(weight) if weight is not None else default_group_weight(group)
+
+
+def _build_group_dendrite(
+    group: dict[str, Any],
     ring_fn: Any,
+    grupo_id: str,
 ) -> dict[str, Any] | None:
-    """Build the single excitatory dendrite from a weights+offset spec."""
+    """Build the single gradient dendrite for an unsectored/unmultiplied group."""
     weight_map: dict[tuple[int, int], float] = {}
-    for i, w in enumerate(exc["weights"]):
-        for off in ring_fn(exc["offset"] + i):
+    for i, w in enumerate(group["weights"]):
+        for off in ring_fn(group["offset"] + i):
             weight_map[off] = w
     if not weight_map:
         return None
     offsets = list(weight_map.keys())
-    density = exc.get("density", 1.0)
+    density = group.get("density", 1.0)
     if density < 1.0:
         offsets = _random_sparse(offsets, density, seed=42)
     pesos = [weight_map[off] for off in offsets]
-    noise = exc.get("noise")  # None = not specified; controls per-neuron scaling only
+    noise = group.get("noise")  # None = not specified; controls per-neuron scaling only
     return {
-        "peso_dendrita": 1.0,
+        "peso_dendrita": resolve_group_weight(group),
         "offsets": offsets,
         "pesos_sinapsis": pesos,
         "random_noise": noise if noise is not None else 0.5,
+        "grupo_id": grupo_id,
     }
 
 
 def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
     """Compile a deamon wiring definition into a MaskDef.
 
+    A wiring definition is a list of dendrite ``groups``; each group is
+    self-contained (its own weight, ring math, density, noise) and plays one
+    of two roles inferred from the fields it carries — never from its ``id``:
+
+    - **single dendrite** (no ``sectors``/``multiplier``): one gradient
+      dendrite, ring offsets from ``offset``/``weights``. Defaults to weight
+      ``+1.0`` unless the group sets its own ``weight``.
+    - **partitioned** (``sectors`` for square/circle, ``multiplier`` for the
+      flower shapes): split into that many wedges/petals, one dendrite each.
+      Defaults to weight ``-1.0`` unless the group sets its own ``weight``.
+
+    A group's ``id`` (any string, e.g. ``"first_ring"``/``"second_ring"`` by
+    convention) becomes every one of its dendrites' ``grupo_id`` — used by
+    ``process_mode="group_avg"`` tension to vote group-by-group. Omitted →
+    falls back to a positional ``"g{index}"``. The ``id`` is purely a label;
+    it never determines polarity (that's always the sign of the group's
+    resolved ``weight``).
+
     Shapes
     ------
-    ``square``
-        Excitatory: single dendrite, square (Chebyshev) rings, gradient in pesos_sinapsis.
-        Inhibitory: ``sectors`` (default 12) wedges covering the full square ring range.
+    ``square`` / ``circle``
+        Square uses Chebyshev (square) rings, circle uses Euclidean (round)
+        rings. A partitioned group's wedges cover the full ring range,
+        clockwise from East.
 
         Format::
 
             {
                 "shape": "square",
-                "excitatory": {"offset": int, "weights": [...], "density": float},
-                "gap":        {"offset": int, "size": int},
-                "inhibitory": {"offset": int, "weights": [...],
-                               "sectors": int, "density": float},
+                "groups": [
+                    {"id": "first_ring", "offset": int, "weights": [...], "density": float},
+                    {"id": "second_ring", "offset": int, "weights": [...],
+                     "sectors": int, "density": float},
+                ],
+                "gap": {"offset": int, "size": int},
             }
 
-    ``circle``
-        Same as ``square`` but uses Euclidean (round) rings instead of Chebyshev.
-        Excitatory: single dendrite, circular rings.
-        Inhibitory: ``sectors`` (default 12) pie-wedges of a circular annular corona.
-
-        Format: identical to ``square``.
-
-    ``square_flower``
-        Excitatory: identical to square (center cup, Chebyshev rings).
-        Inhibitory: ``multiplier`` petals (default 8) placed at distance
-        ``offset`` from the center, angularly equidistant. Petal body uses
-        Chebyshev rings. One dendrite per petal.
+    ``square_flower`` / ``circle_flower``
+        A single-dendrite group forms the center cup (Chebyshev or Euclidean
+        rings). A partitioned group's petals (``multiplier``, default 8) are
+        placed at distance ``offset`` from the center, angularly equidistant;
+        petal body uses the same ring kind as the center.
 
         Format::
 
             {
                 "shape": "square_flower",
-                "excitatory": {"offset": int, "weights": [...], "density": float},
-                "inhibitory": {"offset": int, "multiplier": int,
-                               "weights": [...], "density": float},
+                "groups": [
+                    {"id": "first_ring", "offset": int, "weights": [...], "density": float},
+                    {"id": "second_ring", "offset": int, "multiplier": int,
+                     "weights": [...], "density": float},
+                ],
             }
 
-    ``circle_flower``
-        Same as ``square_flower`` but petal bodies use Euclidean rings.
-        Excitatory center also uses Euclidean rings.
-
-        Format: identical to ``square_flower``.
-
     """
-    shape = wiring.get("shape", "square")
+    groups = wiring.get("groups", [])
+    shape = wiring.get("shape", "circle")
     mask: MaskDef = []
 
     if shape in ("square_flower", "circle_flower"):
         flower_ring = _ring_ci if shape == "circle_flower" else _ring_sq
-        # ── Center (excitatory, optional) ─────────────────────────────────
-        if "excitatory" in wiring:
-            exc_dendrite = _build_exc_dendrite(wiring["excitatory"], flower_ring)
-            if exc_dendrite:
-                mask.append(exc_dendrite)
+        for group_index, group in enumerate(groups):
+            grupo_id = group.get("id") or f"g{group_index}"
+            if "multiplier" not in group:
+                # ── Center (single dendrite) ────────────────────────────────
+                dendrite = _build_group_dendrite(group, flower_ring, grupo_id)
+                if dendrite:
+                    mask.append(dendrite)
+                continue
 
-        # ── Petals (inhibitory, optional) ──────────────────────────────────
-        if "inhibitory" not in wiring:
-            return mask
-        inh = wiring["inhibitory"]
-        petal_dist: int = inh["offset"]
-        multiplier: int = inh.get("multiplier", 8)
+            # ── Petals ───────────────────────────────────────────────────────
+            petal_dist: int = group["offset"]
+            multiplier: int = group["multiplier"]
 
-        # Petal cup shape: center cell at weight 1, then rings 1, 2, …
-        petal_weight_map: dict[tuple[int, int], float] = {(0, 0): 1.0}
-        for i, w in enumerate(inh["weights"]):
-            for dx, dy in flower_ring(i + 1):
-                petal_weight_map[(dx, dy)] = w
+            # Petal cup shape: center cell at weight 1, then rings 1, 2, …
+            petal_weight_map: dict[tuple[int, int], float] = {(0, 0): 1.0}
+            for i, w in enumerate(group["weights"]):
+                for dx, dy in flower_ring(i + 1):
+                    petal_weight_map[(dx, dy)] = w
 
-        # Apply density once — same subsampled pattern for every petal
-        petal_local = list(petal_weight_map.keys())
-        density = inh.get("density", 1.0)
-        if density < 1.0:
-            petal_local = _random_sparse(petal_local, density, seed=43)
+            # Apply density once — same subsampled pattern for every petal
+            petal_local = list(petal_weight_map.keys())
+            density = group.get("density", 1.0)
+            if density < 1.0:
+                petal_local = _random_sparse(petal_local, density, seed=43)
 
-        petal_noise = inh.get("noise")  # None = not specified; controls per-neuron scaling only
-        for k in range(multiplier):
-            angle = 2 * math.pi * k / multiplier
-            cx = round(petal_dist * math.cos(angle))
-            cy = round(petal_dist * math.sin(angle))
-            petal_offsets = [(cx + dx, cy + dy) for dx, dy in petal_local]
-            pesos = [petal_weight_map[(dx, dy)] for dx, dy in petal_local]
-            mask.append({
-                "peso_dendrita": -1.0,
-                "offsets": petal_offsets,
-                "pesos_sinapsis": pesos,
-                "random_noise": petal_noise if petal_noise is not None else 0.5,
-            })
+            petal_noise = group.get("noise")  # None = not specified; controls per-neuron scaling only
+            petal_weight = resolve_group_weight(group)
+            for k in range(multiplier):
+                angle = 2 * math.pi * k / multiplier
+                cx = round(petal_dist * math.cos(angle))
+                cy = round(petal_dist * math.sin(angle))
+                petal_offsets = [(cx + dx, cy + dy) for dx, dy in petal_local]
+                pesos = [petal_weight_map[(dx, dy)] for dx, dy in petal_local]
+                mask.append({
+                    "peso_dendrita": petal_weight,
+                    "offsets": petal_offsets,
+                    "pesos_sinapsis": pesos,
+                    "random_noise": petal_noise if petal_noise is not None else 0.5,
+                    "grupo_id": grupo_id,
+                })
 
         return mask
 
     # ── square / circle ────────────────────────────────────────────────────
     ring_fn = _ring_sq if shape == "square" else _ring_ci
 
-    if "excitatory" in wiring:
-        exc_dendrite = _build_exc_dendrite(wiring["excitatory"], ring_fn)
-        if exc_dendrite:
-            mask.append(exc_dendrite)
+    for group_index, group in enumerate(groups):
+        grupo_id = group.get("id") or f"g{group_index}"
+        if "sectors" not in group:
+            # ── Single dendrite ──────────────────────────────────────────────
+            dendrite = _build_group_dendrite(group, ring_fn, grupo_id)
+            if dendrite:
+                mask.append(dendrite)
+            continue
 
-    if "inhibitory" not in wiring:
-        return mask
+        # ── Sectored wedges ──────────────────────────────────────────────────
+        n_sectors = group["sectors"]
 
-    inh = wiring["inhibitory"]
-    n_sectors = inh.get("sectors", 12)
+        weight_map: dict[tuple[int, int], float] = {}
+        for i, w in enumerate(group["weights"]):
+            for off in ring_fn(group["offset"] + i):
+                weight_map[off] = w
 
-    inh_weight_map: dict[tuple[int, int], float] = {}
-    for i, w in enumerate(inh["weights"]):
-        for off in ring_fn(inh["offset"] + i):
-            inh_weight_map[off] = w
+        offsets = list(weight_map.keys())
+        density = group.get("density", 1.0)
+        if density < 1.0:
+            offsets = _random_sparse(offsets, density, seed=43)
 
-    inh_offsets = list(inh_weight_map.keys())
-    density = inh.get("density", 1.0)
-    if density < 1.0:
-        inh_offsets = _random_sparse(inh_offsets, density, seed=43)
-
-    inh_noise = inh.get("noise")  # None = not specified; controls per-neuron scaling only
-    sectors = _partition(inh_offsets, n_sectors)
-    for s_idx, sector_offsets in enumerate(sectors):
-        pesos = [inh_weight_map[off] for off in sector_offsets]
-        mask.append({
-            "peso_dendrita": -1.0,
-            "offsets": sector_offsets,
-            "pesos_sinapsis": pesos,
-            "random_noise": inh_noise if inh_noise is not None else 0.5,
-        })
+        noise = group.get("noise")  # None = not specified; controls per-neuron scaling only
+        group_weight = resolve_group_weight(group)
+        sectors = _partition(offsets, n_sectors)
+        for sector_offsets in sectors:
+            pesos = [weight_map[off] for off in sector_offsets]
+            mask.append({
+                "peso_dendrita": group_weight,
+                "offsets": sector_offsets,
+                "pesos_sinapsis": pesos,
+                "random_noise": noise if noise is not None else 0.5,
+                "grupo_id": grupo_id,
+            })
 
     centroid = wiring.get("centroid")
     if centroid:
@@ -485,15 +518,16 @@ MASK_DEAMON_E3_G2_I12_DE1_DI1_WE1_WI1: MaskDef = MASK_DEAMON_E3_G2_I12_DE1_DI1
 # Discrete Mexican-hat approximation: gradient weights per ring, square shape
 _WIRING_MHAT_SQ: DeamonWiringDef = {
     "shape": "square",
-    "excitatory": {
-        "offset": 1,
-        "weights": [1.0, 0.85, 0.50],
-    },
+    "groups": [
+        {"id": "first_ring", "offset": 1, "weights": [1.0, 0.85, 0.50]},
+        {
+            "id": "second_ring",
+            "offset": 6,
+            "sectors": 12,
+            "weights": [0.50, 0.85, 0.70, 0.60, 0.55, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10],
+        },
+    ],
     "gap": {"offset": 4, "size": 2},
-    "inhibitory": {
-        "offset": 6,
-        "weights": [0.50, 0.85, 0.70, 0.60, 0.55, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10],
-    },
 }
 MASK_DEAMON_E3_G2_I12_MHAT_SQ: MaskDef = compile_deamon_wiring(_WIRING_MHAT_SQ)
 
