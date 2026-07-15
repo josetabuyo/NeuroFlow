@@ -31,6 +31,13 @@ class ExperimentSession:
         self._inspect_y: int | None = None
         self._inspect_region_id: str | None = None
         self._frame_count: int = 0
+        # Guards `self.experiment` + the frame it produces: the play loop (a
+        # background task) and message handlers like paint/click/step run
+        # concurrently on the same event loop, and without this lock their
+        # mutate-then-send sequences interleave — producing frames sent out
+        # of generation order (seen as flicker when holding the brush down
+        # while the sim is running).
+        self._experiment_lock = asyncio.Lock()
 
     async def send(self, data: dict[str, Any]) -> None:
         """Send JSON data to the client."""
@@ -91,8 +98,9 @@ class ExperimentSession:
 
         x = message.get("x", 0)
         y = message.get("y", 0)
-        self.experiment.click(x, y)
-        await self._send_frame()
+        async with self._experiment_lock:
+            self.experiment.click(x, y)
+            await self._send_frame()
 
     async def _handle_paint(self, message: dict[str, Any]) -> None:
         """Apply brush: activate/deactivate multiple neurons at once."""
@@ -104,12 +112,13 @@ class ExperimentSession:
         region_id: str | None = message.get("region_id")
         origin: dict[str, int] | None = message.get("origin")
         radius: int = message.get("radius", 0)
-        self.experiment.paint(region_id, cells, value, origin, radius)
-        # Painting a "draw" source region records the stroke into
-        # source.loop.points on the live config — keep the client's copy in
-        # sync so the JSON editor reflects it without a reconnect.
-        await self.send({"type": "config_normalized", "config": self.experiment._config})
-        await self._send_frame()
+        async with self._experiment_lock:
+            self.experiment.paint(region_id, cells, value, origin, radius)
+            # Painting a "draw" source region records the stroke into
+            # source.loop.points on the live config — keep the client's copy in
+            # sync so the JSON editor reflects it without a reconnect.
+            await self.send({"type": "config_normalized", "config": self.experiment._config})
+            await self._send_frame()
 
     async def _stop_play_loop(self) -> None:
         """Stop the play loop if active and notify client."""
@@ -129,15 +138,16 @@ class ExperimentSession:
 
         count = max(1, message.get("count", 1))
 
-        t0 = time.perf_counter()
-        result = self.experiment.step_n(count)
-        elapsed = time.perf_counter() - t0
+        async with self._experiment_lock:
+            t0 = time.perf_counter()
+            result = self.experiment.step_n(count)
+            elapsed = time.perf_counter() - t0
 
-        if result.get("type") == "status" and result.get("state") == "complete":
-            await self.send(result)
-            return
+            if result.get("type") == "status" and result.get("state") == "complete":
+                await self.send(result)
+                return
 
-        await self._send_frame(steps=count, elapsed_s=elapsed)
+            await self._send_frame(steps=count, elapsed_s=elapsed)
 
     async def _handle_play(self, message: dict[str, Any]) -> None:
         """Start continuous processing."""
@@ -247,15 +257,16 @@ class ExperimentSession:
         """Continuously process and send frames."""
         try:
             while self._playing and self.experiment:
-                t0 = time.perf_counter()
-                result = self.experiment.step_n(self.steps_per_tick)
-                elapsed = time.perf_counter() - t0
+                async with self._experiment_lock:
+                    t0 = time.perf_counter()
+                    result = self.experiment.step_n(self.steps_per_tick)
+                    elapsed = time.perf_counter() - t0
 
-                if result.get("type") == "status" and result.get("state") == "complete":
-                    await self.send(result)
-                    self._playing = False
-                    return
-                await self._send_frame(steps=self.steps_per_tick, elapsed_s=elapsed)
+                    if result.get("type") == "status" and result.get("state") == "complete":
+                        await self.send(result)
+                        self._playing = False
+                        return
+                    await self._send_frame(steps=self.steps_per_tick, elapsed_s=elapsed)
                 await asyncio.sleep(1.0 / self.fps)
         except asyncio.CancelledError:
             pass
