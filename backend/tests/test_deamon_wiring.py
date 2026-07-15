@@ -387,9 +387,10 @@ class TestOptionalOffsetWithGap:
         second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
         assert second_offsets == set(_ring_sq(4))
 
-    def test_first_group_omits_offset_resolves_to_gap_plus_one(self):
-        """First group has no "previous" ring (treated as ring 0, the
-        center) -> resolved offset = gap + 1."""
+    def test_first_group_omits_offset_ignores_gap_resolves_to_one(self):
+        """`gap` is strictly intergroup — it must never apply before the
+        first group. An omitted first offset always resolves to 1
+        regardless of a positive gap."""
         wiring = {
             "shape": "square",
             "gap": 2,
@@ -399,7 +400,7 @@ class TestOptionalOffsetWithGap:
         }
         mask = compile_deamon_wiring(wiring)
         first = next(d for d in mask if d["grupo_id"] == "first_ring")
-        assert set(first["offsets"]) == set(_ring_sq(3))
+        assert set(first["offsets"]) == set(_ring_sq(1))
 
     def test_first_group_omits_offset_no_gap_defaults_to_one(self):
         """First group, no gap declared -> resolved offset = 1 (the
@@ -415,18 +416,19 @@ class TestOptionalOffsetWithGap:
         assert set(first["offsets"]) == set(_ring_sq(1))
 
     def test_negative_gap_never_resolves_to_ring_zero(self):
-        """An auto-computed offset must never fall to ring 0 (the center
-        cell) or below, even with a pathological negative gap."""
+        """A negative gap between a second, offset-omitting group and its
+        predecessor must never push the resolved offset to ring 0 or below."""
         wiring = {
             "shape": "square",
             "gap": -5,
             "groups": [
-                {"id": "first_ring", "weights": [1]},
+                {"id": "first_ring", "offset": 1, "weights": [1]},
+                {"id": "second_ring", "weights": [1], "sectors": 4},
             ],
         }
         mask = compile_deamon_wiring(wiring)
-        first = next(d for d in mask if d["grupo_id"] == "first_ring")
-        assert set(first["offsets"]) == set(_ring_sq(1))
+        second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
+        assert second_offsets == set(_ring_sq(1))
 
     def test_all_offsets_explicit_ignores_gap(self):
         """When every group declares its own offset, `gap` is irrelevant."""
