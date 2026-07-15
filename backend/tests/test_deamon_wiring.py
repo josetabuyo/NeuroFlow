@@ -387,8 +387,9 @@ class TestOptionalOffsetWithGap:
         second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
         assert second_offsets == set(_ring_sq(4))
 
-    def test_first_group_omits_offset_resolves_to_gap(self):
-        """First group has no "previous" -> resolved offset = gap."""
+    def test_first_group_omits_offset_resolves_to_gap_plus_one(self):
+        """First group has no "previous" ring (treated as ring 0, the
+        center) -> resolved offset = gap + 1."""
         wiring = {
             "shape": "square",
             "gap": 2,
@@ -398,7 +399,34 @@ class TestOptionalOffsetWithGap:
         }
         mask = compile_deamon_wiring(wiring)
         first = next(d for d in mask if d["grupo_id"] == "first_ring")
-        assert set(first["offsets"]) == set(_ring_sq(2))
+        assert set(first["offsets"]) == set(_ring_sq(3))
+
+    def test_first_group_omits_offset_no_gap_defaults_to_one(self):
+        """First group, no gap declared -> resolved offset = 1 (the
+        innermost ring, right after the center cell)."""
+        wiring = {
+            "shape": "square",
+            "groups": [
+                {"id": "first_ring", "weights": [1]},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        first = next(d for d in mask if d["grupo_id"] == "first_ring")
+        assert set(first["offsets"]) == set(_ring_sq(1))
+
+    def test_negative_gap_never_resolves_to_ring_zero(self):
+        """An auto-computed offset must never fall to ring 0 (the center
+        cell) or below, even with a pathological negative gap."""
+        wiring = {
+            "shape": "square",
+            "gap": -5,
+            "groups": [
+                {"id": "first_ring", "weights": [1]},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        first = next(d for d in mask if d["grupo_id"] == "first_ring")
+        assert set(first["offsets"]) == set(_ring_sq(1))
 
     def test_all_offsets_explicit_ignores_gap(self):
         """When every group declares its own offset, `gap` is irrelevant."""

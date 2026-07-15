@@ -162,16 +162,18 @@ def _resolve_offsets(groups: list[dict[str, Any]], gap: int) -> list[int]:
     A group with an explicit ``offset`` uses it as-is. A group without one
     picks up right after the previous group's outer ring plus ``gap`` empty
     rings: ``resolved = prev_resolved + len(prev["weights"]) - 1 + gap + 1``.
-    The first group treats "previous" as ending at ring -1, so an omitted
-    offset there resolves to ``gap``.
+    The first group treats "previous" as ending at ring 0 (the center cell),
+    so an omitted offset there resolves to ``gap + 1`` — 1 by default. An
+    auto-computed offset never goes below 1 — ring 0 is the center cell
+    itself, never a valid ring start — even with a negative ``gap``.
     """
     resolved: list[int] = []
-    prev_last_ring = -1
+    prev_last_ring = 0
     for group in groups:
         if "offset" in group:
             off = int(group["offset"])
         else:
-            off = prev_last_ring + gap + 1
+            off = max(1, prev_last_ring + gap + 1)
         resolved.append(off)
         prev_last_ring = off + len(group["weights"]) - 1
     return resolved
