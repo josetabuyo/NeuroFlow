@@ -157,27 +157,27 @@ def resolve_group_weight(group: dict[str, Any]) -> float:
 
 
 def _resolve_offsets(groups: list[dict[str, Any]], gap: int) -> list[int]:
-    """Resolve each ring group's ``offset``, filling in the ones that omit it.
+    """Resolve each ring group's starting offset from ``gap``.
 
-    A group with an explicit ``offset`` uses it as-is. A group without one
-    picks up right after the previous group's outer ring plus ``gap`` empty
-    rings: ``resolved = prev_resolved + len(prev["weights"]) - 1 + gap + 1``.
-    ``gap`` is strictly an *intergroup* gap — it never applies before the
-    first group. The first group has no "previous", so an omitted offset
-    there always resolves to exactly 1 (right after the center cell, ring 0)
-    regardless of ``gap``. An auto-computed offset never goes below 1 — ring
-    0 is the center cell itself, never a valid ring start — even with a
+    Each group picks up right after the previous group's outer ring plus a
+    ``gap`` of empty rings: ``resolved = prev_resolved + len(prev["weights"])
+    - 1 + gap + 1``. A group may set its own ``gap``, overriding the
+    wiring-level default for that one transition; a group without one uses
+    the wiring's ``gap``. ``gap`` is strictly an *intergroup* gap — it never
+    applies before the first group. The first group has no "previous", so it
+    always resolves to exactly 1 (right after the center cell, ring 0)
+    regardless of any ``gap``. An auto-computed offset never goes below 1 —
+    ring 0 is the center cell itself, never a valid ring start — even with a
     negative ``gap``.
     """
     resolved: list[int] = []
     prev_last_ring: int | None = None
     for group in groups:
-        if "offset" in group:
-            off = int(group["offset"])
-        elif prev_last_ring is None:
+        if prev_last_ring is None:
             off = 1
         else:
-            off = max(1, prev_last_ring + gap + 1)
+            group_gap = group.get("gap", gap)
+            off = max(1, prev_last_ring + group_gap + 1)
         resolved.append(off)
         prev_last_ring = off + len(group["weights"]) - 1
     return resolved
@@ -232,10 +232,12 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
     it never determines polarity (that's always the sign of the group's
     resolved ``weight``).
 
-    A group's ``offset`` is optional. Omitted → accumulates right after the
-    previous group's outer ring, with ``wiring["gap"]`` empty rings in
-    between (default 0, i.e. adjacent). ``gap`` is strictly intergroup — the
-    first group, having no previous ring, always resolves an omitted offset
+    A group's starting ring is always computed, never set directly: it
+    accumulates right after the previous group's outer ring, with a ``gap``
+    of empty rings in between (default 0, i.e. adjacent). That ``gap`` comes
+    from ``wiring["gap"]`` unless the group sets its own ``gap``, which
+    overrides the default for that one transition. ``gap`` is strictly
+    intergroup — the first group, having no previous ring, always resolves
     to 1 (right after the center cell) regardless of ``gap``. See
     `_resolve_offsets`.
 
@@ -250,11 +252,11 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
 
             {
                 "shape": "square",
-                "gap": int,  # optional, default 0 — used by groups without their own offset
+                "gap": int,  # optional, default 0 — wiring-level default gap
                 "groups": [
-                    {"id": "first_ring", "offset": int, "weights": [...], "density": float},
+                    {"id": "first_ring", "weights": [...], "density": float},
                     {"id": "second_ring", "weights": [...],
-                     "sectors": int, "density": float},
+                     "sectors": int, "density": float, "gap": int},  # overrides wiring gap
                 ],
             }
 
@@ -495,15 +497,14 @@ MASK_DEAMON_E3_G2_I12_DE1_DI1_WE1_WI1: MaskDef = MASK_DEAMON_E3_G2_I12_DE1_DI1
 _WIRING_MHAT_SQ: DeamonWiringDef = {
     "shape": "square",
     "groups": [
-        {"id": "first_ring", "offset": 1, "weights": [1.0, 0.85, 0.50]},
+        {"id": "first_ring", "weights": [1.0, 0.85, 0.50]},
         {
             "id": "second_ring",
-            "offset": 6,
             "sectors": 12,
             "weights": [0.50, 0.85, 0.70, 0.60, 0.55, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10],
         },
     ],
-    "gap": {"offset": 4, "size": 2},
+    "gap": 2,
 }
 MASK_DEAMON_E3_G2_I12_MHAT_SQ: MaskDef = compile_deamon_wiring(_WIRING_MHAT_SQ)
 

@@ -32,8 +32,8 @@ def _experiment_config(nerve_cfg: dict) -> dict:
                 "deamon": {
                     "shape": "square",
                     "groups": [
-                        {"id": "excitatory", "weight": 0.9, "offset": 1, "noise": 0, "weights": [1]},
-                        {"id": "inhibitory", "weight": -1.0, "offset": 3, "noise": 0, "sectors": 4, "weights": [1]},
+                        {"id": "excitatory", "weight": 0.9, "noise": 0, "weights": [1]},
+                        {"id": "inhibitory", "weight": -1.0, "gap": 1, "noise": 0, "sectors": 4, "weights": [1]},
                     ],
                 },
             },

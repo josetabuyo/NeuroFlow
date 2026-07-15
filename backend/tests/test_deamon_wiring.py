@@ -19,8 +19,8 @@ from core.masks import _compute_preview_grid, _ring_ci, _ring_sq, compile_deamon
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _square_wiring(exc_noise=None, inh_noise=None, sectors=4):
-    exc = {"id": "excitatory", "offset": 1, "weights": [1, 1, 1]}
-    inh = {"id": "inhibitory", "offset": 4, "weights": [1, 1, 1], "sectors": sectors}
+    exc = {"id": "excitatory", "weights": [1, 1, 1]}
+    inh = {"id": "inhibitory", "weights": [1, 1, 1], "sectors": sectors}
     if exc_noise is not None:
         exc["noise"] = exc_noise
     if inh_noise is not None:
@@ -259,8 +259,8 @@ def _crown_wiring(sectors=4):
     return {
         "shape": "crown",
         "groups": [
-            {"id": "excitatory", "offset": 1, "weights": [1.0, 0.5]},
-            {"id": "inhibitory", "offset": 4, "weights": [1.0, 1.0], "sectors": sectors},
+            {"id": "excitatory", "weights": [1.0, 0.5]},
+            {"id": "inhibitory", "gap": 1, "weights": [1.0, 1.0], "sectors": sectors},
         ],
     }
 
@@ -319,8 +319,8 @@ class TestGrupoIdFromDeclaredId:
         wiring = {
             "shape": "square",
             "groups": [
-                {"id": "first_ring", "offset": 1, "weights": [1]},
-                {"id": "second_ring", "offset": 3, "weights": [1], "sectors": 4},
+                {"id": "first_ring", "weights": [1]},
+                {"id": "second_ring", "gap": 1, "weights": [1], "sectors": 4},
             ],
         }
         mask = compile_deamon_wiring(wiring)
@@ -331,8 +331,8 @@ class TestGrupoIdFromDeclaredId:
         wiring = {
             "shape": "square",
             "groups": [
-                {"offset": 1, "weights": [1]},
-                {"offset": 3, "weights": [1], "sectors": 4},
+                {"weights": [1]},
+                {"gap": 1, "weights": [1], "sectors": 4},
             ],
         }
         mask = compile_deamon_wiring(wiring)
@@ -345,7 +345,7 @@ class TestGrupoIdFromDeclaredId:
         wiring = {
             "shape": "square",
             "groups": [
-                {"id": "second_ring", "weight": 0.5, "offset": 1, "weights": [1]},
+                {"id": "second_ring", "weight": 0.5, "weights": [1]},
             ],
         }
         mask = compile_deamon_wiring(wiring)
@@ -353,19 +353,21 @@ class TestGrupoIdFromDeclaredId:
         assert mask[0]["grupo_id"] == "second_ring"
 
 
-class TestOptionalOffsetWithGap:
-    """A group's `offset` is optional: omitted → accumulates right after the
-    previous group's outer ring, plus `wiring["gap"]` empty rings (default 0
-    when `gap` is absent and needed)."""
+class TestGapResolution:
+    """A group's offset is always computed, never set directly: it
+    accumulates right after the previous group's outer ring, plus a `gap` of
+    empty rings. `gap` defaults at the wiring level (`wiring["gap"]`,
+    default 0 when absent) and a group may override it for its own
+    transition via its own `gap`."""
 
-    def test_second_group_omits_offset_uses_explicit_gap(self):
-        """first_ring offset=1, weights=[1,1,1] -> outer ring = 3.
-        second_ring omits offset, gap=3 -> resolved offset = 3 + 3 + 1 = 7."""
+    def test_second_group_uses_wiring_gap(self):
+        """first_ring weights=[1,1,1] -> outer ring = 3.
+        second_ring has no own gap, wiring gap=3 -> resolved offset = 3 + 3 + 1 = 7."""
         wiring = {
             "shape": "square",
             "gap": 3,
             "groups": [
-                {"id": "first_ring", "offset": 1, "weights": [1, 1, 1]},
+                {"id": "first_ring", "weights": [1, 1, 1]},
                 {"id": "second_ring", "weights": [1], "sectors": 4},
             ],
         }
@@ -373,13 +375,13 @@ class TestOptionalOffsetWithGap:
         second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
         assert second_offsets == set(_ring_sq(7))
 
-    def test_second_group_omits_offset_no_gap_defaults_adjacent(self):
-        """No `gap` declared -> defaults to 0 -> second ring starts right
-        after the first one's outer ring (adjacent, no empty ring)."""
+    def test_second_group_no_gap_defaults_adjacent(self):
+        """No `gap` declared anywhere -> defaults to 0 -> second ring starts
+        right after the first one's outer ring (adjacent, no empty ring)."""
         wiring = {
             "shape": "square",
             "groups": [
-                {"id": "first_ring", "offset": 1, "weights": [1, 1, 1]},
+                {"id": "first_ring", "weights": [1, 1, 1]},
                 {"id": "second_ring", "weights": [1], "sectors": 4},
             ],
         }
@@ -387,22 +389,37 @@ class TestOptionalOffsetWithGap:
         second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
         assert second_offsets == set(_ring_sq(4))
 
-    def test_first_group_omits_offset_ignores_gap_resolves_to_one(self):
+    def test_group_gap_overrides_wiring_gap(self):
+        """The wiring default gap is 3, but second_ring declares its own
+        gap=0, which wins for that transition: resolved offset = 3 + 0 + 1 = 4."""
+        wiring = {
+            "shape": "square",
+            "gap": 3,
+            "groups": [
+                {"id": "first_ring", "weights": [1, 1, 1]},
+                {"id": "second_ring", "gap": 0, "weights": [1], "sectors": 4},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
+        assert second_offsets == set(_ring_sq(4))
+
+    def test_first_group_ignores_gap_resolves_to_one(self):
         """`gap` is strictly intergroup — it must never apply before the
-        first group. An omitted first offset always resolves to 1
-        regardless of a positive gap."""
+        first group. The first group always resolves to 1 regardless of a
+        positive wiring gap or an own gap."""
         wiring = {
             "shape": "square",
             "gap": 2,
             "groups": [
-                {"id": "first_ring", "weights": [1]},
+                {"id": "first_ring", "gap": 5, "weights": [1]},
             ],
         }
         mask = compile_deamon_wiring(wiring)
         first = next(d for d in mask if d["grupo_id"] == "first_ring")
         assert set(first["offsets"]) == set(_ring_sq(1))
 
-    def test_first_group_omits_offset_no_gap_defaults_to_one(self):
+    def test_first_group_no_gap_defaults_to_one(self):
         """First group, no gap declared -> resolved offset = 1 (the
         innermost ring, right after the center cell)."""
         wiring = {
@@ -415,14 +432,14 @@ class TestOptionalOffsetWithGap:
         first = next(d for d in mask if d["grupo_id"] == "first_ring")
         assert set(first["offsets"]) == set(_ring_sq(1))
 
-    def test_negative_gap_never_resolves_to_ring_zero(self):
-        """A negative gap between a second, offset-omitting group and its
-        predecessor must never push the resolved offset to ring 0 or below."""
+    def test_negative_wiring_gap_never_resolves_to_ring_zero(self):
+        """A negative gap between a second group and its predecessor must
+        never push the resolved offset to ring 0 or below."""
         wiring = {
             "shape": "square",
             "gap": -5,
             "groups": [
-                {"id": "first_ring", "offset": 1, "weights": [1]},
+                {"id": "first_ring", "weights": [1]},
                 {"id": "second_ring", "weights": [1], "sectors": 4},
             ],
         }
@@ -430,16 +447,18 @@ class TestOptionalOffsetWithGap:
         second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
         assert second_offsets == set(_ring_sq(1))
 
-    def test_all_offsets_explicit_ignores_gap(self):
-        """When every group declares its own offset, `gap` is irrelevant."""
-        wiring_no_gap = {
+    def test_negative_group_gap_never_resolves_to_ring_zero(self):
+        """Same clamp applies when the negative gap comes from the group's
+        own override rather than the wiring default."""
+        wiring = {
             "shape": "square",
             "groups": [
-                {"id": "first_ring", "offset": 1, "weights": [1]},
-                {"id": "second_ring", "offset": 10, "weights": [1], "sectors": 4},
+                {"id": "first_ring", "weights": [1]},
+                {"id": "second_ring", "gap": -5, "weights": [1], "sectors": 4},
             ],
         }
-        wiring_with_gap = {**wiring_no_gap, "gap": 99}
-        assert compile_deamon_wiring(wiring_no_gap) == compile_deamon_wiring(wiring_with_gap)
+        mask = compile_deamon_wiring(wiring)
+        second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
+        assert second_offsets == set(_ring_sq(1))
 
 

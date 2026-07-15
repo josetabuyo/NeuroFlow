@@ -153,8 +153,8 @@ def _tissue_config(delta_weight: dict | None = None, **extra_conns: object) -> d
                 "deamon": {
                     "shape": "square",
                     "groups": [
-                        {"id": "first_ring", "weight": 0.6, "offset": 1, "noise": 0, "weights": [1]},
-                        {"id": "second_ring", "weight": -0.7, "offset": 3, "noise": 0, "sectors": 12, "weights": [1]},
+                        {"id": "first_ring", "weight": 0.6, "noise": 0, "weights": [1]},
+                        {"id": "second_ring", "weight": -0.7, "gap": 1, "noise": 0, "sectors": 12, "weights": [1]},
                     ],
                 },
             },

@@ -80,13 +80,14 @@ export interface RegionSource {
 /** One dendrite group within a deamon wiring block. No fixed "excitatory"/
  * "inhibitory" keys — `id` is just a label, and `weight`'s sign is the
  * group's polarity (defaults to +1 for a single dendrite, -1 once `sectors`
- * make it partitioned, unless `weight` overrides it). `offset` is optional —
- * omitted, it accumulates right after the previous group's outer ring plus
- * the wiring's `gap` (see `DeamonWiring.gap`). */
+ * make it partitioned, unless `weight` overrides it). A group's starting
+ * ring is always computed: it accumulates right after the previous group's
+ * outer ring plus a `gap` of empty rings, taken from this group's own `gap`
+ * if set, otherwise the wiring's `gap` (see `DeamonWiring.gap`). */
 export interface DeamonGroup {
   id: string;
   weight?: number;
-  offset?: number;
+  gap?: number;
   weights?: number[];
   noise?: number;
   density?: number;
