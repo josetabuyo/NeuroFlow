@@ -5,16 +5,15 @@ Validates:
 - noise controls per-neuron scaling only (template weights unchanged)
 - aplicar_mascara_2d uses random_noise to determine scaling range
 - _compute_preview_grid uses the same noise formula as the live network
-- circle / circle_flower / crown shapes produce circular (Euclidean) cells
+- crown shape produces circular (Euclidean) cells
 """
 
-import math
 import random
 
 import pytest
 
 from core.constructor import Constructor
-from core.masks import _compute_preview_grid, _ring_ci, compile_deamon_wiring
+from core.masks import _compute_preview_grid, _ring_ci, _ring_sq, compile_deamon_wiring
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -85,19 +84,6 @@ class TestCompileDeamonWiringRandomNoise:
         inh_clean  = [d for d in mask_clean  if d["peso_dendrita"] < 0]
         for d_n, d_c in zip(inh_noisy, inh_clean):
             assert d_n["pesos_sinapsis"] == d_c["pesos_sinapsis"]
-
-    def test_square_flower_petals_get_random_noise(self):
-        wiring = {
-            "shape": "square_flower",
-            "groups": [
-                {"id": "excitatory", "offset": 1, "weights": [1], "noise": 0.3},
-                {"id": "inhibitory", "offset": 5, "weights": [1], "multiplier": 4, "noise": 0.3},
-            ],
-        }
-        mask = compile_deamon_wiring(wiring)
-        inh = [d for d in mask if d["peso_dendrita"] < 0]
-        assert len(inh) == 4
-        assert all(d["random_noise"] == pytest.approx(0.3) for d in inh)
 
     def test_square_structure_one_exc_plus_sectors(self):
         mask = compile_deamon_wiring(_square_wiring(sectors=6))
@@ -269,9 +255,9 @@ class TestPreviewGridNoise:
 
 # ── circle shape ──────────────────────────────────────────────────────────────
 
-def _circle_wiring(sectors=4):
+def _crown_wiring(sectors=4):
     return {
-        "shape": "circle",
+        "shape": "crown",
         "groups": [
             {"id": "excitatory", "offset": 1, "weights": [1.0, 0.5]},
             {"id": "inhibitory", "offset": 4, "weights": [1.0, 1.0], "sectors": sectors},
@@ -279,11 +265,11 @@ def _circle_wiring(sectors=4):
     }
 
 
-class TestCircleShape:
-    """compile_deamon_wiring with shape='circle' produces Euclidean (round) cells."""
+class TestCrownShape:
+    """compile_deamon_wiring with shape='crown' produces Euclidean (round) cells."""
 
     def test_structure_one_exc_plus_sectors(self):
-        mask = compile_deamon_wiring(_circle_wiring(sectors=6))
+        mask = compile_deamon_wiring(_crown_wiring(sectors=6))
         exc = [d for d in mask if d["peso_dendrita"] > 0]
         inh = [d for d in mask if d["peso_dendrita"] < 0]
         assert len(exc) == 1
@@ -291,7 +277,7 @@ class TestCircleShape:
 
     def test_exc_cells_are_euclidean_rings(self):
         """Excitatory cells must be exactly the cells in _ring_ci(1) ∪ _ring_ci(2)."""
-        mask = compile_deamon_wiring(_circle_wiring())
+        mask = compile_deamon_wiring(_crown_wiring())
         exc = next(d for d in mask if d["peso_dendrita"] > 0)
         expected = set(_ring_ci(1)) | set(_ring_ci(2))
         assert set(exc["offsets"]) == expected
@@ -302,7 +288,7 @@ class TestCircleShape:
         Chebyshev r=2 includes (2,2) etc.; Euclidean r=2 (round(sqrt(8))=3) excludes them.
         For exc rings 1..2 the cell (2,2) has euclidean dist sqrt(8)≈2.83 → round→3, not 1 or 2.
         """
-        mask = compile_deamon_wiring(_circle_wiring())
+        mask = compile_deamon_wiring(_crown_wiring())
         exc = next(d for d in mask if d["peso_dendrita"] > 0)
         offsets = set(exc["offsets"])
         # (2,2) is the classic chebyshev-only corner at the r=2 level
@@ -311,65 +297,13 @@ class TestCircleShape:
 
     def test_inh_cells_are_euclidean(self):
         """All inhibitory cells must live on Euclidean rings 4 or 5."""
-        mask = compile_deamon_wiring(_circle_wiring())
+        mask = compile_deamon_wiring(_crown_wiring())
         inh_cells = {off for d in mask if d["peso_dendrita"] < 0 for off in d["offsets"]}
         valid = set(_ring_ci(4)) | set(_ring_ci(5))
         assert inh_cells == valid
 
-    def test_noise_defaults_on_circle(self):
-        mask = compile_deamon_wiring(_circle_wiring())
-        assert all(d["random_noise"] == 0.5 for d in mask)
-
-
-# ── circle_flower shape ───────────────────────────────────────────────────────
-
-class TestCircleFlowerShape:
-    """circle_flower petals use Euclidean ring cells, not Chebyshev."""
-
-    def test_structure_same_as_square_flower(self):
-        wiring = {
-            "shape": "circle_flower",
-            "groups": [
-                {"id": "excitatory", "offset": 1, "weights": [1.0]},
-                {"id": "inhibitory", "offset": 5, "weights": [1.0], "multiplier": 4},
-            ],
-        }
-        mask = compile_deamon_wiring(wiring)
-        exc = [d for d in mask if d["peso_dendrita"] > 0]
-        inh = [d for d in mask if d["peso_dendrita"] < 0]
-        assert len(exc) == 1
-        assert len(inh) == 4
-
-    def test_petal_body_uses_euclidean_cells(self):
-        """Petal body at ring 1 must match _ring_ci(1), not _ring_sq(1).
-
-        _ring_sq(1) == _ring_ci(1) (they agree at r=1), so we use r=2 where
-        they differ: chebyshev r=2 includes (2,2); euclidean r=2 does not.
-        """
-        wiring = {
-            "shape": "circle_flower",
-            "groups": [
-                {"id": "inhibitory", "offset": 5, "weights": [1.0, 0.5], "multiplier": 1},
-            ],
-        }
-        mask = compile_deamon_wiring(wiring)
-        petal = mask[0]
-        # center at cos(0)*5=5, sin(0)*5=0 → petal placed at (5, 0)
-        # local offsets (relative to petal center) must come from _ring_ci, not _ring_sq
-        petal_center = (round(5 * math.cos(0)), round(5 * math.sin(0)))
-        local_offsets = {(dx - petal_center[0], dy - petal_center[1]) for dx, dy in petal["offsets"]}
-        # (2,2) should NOT appear (it's chebyshev r=2 but not euclidean r=2)
-        assert (2, 2) not in local_offsets
-
-    def test_noise_defaults_on_circle_flower(self):
-        wiring = {
-            "shape": "circle_flower",
-            "groups": [
-                {"id": "excitatory", "offset": 1, "weights": [1.0]},
-                {"id": "inhibitory", "offset": 5, "weights": [1.0], "multiplier": 3},
-            ],
-        }
-        mask = compile_deamon_wiring(wiring)
+    def test_noise_defaults_on_crown(self):
+        mask = compile_deamon_wiring(_crown_wiring())
         assert all(d["random_noise"] == 0.5 for d in mask)
 
 
@@ -405,18 +339,6 @@ class TestGrupoIdFromDeclaredId:
         grupo_ids = {d["grupo_id"] for d in mask}
         assert grupo_ids == {"g0", "g1"}
 
-    def test_declared_id_used_as_grupo_id_flower(self):
-        wiring = {
-            "shape": "square_flower",
-            "groups": [
-                {"id": "core", "offset": 1, "weights": [1.0]},
-                {"id": "petals", "offset": 5, "weights": [1.0], "multiplier": 3},
-            ],
-        }
-        mask = compile_deamon_wiring(wiring)
-        grupo_ids = {d["grupo_id"] for d in mask}
-        assert grupo_ids == {"core", "petals"}
-
     def test_declared_id_does_not_affect_polarity(self):
         """A group named "second_ring" with a positive weight still resolves
         positive — the id is a label, not a polarity source."""
@@ -429,5 +351,65 @@ class TestGrupoIdFromDeclaredId:
         mask = compile_deamon_wiring(wiring)
         assert mask[0]["peso_dendrita"] == 0.5
         assert mask[0]["grupo_id"] == "second_ring"
+
+
+class TestOptionalOffsetWithGap:
+    """A group's `offset` is optional: omitted → accumulates right after the
+    previous group's outer ring, plus `wiring["gap"]` empty rings (default 0
+    when `gap` is absent and needed)."""
+
+    def test_second_group_omits_offset_uses_explicit_gap(self):
+        """first_ring offset=1, weights=[1,1,1] -> outer ring = 3.
+        second_ring omits offset, gap=3 -> resolved offset = 3 + 3 + 1 = 7."""
+        wiring = {
+            "shape": "square",
+            "gap": 3,
+            "groups": [
+                {"id": "first_ring", "offset": 1, "weights": [1, 1, 1]},
+                {"id": "second_ring", "weights": [1], "sectors": 4},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
+        assert second_offsets == set(_ring_sq(7))
+
+    def test_second_group_omits_offset_no_gap_defaults_adjacent(self):
+        """No `gap` declared -> defaults to 0 -> second ring starts right
+        after the first one's outer ring (adjacent, no empty ring)."""
+        wiring = {
+            "shape": "square",
+            "groups": [
+                {"id": "first_ring", "offset": 1, "weights": [1, 1, 1]},
+                {"id": "second_ring", "weights": [1], "sectors": 4},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        second_offsets = {off for d in mask if d["grupo_id"] == "second_ring" for off in d["offsets"]}
+        assert second_offsets == set(_ring_sq(4))
+
+    def test_first_group_omits_offset_resolves_to_gap(self):
+        """First group has no "previous" -> resolved offset = gap."""
+        wiring = {
+            "shape": "square",
+            "gap": 2,
+            "groups": [
+                {"id": "first_ring", "weights": [1]},
+            ],
+        }
+        mask = compile_deamon_wiring(wiring)
+        first = next(d for d in mask if d["grupo_id"] == "first_ring")
+        assert set(first["offsets"]) == set(_ring_sq(2))
+
+    def test_all_offsets_explicit_ignores_gap(self):
+        """When every group declares its own offset, `gap` is irrelevant."""
+        wiring_no_gap = {
+            "shape": "square",
+            "groups": [
+                {"id": "first_ring", "offset": 1, "weights": [1]},
+                {"id": "second_ring", "offset": 10, "weights": [1], "sectors": 4},
+            ],
+        }
+        wiring_with_gap = {**wiring_no_gap, "gap": 99}
+        assert compile_deamon_wiring(wiring_no_gap) == compile_deamon_wiring(wiring_with_gap)
 
 

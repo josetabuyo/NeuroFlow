@@ -162,13 +162,12 @@ def _convert_deamon_groups(deamon: dict[str, Any]) -> dict[str, Any]:
     the sign of each group's resolved weight."""
     if "groups" in deamon or ("excitatory" not in deamon and "inhibitory" not in deamon):
         return deamon
-    is_flower = deamon.get("shape") in ("square_flower", "circle_flower")
     groups: list[dict[str, Any]] = []
     if "excitatory" in deamon:
         groups.append({"id": "first_ring", **deamon["excitatory"]})
     if "inhibitory" in deamon:
         inh = dict(deamon["inhibitory"])
-        inh.setdefault("multiplier" if is_flower else "sectors", 8 if is_flower else 12)
+        inh.setdefault("sectors", 12)
         groups.append({"id": "second_ring", **inh})
     new_deamon = {k: v for k, v in deamon.items() if k not in ("excitatory", "inhibitory")}
     new_deamon["groups"] = groups

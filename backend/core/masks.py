@@ -143,10 +143,10 @@ def _apply_noise(weights: list[float], noise: float, seed: int) -> list[float]:
 
 def default_group_weight(group: dict[str, Any]) -> float:
     """Structural default weight for a group that doesn't set its own:
-    unsectored/unmultiplied (single dendrite) groups default to +1.0,
-    sectored/petal groups to -1.0 — the historical excitatory/inhibitory
-    convention, driven by shape instead of by name."""
-    return -1.0 if ("sectors" in group or "multiplier" in group) else 1.0
+    unsectored (single dendrite) groups default to +1.0, sectored groups to
+    -1.0 — the historical excitatory/inhibitory convention, driven by shape
+    instead of by name."""
+    return -1.0 if "sectors" in group else 1.0
 
 
 def resolve_group_weight(group: dict[str, Any]) -> float:
@@ -156,15 +156,37 @@ def resolve_group_weight(group: dict[str, Any]) -> float:
     return float(weight) if weight is not None else default_group_weight(group)
 
 
+def _resolve_offsets(groups: list[dict[str, Any]], gap: int) -> list[int]:
+    """Resolve each ring group's ``offset``, filling in the ones that omit it.
+
+    A group with an explicit ``offset`` uses it as-is. A group without one
+    picks up right after the previous group's outer ring plus ``gap`` empty
+    rings: ``resolved = prev_resolved + len(prev["weights"]) - 1 + gap + 1``.
+    The first group treats "previous" as ending at ring -1, so an omitted
+    offset there resolves to ``gap``.
+    """
+    resolved: list[int] = []
+    prev_last_ring = -1
+    for group in groups:
+        if "offset" in group:
+            off = int(group["offset"])
+        else:
+            off = prev_last_ring + gap + 1
+        resolved.append(off)
+        prev_last_ring = off + len(group["weights"]) - 1
+    return resolved
+
+
 def _build_group_dendrite(
     group: dict[str, Any],
     ring_fn: Any,
     grupo_id: str,
+    offset: int,
 ) -> dict[str, Any] | None:
-    """Build the single gradient dendrite for an unsectored/unmultiplied group."""
+    """Build the single gradient dendrite for an unsectored group."""
     weight_map: dict[tuple[int, int], float] = {}
     for i, w in enumerate(group["weights"]):
-        for off in ring_fn(group["offset"] + i):
+        for off in ring_fn(offset + i):
             weight_map[off] = w
     if not weight_map:
         return None
@@ -190,12 +212,12 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
     self-contained (its own weight, ring math, density, noise) and plays one
     of two roles inferred from the fields it carries — never from its ``id``:
 
-    - **single dendrite** (no ``sectors``/``multiplier``): one gradient
-      dendrite, ring offsets from ``offset``/``weights``. Defaults to weight
-      ``+1.0`` unless the group sets its own ``weight``.
-    - **partitioned** (``sectors`` for square/circle, ``multiplier`` for the
-      flower shapes): split into that many wedges/petals, one dendrite each.
-      Defaults to weight ``-1.0`` unless the group sets its own ``weight``.
+    - **single dendrite** (no ``sectors``): one gradient dendrite, ring
+      offsets from ``offset``/``weights``. Defaults to weight ``+1.0``
+      unless the group sets its own ``weight``.
+    - **partitioned** (``sectors``): split into that many angular wedges,
+      one dendrite each. Defaults to weight ``-1.0`` unless the group sets
+      its own ``weight``.
 
     A group's ``id`` (any string, e.g. ``"first_ring"``/``"second_ring"`` by
     convention) becomes every one of its dendrites' ``grupo_id`` — used by
@@ -204,100 +226,45 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
     it never determines polarity (that's always the sign of the group's
     resolved ``weight``).
 
+    A group's ``offset`` is optional. Omitted → accumulates right after the
+    previous group's outer ring, with ``wiring["gap"]`` empty rings in
+    between (default 0, i.e. adjacent). See `_resolve_offsets`.
+
     Shapes
     ------
-    ``square`` / ``circle``
-        Square uses Chebyshev (square) rings, circle uses Euclidean (round)
+    ``square`` / ``crown``
+        Square uses Chebyshev (square) rings, crown uses Euclidean (round)
         rings. A partitioned group's wedges cover the full ring range,
-        clockwise from East.
+        clockwise from East. ``crown`` is the default.
 
         Format::
 
             {
                 "shape": "square",
+                "gap": int,  # optional, default 0 — used by groups without their own offset
                 "groups": [
                     {"id": "first_ring", "offset": int, "weights": [...], "density": float},
-                    {"id": "second_ring", "offset": int, "weights": [...],
+                    {"id": "second_ring", "weights": [...],
                      "sectors": int, "density": float},
-                ],
-                "gap": {"offset": int, "size": int},
-            }
-
-    ``square_flower`` / ``circle_flower``
-        A single-dendrite group forms the center cup (Chebyshev or Euclidean
-        rings). A partitioned group's petals (``multiplier``, default 8) are
-        placed at distance ``offset`` from the center, angularly equidistant;
-        petal body uses the same ring kind as the center.
-
-        Format::
-
-            {
-                "shape": "square_flower",
-                "groups": [
-                    {"id": "first_ring", "offset": int, "weights": [...], "density": float},
-                    {"id": "second_ring", "offset": int, "multiplier": int,
-                     "weights": [...], "density": float},
                 ],
             }
 
     """
     groups = wiring.get("groups", [])
-    shape = wiring.get("shape", "circle")
+    shape = wiring.get("shape", "crown")
+    gap = wiring.get("gap", 0)
     mask: MaskDef = []
 
-    if shape in ("square_flower", "circle_flower"):
-        flower_ring = _ring_ci if shape == "circle_flower" else _ring_sq
-        for group_index, group in enumerate(groups):
-            grupo_id = group.get("id") or f"g{group_index}"
-            if "multiplier" not in group:
-                # ── Center (single dendrite) ────────────────────────────────
-                dendrite = _build_group_dendrite(group, flower_ring, grupo_id)
-                if dendrite:
-                    mask.append(dendrite)
-                continue
-
-            # ── Petals ───────────────────────────────────────────────────────
-            petal_dist: int = group["offset"]
-            multiplier: int = group["multiplier"]
-
-            # Petal cup shape: center cell at weight 1, then rings 1, 2, …
-            petal_weight_map: dict[tuple[int, int], float] = {(0, 0): 1.0}
-            for i, w in enumerate(group["weights"]):
-                for dx, dy in flower_ring(i + 1):
-                    petal_weight_map[(dx, dy)] = w
-
-            # Apply density once — same subsampled pattern for every petal
-            petal_local = list(petal_weight_map.keys())
-            density = group.get("density", 1.0)
-            if density < 1.0:
-                petal_local = _random_sparse(petal_local, density, seed=43)
-
-            petal_noise = group.get("noise")  # None = not specified; controls per-neuron scaling only
-            petal_weight = resolve_group_weight(group)
-            for k in range(multiplier):
-                angle = 2 * math.pi * k / multiplier
-                cx = round(petal_dist * math.cos(angle))
-                cy = round(petal_dist * math.sin(angle))
-                petal_offsets = [(cx + dx, cy + dy) for dx, dy in petal_local]
-                pesos = [petal_weight_map[(dx, dy)] for dx, dy in petal_local]
-                mask.append({
-                    "peso_dendrita": petal_weight,
-                    "offsets": petal_offsets,
-                    "pesos_sinapsis": pesos,
-                    "random_noise": petal_noise if petal_noise is not None else 0.5,
-                    "grupo_id": grupo_id,
-                })
-
-        return mask
-
-    # ── square / circle ────────────────────────────────────────────────────
+    # ── square / crown ────────────────────────────────────────────────────
     ring_fn = _ring_sq if shape == "square" else _ring_ci
+    resolved_offsets = _resolve_offsets(groups, gap)
 
     for group_index, group in enumerate(groups):
         grupo_id = group.get("id") or f"g{group_index}"
+        offset = resolved_offsets[group_index]
         if "sectors" not in group:
             # ── Single dendrite ──────────────────────────────────────────────
-            dendrite = _build_group_dendrite(group, ring_fn, grupo_id)
+            dendrite = _build_group_dendrite(group, ring_fn, grupo_id, offset)
             if dendrite:
                 mask.append(dendrite)
             continue
@@ -307,7 +274,7 @@ def compile_deamon_wiring(wiring: DeamonWiringDef) -> MaskDef:
 
         weight_map: dict[tuple[int, int], float] = {}
         for i, w in enumerate(group["weights"]):
-            for off in ring_fn(group["offset"] + i):
+            for off in ring_fn(offset + i):
                 weight_map[off] = w
 
         offsets = list(weight_map.keys())
