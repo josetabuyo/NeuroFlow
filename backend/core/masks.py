@@ -1133,6 +1133,22 @@ def get_random_weights(mask_id: str) -> bool:
     return MASK_PRESETS[mask_id].get("random_weights", True)
 
 
+def _mask_extent(mask: MaskDef) -> int:
+    """Max Chebyshev distance from center among all synapse offsets in the mask."""
+    max_r = 0
+    for dendrite in mask:
+        for dx, dy in dendrite["offsets"]:
+            max_r = max(max_r, abs(dx), abs(dy))
+    return max_r
+
+
+def _preview_grid_size(mask: MaskDef, margin: int = 2) -> int:
+    """Grid side length that fits every synapse in `mask` plus a small margin,
+    so the preview never has to clip/drop cells — the frontend scales the
+    whole grid down to fit its container, so a bigger grid just renders smaller."""
+    return 2 * (_mask_extent(mask) + margin) + 1
+
+
 def _compute_preview_grid(
     mask: MaskDef,
     grid_width: int = 50,
@@ -1253,27 +1269,31 @@ def _compute_dendrite_info(
 
 
 def get_mask_info(
-    grid_width: int = 50,
-    grid_height: int = 50,
+    grid_width: int | None = None,
+    grid_height: int | None = None,
 ) -> list[dict[str, Any]]:
     """Get metadata for all mask presets (without the mask data itself)."""
     result = []
     for preset in MASK_PRESETS.values():
+        mask = preset["mask"]
+        size = _preview_grid_size(mask)
+        gw = grid_width or size
+        gh = grid_height or size
         entry = {k: v for k, v in preset.items() if k != "mask"}
         entry["preview_grid"] = _compute_preview_grid(
-            preset["mask"], grid_width, grid_height,
+            mask, gw, gh,
             random_weights=preset.get("random_weights", True),
         )
-        entry["mask_stats"] = _compute_mask_stats(preset["mask"])
-        entry["dendrites"] = _compute_dendrite_info(preset["mask"], grid_width, grid_height)
+        entry["mask_stats"] = _compute_mask_stats(mask)
+        entry["dendrites"] = _compute_dendrite_info(mask, gw, gh)
         result.append(entry)
     return result
 
 
 def preview_deamon_wiring(
     wiring: DeamonWiringDef,
-    grid_width: int = 50,
-    grid_height: int = 50,
+    grid_width: int | None = None,
+    grid_height: int | None = None,
 ) -> dict[str, Any]:
     """Compute preview_grid, mask_stats and dendrites for an inline deamon wiring."""
     mask_name = wiring.get("mask")
@@ -1284,8 +1304,11 @@ def preview_deamon_wiring(
     else:
         mask = compile_deamon_wiring(wiring)
         random_weights = not wiring.get("fixed", False)
+    size = _preview_grid_size(mask)
+    gw = grid_width or size
+    gh = grid_height or size
     return {
-        "preview_grid": _compute_preview_grid(mask, grid_width, grid_height, random_weights=random_weights),
+        "preview_grid": _compute_preview_grid(mask, gw, gh, random_weights=random_weights),
         "mask_stats": _compute_mask_stats(mask),
-        "dendrites": _compute_dendrite_info(mask, grid_width, grid_height),
+        "dendrites": _compute_dendrite_info(mask, gw, gh),
     }
