@@ -28,8 +28,14 @@ export function InspectChart({ history }: { history: InspectSample[] }) {
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = INSPECT_CHART_WIDTH * dpr;
-    canvas.height = INSPECT_CHART_HEIGHT * dpr;
+    const targetWidth = INSPECT_CHART_WIDTH * dpr;
+    const targetHeight = INSPECT_CHART_HEIGHT * dpr;
+    // See PixelCanvas.tsx — avoid reallocating the GPU backing store every
+    // frame when the size hasn't actually changed.
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     ctx.fillStyle = BG;

@@ -195,7 +195,9 @@ export function useExperiment(): UseExperimentReturn {
           setGrid(msg.grid);
           setGeneration(msg.generation);
           generationRef.current = msg.generation;
-          setStats(msg.stats);
+          // Merge (not replace): daemon/stability fields arrive separately via
+          // "metrics" on their own cadence and must survive between frames.
+          setStats(prev => ({ ...prev, ...msg.stats }));
           if (msg.perf) setPerf(msg.perf);
           setTensionGrid(msg.tension_grid ?? null);
           setInputFrame(msg.input_frame ?? null);
@@ -274,6 +276,14 @@ export function useExperiment(): UseExperimentReturn {
           setSourceWeightGrids(_parseSourceWeightGrids(msg));
           setRegionOverlays(_parseRegionOverlays(msg));
           setNerveCircles((msg.nerve_circles as Array<{ cx: number; cy: number; radius: number }> | null) ?? null);
+          break;
+        }
+        case "metrics": {
+          const { type: _type, generation: _gen, ...daemonFields } = msg;
+          // A "metrics" tick can't arrive before the first "frame" (the
+          // server always sends one before starting the metrics loop) — if
+          // stats is still null there's nothing to merge into yet.
+          setStats(prev => (prev ? { ...prev, ...daemonFields } : prev));
           break;
         }
         case "status":

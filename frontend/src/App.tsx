@@ -452,12 +452,33 @@ function App() {
     paint(cells, value, frame.regionId, lastPoint ?? undefined, Math.floor(brushSize / 2));
   }, [brushMode, paint, brushSize]);
 
+  // Coalesces drag-to-inspect into at most one `inspect` call per rendered
+  // frame — each cell entered during a fast drag used to fire an unthrottled
+  // "inspect" message (full weight_grid + overlays), and a quick scrub across
+  // a densely-connected region could flood the socket with heavy payloads
+  // faster than the backend/UI could drain them. Same fix already applied to
+  // the paint brush above (dragFrameRef/flushDragFrame).
+  const dragInspectFrameRef = useRef<{ x: number; y: number; regionId?: string } | null>(null);
+  const dragInspectScheduledRef = useRef(false);
+
+  const flushDragInspect = useCallback(() => {
+    dragInspectScheduledRef.current = false;
+    const cell = dragInspectFrameRef.current;
+    if (!cell) return;
+    dragInspectFrameRef.current = null;
+    inspect(cell.x, cell.y, cell.regionId);
+  }, [inspect]);
+
   const handleCellDrag = useCallback(
     (x: number, y: number, regionId?: string) => {
       if (inspectMode) {
-        // Drag the observer across neurons — PixelCanvas already dedupes
-        // consecutive calls to the same cell, so this fires once per cell entered.
-        inspect(x, y, regionId);
+        // Drag the observer across neurons — only the latest cell reached
+        // before the next animation frame is actually inspected.
+        dragInspectFrameRef.current = { x, y, regionId };
+        if (!dragInspectScheduledRef.current) {
+          dragInspectScheduledRef.current = true;
+          requestAnimationFrame(flushDragInspect);
+        }
         return;
       }
       if (!drawOpen) return;
@@ -474,7 +495,7 @@ function App() {
         requestAnimationFrame(flushDragFrame);
       }
     },
-    [inspectMode, inspect, drawOpen, computeBrushCells, flushDragFrame]
+    [inspectMode, flushDragInspect, drawOpen, computeBrushCells, flushDragFrame]
   );
 
   // Clears the live draw-cursor stamp on mouse-up/mouse-leave so nothing

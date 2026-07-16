@@ -273,6 +273,18 @@ export interface StatusMessage {
   state: "running" | "paused" | "ready" | "complete" | "initializing";
 }
 
+/** Daemon detection / stability HUD data, sent on its own real-time cadence —
+ * decoupled from `frame`'s fps, see backend/metrics/daemon_metrics.py. */
+export interface MetricsMessage {
+  type: "metrics";
+  generation: number;
+  daemon_count: number;
+  avg_daemon_size: number;
+  noise_cells: number;
+  stability: number;
+  exclusion: number;
+}
+
 export interface ErrorMessage {
   type: "error";
   message: string;
@@ -307,7 +319,7 @@ export interface ConfigNormalizedMessage {
   config: CanonicalExperimentConfig;
 }
 
-export type ServerMessage = FrameMessage | StatusMessage | ErrorMessage | ConnectionsMessage | ConfigNormalizedMessage;
+export type ServerMessage = FrameMessage | StatusMessage | ErrorMessage | ConnectionsMessage | ConfigNormalizedMessage | MetricsMessage;
 
 export interface ExperimentStats {
   active_cells: number;

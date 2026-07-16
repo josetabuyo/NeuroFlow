@@ -106,8 +106,18 @@ export function PixelCanvas({
     if (!ctx) return;
 
     const cellSize = getCellSize();
-    canvas.width  = cellSize * width;
-    canvas.height = cellSize * height;
+    const targetWidth = cellSize * width;
+    const targetHeight = cellSize * height;
+    // Reassigning canvas.width/height discards and reallocates the GPU-side
+    // backing store even when set to the same value — at 10fps over hours
+    // this churns compositor memory and can OOM the renderer. Only resize
+    // when the pixel size actually changed; otherwise just clear.
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
 
     ctx.fillStyle = "#0a0a0a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);

@@ -421,31 +421,41 @@ class TestCutBorderTopology:
 
 
 class TestDaemonMetrics:
-    """Tests for daemon metrics."""
+    """Tests for daemon metrics. Daemon detection/stability live outside
+    get_stats() (backend/metrics/daemon_metrics.py) — pulled on demand via
+    `compute_daemon_metrics()`, decoupled from the frame/generation cadence."""
 
-    def test_stats_include_daemon_fields(self) -> None:
+    def test_get_stats_no_longer_has_daemon_fields(self) -> None:
         exp = Experiment()
         exp.setup(_nested_config())
         exp.step()
         stats = exp.get_stats()
-        assert "daemon_count" in stats
-        assert "avg_daemon_size" in stats
-        assert "noise_cells" in stats
-        assert "stability" in stats
-        assert "exclusion" in stats
-        assert isinstance(stats["daemon_count"], int)
-        assert isinstance(stats["avg_daemon_size"], float)
-        assert isinstance(stats["noise_cells"], int)
+        for key in ("daemon_count", "avg_daemon_size", "noise_cells", "stability", "exclusion"):
+            assert key not in stats
+
+    def test_metrics_include_daemon_fields(self) -> None:
+        exp = Experiment()
+        exp.setup(_nested_config())
+        exp.step()
+        metrics = exp.compute_daemon_metrics()
+        assert "daemon_count" in metrics
+        assert "avg_daemon_size" in metrics
+        assert "noise_cells" in metrics
+        assert "stability" in metrics
+        assert "exclusion" in metrics
+        assert isinstance(metrics["daemon_count"], int)
+        assert isinstance(metrics["avg_daemon_size"], float)
+        assert isinstance(metrics["noise_cells"], int)
 
     def test_daemon_count_zero_for_empty_grid(self) -> None:
         exp = Experiment()
         exp.setup(_nested_config(width=5, height=5))
         for i in range(exp.brain_tensor.n_real):
             exp.brain_tensor.set_valor(i, 0.0)
-        stats = exp.get_stats()
-        assert stats["daemon_count"] == 0
-        assert stats["noise_cells"] == 0
-        assert stats["active_cells"] == 0
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["daemon_count"] == 0
+        assert metrics["noise_cells"] == 0
+        assert exp.get_stats()["active_cells"] == 0
 
     def test_daemon_count_one_cluster(self) -> None:
         exp = Experiment()
@@ -456,11 +466,11 @@ class TestDaemonMetrics:
             for dx in range(3):
                 idx = (3 + dy) * 10 + (3 + dx)
                 exp.brain_tensor.set_valor(idx, 1.0)
-        stats = exp.get_stats()
-        assert stats["daemon_count"] == 1
-        assert stats["active_cells"] == 9
-        assert stats["avg_daemon_size"] == 9.0
-        assert stats["noise_cells"] == 0
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["daemon_count"] == 1
+        assert exp.get_stats()["active_cells"] == 9
+        assert metrics["avg_daemon_size"] == 9.0
+        assert metrics["noise_cells"] == 0
 
     def test_isolated_pixels_are_noise_not_daemons(self) -> None:
         exp = Experiment()
@@ -469,10 +479,10 @@ class TestDaemonMetrics:
             exp.brain_tensor.set_valor(i, 0.0)
         exp.brain_tensor.set_valor(0, 1.0)
         exp.brain_tensor.set_valor(9 * 10 + 9, 1.0)
-        stats = exp.get_stats()
-        assert stats["daemon_count"] == 0
-        assert stats["noise_cells"] == 2
-        assert stats["active_cells"] == 2
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["daemon_count"] == 0
+        assert metrics["noise_cells"] == 2
+        assert exp.get_stats()["active_cells"] == 2
 
     def test_pair_is_noise_not_daemon(self) -> None:
         exp = Experiment()
@@ -481,9 +491,9 @@ class TestDaemonMetrics:
             exp.brain_tensor.set_valor(i, 0.0)
         exp.brain_tensor.set_valor(0, 1.0)
         exp.brain_tensor.set_valor(1, 1.0)
-        stats = exp.get_stats()
-        assert stats["daemon_count"] == 0
-        assert stats["noise_cells"] == 2
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["daemon_count"] == 0
+        assert metrics["noise_cells"] == 2
 
     def test_two_real_clusters(self) -> None:
         exp = Experiment()
@@ -496,10 +506,10 @@ class TestDaemonMetrics:
         exp.brain_tensor.set_valor(98, 1.0)
         exp.brain_tensor.set_valor(99, 1.0)
         exp.brain_tensor.set_valor(89, 1.0)
-        stats = exp.get_stats()
-        assert stats["daemon_count"] == 2
-        assert stats["noise_cells"] == 0
-        assert stats["avg_daemon_size"] == 3.0
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["daemon_count"] == 2
+        assert metrics["noise_cells"] == 0
+        assert metrics["avg_daemon_size"] == 3.0
 
     def test_mixed_daemons_and_noise(self) -> None:
         exp = Experiment()
@@ -510,10 +520,10 @@ class TestDaemonMetrics:
             for dx in range(3):
                 exp.brain_tensor.set_valor((dy) * 10 + dx, 1.0)
         exp.brain_tensor.set_valor(99, 1.0)
-        stats = exp.get_stats()
-        assert stats["daemon_count"] == 1
-        assert stats["noise_cells"] == 1
-        assert stats["active_cells"] == 10
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["daemon_count"] == 1
+        assert metrics["noise_cells"] == 1
+        assert exp.get_stats()["active_cells"] == 10
 
     def test_exclusion_with_daemon_and_noise(self) -> None:
         exp = Experiment()
@@ -523,16 +533,16 @@ class TestDaemonMetrics:
         exp.brain_tensor.set_valor(0, 1.0)
         exp.brain_tensor.set_valor(1, 1.0)
         exp.brain_tensor.set_valor(10, 1.0)
-        stats = exp.get_stats()
-        assert stats["exclusion"] > 0.9
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["exclusion"] > 0.9
 
     def test_exclusion_zero_for_empty_grid(self) -> None:
         exp = Experiment()
         exp.setup(_nested_config(width=5, height=5))
         for i in range(exp.brain_tensor.n_real):
             exp.brain_tensor.set_valor(i, 0.0)
-        stats = exp.get_stats()
-        assert stats["exclusion"] == 0.0
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["exclusion"] == 0.0
 
     def test_stability_increases_with_consistency(self) -> None:
         random.seed(42)
@@ -540,33 +550,42 @@ class TestDaemonMetrics:
         exp.setup(_nested_config())
         for _ in range(10):
             exp.step()
-        stats = exp.get_stats()
-        assert stats["stability"] >= 0.0
+            metrics = exp.compute_daemon_metrics()
+        assert metrics["stability"] >= 0.0
 
-    def test_stability_zero_on_first_step(self) -> None:
+    def test_stability_zero_on_first_sample(self) -> None:
         exp = Experiment()
         exp.setup(_nested_config())
         exp.step()
-        stats = exp.get_stats()
-        assert stats["stability"] == 0.0
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["stability"] == 0.0
 
-    def test_daemon_history_resets_on_reset(self) -> None:
+    def test_stability_history_resets_on_reset(self) -> None:
         exp = Experiment()
         exp.setup(_nested_config())
-        for _ in range(5):
-            exp.step()
-            exp.get_stats()  # history is populated on stats query, not on step
-        assert len(exp._daemon_history) == 5
+        exp.step()
+        exp.compute_daemon_metrics()
+        exp.step()
+        metrics = exp.compute_daemon_metrics()
+        assert metrics["stability"] != 0.0 or len(exp.daemon_metrics._history) >= 2
         exp.reset()
-        assert len(exp._daemon_history) == 0
+        # Right after reset, history is empty again — a single fresh sample
+        # can't score stability yet.
+        assert exp.compute_daemon_metrics()["stability"] == 0.0
+        assert len(exp.daemon_metrics._history) == 1
 
-    def test_no_duplicate_history_on_double_get_stats(self) -> None:
+    def test_stability_is_scored_over_a_real_time_window_not_generations(self) -> None:
+        """Two samples taken back-to-back in wall-clock time both fall inside
+        the stability window regardless of how many sim generations elapsed
+        between them — the window is time-based, not generation-based."""
         exp = Experiment()
         exp.setup(_nested_config())
-        exp.step()
-        exp.get_stats()
-        exp.get_stats()
-        assert len(exp._daemon_history) == 1
+        for _ in range(50):
+            exp.step()
+        exp.compute_daemon_metrics()
+        metrics = exp.compute_daemon_metrics()
+        assert len(exp.daemon_metrics._history) == 2
+        assert metrics["stability"] >= 0.0
 
 
 class TestMaskStatsInInfo:

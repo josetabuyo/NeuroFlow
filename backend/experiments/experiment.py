@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import logging
 import random
-from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -38,13 +37,10 @@ from core.dendrita import Dendrita
 from core.masks import get_mask, get_mask_type, get_random_weights, compile_deamon_wiring, resolve_group_weight
 from core.nerve import place_nerve_circles, circle_cells_with_weights, NerveCircle
 from core.ascii_renderer import render_char, apply_white_noise, apply_shift_noise, load_image_grid
+from metrics.daemon_metrics import DaemonMetrics, DEFAULT_DAEMON_THRESHOLD, DEFAULT_MIN_DAEMON_SIZE
 from .base import Experimento
 
 logger = logging.getLogger(__name__)
-
-_STABILITY_WINDOW = 20
-_DAEMON_THRESHOLD = 0.5
-_MIN_DAEMON_SIZE = 3
 
 _SOURCE_TYPES_NON_INPUT = {"label", "error_diff", "label_mismatch"}
 _NOCICEPTOR_SOURCE_TYPES = {"label_mismatch", "error_diff"}
@@ -106,51 +102,6 @@ class RegionState:
     @property
     def is_ascii_input(self) -> bool:
         return self.source_type == "ascii"
-
-
-def _detect_daemons(
-    values: torch.Tensor,
-    width: int,
-    height: int,
-    threshold: float,
-    min_size: int = _MIN_DAEMON_SIZE,
-) -> tuple[int, set[int], set[int], list[int]]:
-    """Detect daemons as connected components of active neurons (8-connectivity)."""
-    n = width * height
-    active = (values[:n] > threshold).tolist()
-    visited = [False] * n
-    daemon_indices: set[int] = set()
-    noise_indices: set[int] = set()
-    sizes: list[int] = []
-
-    for idx in range(n):
-        if active[idx] and not visited[idx]:
-            queue = [idx]
-            visited[idx] = True
-            cluster: list[int] = []
-            head = 0
-            while head < len(queue):
-                cidx = queue[head]
-                head += 1
-                cluster.append(cidx)
-                cx, cy = cidx % width, cidx // width
-                for dy in (-1, 0, 1):
-                    for dx in (-1, 0, 1):
-                        if dx == 0 and dy == 0:
-                            continue
-                        nx, ny = cx + dx, cy + dy
-                        if 0 <= nx < width and 0 <= ny < height:
-                            nidx = ny * width + nx
-                            if active[nidx] and not visited[nidx]:
-                                visited[nidx] = True
-                                queue.append(nidx)
-            if len(cluster) >= min_size:
-                daemon_indices.update(cluster)
-                sizes.append(len(cluster))
-            else:
-                noise_indices.update(cluster)
-
-    return len(sizes), daemon_indices, noise_indices, sizes
 
 
 def _convert_deamon_groups(deamon: dict[str, Any]) -> dict[str, Any]:
@@ -711,11 +662,9 @@ class Experiment(Experimento):
         self.up_ticks: int = 5
         self.down_ticks: int = 5
 
-        # Daemon detection
-        self._daemon_threshold: float = _DAEMON_THRESHOLD
-        self._min_daemon_size: int = _MIN_DAEMON_SIZE
-        self._daemon_history: deque[int] = deque(maxlen=_STABILITY_WINDOW)
-        self._last_history_gen: int = -1
+        # Daemon detection — HUD-only metrics, computed on demand by callers
+        # (see backend/metrics/daemon_metrics.py), not on every frame.
+        self.daemon_metrics = DaemonMetrics()
 
         self._is_wolfram: bool = False
         self._n_classes: int = 0
@@ -847,8 +796,8 @@ class Experiment(Experimento):
         self.down_ticks = int(spiking_cfg.get("down_ticks", 5)) if spiking_cfg else 5
 
         daemon_cfg = tissue_cfg.get("daemon")
-        self._daemon_threshold = float(daemon_cfg.get("threshold", _DAEMON_THRESHOLD)) if daemon_cfg else _DAEMON_THRESHOLD
-        self._min_daemon_size = int(daemon_cfg.get("min_size", _MIN_DAEMON_SIZE)) if daemon_cfg else _MIN_DAEMON_SIZE
+        self.daemon_metrics.threshold = float(daemon_cfg.get("threshold", DEFAULT_DAEMON_THRESHOLD)) if daemon_cfg else DEFAULT_DAEMON_THRESHOLD
+        self.daemon_metrics.min_size = int(daemon_cfg.get("min_size", DEFAULT_MIN_DAEMON_SIZE)) if daemon_cfg else DEFAULT_MIN_DAEMON_SIZE
 
         # Wolfram mode: only when single tissue region with a wolfram mask
         wiring0 = tissue_cfg["wiring"]
@@ -990,8 +939,7 @@ class Experiment(Experimento):
             if rs.is_ascii_input:
                 self._inject_source(rs)
 
-        self._daemon_history.clear()
-        self._last_history_gen = -1
+        self.daemon_metrics.reset()
 
     def _setup_wolfram(self, tissue_cfg: dict[str, Any]) -> None:
         grid = tissue_cfg["grid"]
@@ -1034,8 +982,7 @@ class Experiment(Experimento):
 
         self._mask_type = "wolfram"
         self._compile()
-        self._daemon_history.clear()
-        self._last_history_gen = -1
+        self.daemon_metrics.reset()
 
     def _wire_connection(self, conn: dict[str, Any], conn_index: int) -> None:
         if "nerve" in conn:
@@ -2184,53 +2131,19 @@ class Experiment(Experimento):
     # ── Stats ──
 
     def get_stats(self) -> dict[str, Any]:
+        """Cheap, full-fps HUD data. Daemon detection/stability is NOT here —
+        it's visualization-only and expensive (O(grid) BFS), so callers pull
+        it separately via `compute_daemon_metrics()` on their own cadence."""
         if self.brain_tensor is None:
             return super().get_stats()
 
         n_tissue = self.width * self.height
         vals = self.brain_tensor.valores[:n_tissue]
-        active = int((vals > self._daemon_threshold).sum().item())
-
-        count, daemon_indices, noise_indices, sizes = _detect_daemons(
-            self.brain_tensor.valores, self.width, self.height,
-            self._daemon_threshold, self._min_daemon_size,
-        )
-        avg_size = round(sum(sizes) / len(sizes), 1) if sizes else 0.0
-
-        if daemon_indices:
-            daemon_mask = torch.zeros(n_tissue, dtype=torch.bool)
-            daemon_mask[list(daemon_indices)] = True
-            inside_mean = vals[daemon_mask].mean().item()
-            outside = vals[~daemon_mask]
-            outside_mean = outside.mean().item() if outside.numel() > 0 else 0.0
-            exclusion = inside_mean - outside_mean
-        else:
-            exclusion = 0.0
-
-        if self.generation != self._last_history_gen:
-            self._daemon_history.append(count)
-            self._last_history_gen = self.generation
-
-        if len(self._daemon_history) >= 2:
-            counts = list(self._daemon_history)
-            mean_c = sum(counts) / len(counts)
-            if mean_c > 0:
-                variance = sum((c - mean_c) ** 2 for c in counts) / len(counts)
-                cv = (variance ** 0.5) / mean_c
-                stability = round(max(0.0, min(1.0, 1.0 - cv)), 3)
-            else:
-                stability = 1.0 if all(c == 0 for c in counts) else 0.0
-        else:
-            stability = 0.0
+        active = int((vals > self.daemon_metrics.threshold).sum().item())
 
         stats: dict[str, Any] = {
             "active_cells": active,
             "steps": self.generation,
-            "daemon_count": count,
-            "avg_daemon_size": avg_size,
-            "noise_cells": len(noise_indices),
-            "stability": stability,
-            "exclusion": round(exclusion, 3),
         }
 
         ascii_r = self._ascii_region()
@@ -2254,6 +2167,13 @@ class Experiment(Experimento):
             })
 
         return stats
+
+    def compute_daemon_metrics(self) -> dict[str, Any]:
+        """Daemon count/size/stability HUD data — expensive, call on your own
+        cadence (see backend/metrics/daemon_metrics.py), not per frame."""
+        if self.brain_tensor is None:
+            return {"daemon_count": 0, "avg_daemon_size": 0.0, "noise_cells": 0, "exclusion": 0.0, "stability": 0.0}
+        return self.daemon_metrics.compute(self.brain_tensor.valores, self.width, self.height)
 
     # ── Inspect ──
 

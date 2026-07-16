@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 ws_router = APIRouter()
 
+METRICS_INTERVAL_SECONDS = 0.5
+
 
 class ExperimentSession:
     """Manages a single WebSocket experiment session."""
@@ -25,6 +27,9 @@ class ExperimentSession:
         self.experiment: Experiment | None = None
         self._play_task: asyncio.Task | None = None
         self._playing: bool = False
+        # Daemon/stability HUD metrics run on their own real-time cadence,
+        # independent of fps and of play/pause — see _metrics_loop.
+        self._metrics_task: asyncio.Task | None = None
         self.fps: int = 10
         self.steps_per_tick: int = 1
         self._inspect_x: int | None = None
@@ -89,6 +94,7 @@ class ExperimentSession:
         await self.send({"type": "status", "state": "ready"})
         await self.send({"type": "config_normalized", "config": self.experiment._config})
         await self._send_frame()
+        self._start_metrics_loop()
 
     async def _handle_click(self, message: dict[str, Any]) -> None:
         """Handle a click on the canvas."""
@@ -207,6 +213,7 @@ class ExperimentSession:
         await self.send({"type": "status", "state": "ready"})
         await self.send({"type": "config_normalized", "config": self.experiment._config})
         await self._send_frame()
+        self._start_metrics_loop()
 
     async def _handle_update_config(self, message: dict[str, Any]) -> None:
         """Apply config changes to a running experiment.
@@ -272,6 +279,32 @@ class ExperimentSession:
             pass
         except Exception as e:
             logger.exception("Error in play loop")
+            await self.send({"type": "error", "message": str(e)})
+
+    def _start_metrics_loop(self) -> None:
+        """(Re)start the metrics loop for the current experiment. Safe to call
+        after every setup/reconnect — cancels any previous run first."""
+        if self._metrics_task and not self._metrics_task.done():
+            self._metrics_task.cancel()
+        self._metrics_task = asyncio.create_task(self._metrics_loop())
+
+    async def _metrics_loop(self) -> None:
+        """Daemon/stability HUD metrics on their own real-time cadence —
+        decoupled from fps and from play/pause, so it never adds per-frame
+        cost to the simulation and keeps running through unattended play
+        sessions. Runs for the lifetime of the experiment; cancelled in
+        cleanup() or when a new one replaces it."""
+        try:
+            while self.experiment is not None:
+                async with self._experiment_lock:
+                    metrics = self.experiment.compute_daemon_metrics()
+                    generation = self.experiment.generation
+                await self.send({"type": "metrics", "generation": generation, **metrics})
+                await asyncio.sleep(METRICS_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.exception("Error in metrics loop")
             await self.send({"type": "error", "message": str(e)})
 
     async def _send_frame(
@@ -349,6 +382,8 @@ class ExperimentSession:
         self._playing = False
         if self._play_task and not self._play_task.done():
             self._play_task.cancel()
+        if self._metrics_task and not self._metrics_task.done():
+            self._metrics_task.cancel()
 
 
 @ws_router.websocket("/ws/experiment")
