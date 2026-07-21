@@ -36,6 +36,13 @@ class ExperimentSession:
         self._inspect_y: int | None = None
         self._inspect_region_id: str | None = None
         self._frame_count: int = 0
+        # While the client tab is backgrounded/frozen it stops draining the
+        # socket, but the play/metrics loops kept pushing frames regardless —
+        # over hours that unconsumed traffic piles up in the renderer process
+        # and OOM-crashes the tab ("Aw, Snap!"). The simulation itself must
+        # keep running unattended (that's the point), so only the outbound
+        # stream is gated on visibility, not `_play_loop`'s stepping.
+        self._client_visible: bool = True
         # Guards `self.experiment` + the frame it produces: the play loop (a
         # background task) and message handlers like paint/click/step run
         # concurrently on the same event loop, and without this lock their
@@ -64,6 +71,7 @@ class ExperimentSession:
             "uninspect": self._handle_uninspect,
             "reconnect": self._handle_reconnect,
             "update_config": self._handle_update_config,
+            "visibility": self._handle_visibility,
         }
 
         handler = handlers.get(action)
@@ -243,6 +251,15 @@ class ExperimentSession:
             await self.send({"type": "status", "state": "running"})
             self._play_task = asyncio.create_task(self._play_loop())
 
+    async def _handle_visibility(self, message: dict[str, Any]) -> None:
+        """Client reports its tab's visibility state — gates the outbound
+        frame/metrics stream without touching the running simulation."""
+        was_visible = self._client_visible
+        self._client_visible = bool(message.get("visible", True))
+        if self._client_visible and not was_visible and self.experiment:
+            async with self._experiment_lock:
+                await self._send_frame()
+
     async def _handle_reset(self, _message: dict[str, Any]) -> None:
         """Reset the experiment."""
         if not self.experiment:
@@ -270,10 +287,12 @@ class ExperimentSession:
                     elapsed = time.perf_counter() - t0
 
                     if result.get("type") == "status" and result.get("state") == "complete":
-                        await self.send(result)
+                        if self._client_visible:
+                            await self.send(result)
                         self._playing = False
                         return
-                    await self._send_frame(steps=self.steps_per_tick, elapsed_s=elapsed)
+                    if self._client_visible:
+                        await self._send_frame(steps=self.steps_per_tick, elapsed_s=elapsed)
                 await asyncio.sleep(1.0 / self.fps)
         except asyncio.CancelledError:
             pass
@@ -296,10 +315,11 @@ class ExperimentSession:
         cleanup() or when a new one replaces it."""
         try:
             while self.experiment is not None:
-                async with self._experiment_lock:
-                    metrics = self.experiment.compute_daemon_metrics()
-                    generation = self.experiment.generation
-                await self.send({"type": "metrics", "generation": generation, **metrics})
+                if self._client_visible:
+                    async with self._experiment_lock:
+                        metrics = self.experiment.compute_daemon_metrics()
+                        generation = self.experiment.generation
+                    await self.send({"type": "metrics", "generation": generation, **metrics})
                 await asyncio.sleep(METRICS_INTERVAL_SECONDS)
         except asyncio.CancelledError:
             pass

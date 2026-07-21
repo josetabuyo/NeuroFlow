@@ -186,6 +186,7 @@ export function useExperiment(): UseExperimentReturn {
 
     ws.onopen = () => {
       setState("ready");
+      send({ action: "visibility", visible: document.visibilityState === "visible" });
     };
 
     ws.onmessage = (event: MessageEvent) => {
@@ -310,14 +311,25 @@ export function useExperiment(): UseExperimentReturn {
       // Error is already logged by browser; onclose will fire next
     };
 
+    // Tells the backend to stop streaming frame/metrics while this tab is
+    // backgrounded — the simulation keeps running server-side, but a
+    // backgrounded/frozen tab stops draining the socket, and unconsumed
+    // traffic piling up in the renderer over hours was OOM-crashing it
+    // ("Aw, Snap!"). Backend resends a fresh frame as soon as we report back.
+    const onVisibilityChange = () => {
+      send({ action: "visibility", visible: document.visibilityState === "visible" });
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       // Cleanup: close WebSocket, clear ref so stale onclose doesn't interfere
       if (wsRef.current === ws) {
         wsRef.current = null;
       }
       ws.close();
     };
-  }, []);
+  }, [send]);
 
   const start = useCallback(
     (config: ExperimentConfig) => {
